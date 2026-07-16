@@ -1,0 +1,9 @@
+﻿metric;baseline;proposed;n_pairs;raw_difference_mean;benefit_mean;benefit_ci_low;benefit_ci_high;probability_better;significant;direction;bootstrap_samples
+rmse_to_truth;arithmetic_mean;proposed_robust;100;-0.07275760841914768;0.07275760841914768;0.07252811961144211;0.07298649463262886;1;true;positive_benefit_means_proposed_is_better;1000
+rmse_to_truth;trust_weighted_mean;proposed_robust;100;-0.049200195515965044;0.049200195515965044;0.04901051193309124;0.049389230864877884;1;true;positive_benefit_means_proposed_is_better;1000
+mae_to_truth;arithmetic_mean;proposed_robust;100;-0.032631942338158776;0.032631942338158776;0.03241075641599123;0.032851265907896866;1;true;positive_benefit_means_proposed_is_better;1000
+mae_to_truth;trust_weighted_mean;proposed_robust;100;-0.019377244410702935;0.019377244410702935;0.01919785666976428;0.019548906134442965;1;true;positive_benefit_means_proposed_is_better;1000
+probability_correct;arithmetic_mean;proposed_robust;100;0;0;0;0;0;false;positive_benefit_means_proposed_is_better;1000
+probability_correct;trust_weighted_mean;proposed_robust;100;0;0;0;0;0;false;positive_benefit_means_proposed_is_better;1000
+consensus_error;arithmetic_mean;proposed_robust;100;-0.03957562697836517;0.03957562697836517;0.039413861016984575;0.03973860501882243;1;true;positive_benefit_means_proposed_is_better;1000
+consensus_error;trust_weighted_mean;proposed_robust;100;-0.026435410281639107;0.026435410281639107;0.02629303339154379;0.026583693206067086;1;true;positive_benefit_means_proposed_is_better;1000

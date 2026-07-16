@@ -1,0 +1,20 @@
+{
+  "title": "Модельный эксперимент ИМАС",
+  "url": "http://127.0.0.1:4173/",
+  "browser": "bundled @sparticuz/chromium",
+  "bodyLength": 9191,
+  "buttons": 13,
+  "fields": 28,
+  "helpSections": 18,
+  "requiredControls": {
+    "sybil": 1,
+    "bootstrap": 1,
+    "parallelWorkers": 1
+  },
+  "errors": [],
+  "warnings": [],
+  "screenshots": {
+    "dashboard": "/mnt/data/imas_encoding_fix/ИМАС_модельный_эксперимент_GUI_v3.2/gui/dashboard.png",
+    "help": "/mnt/data/imas_encoding_fix/ИМАС_модельный_эксперимент_GUI_v3.2/gui/help.png"
+  }
+}

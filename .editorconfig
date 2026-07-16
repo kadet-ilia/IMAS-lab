@@ -1,0 +1,12 @@
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.bat]
+end_of_line = crlf
+
+[*.{py,js,jsx,mjs,json,md,html,css,sh,txt}]
+end_of_line = lf
