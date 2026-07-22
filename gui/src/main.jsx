@@ -96,6 +96,51 @@ const DEFAULT_CONFIG = {
   partition_fraction: 0.5,
 };
 
+const PARAMETER_TOOLTIPS = {
+  n_agents: "Общее число легитимных агентов в модели. Чем больше N, тем устойчивее честное большинство, но тем дольше расчет и сложнее сетевое взаимодействие.",
+  n_byzantine: "Число византийских агентов, которые могут выдавать искаженные значения. Рост f повышает ошибку консенсуса и усложняет обнаружение атак.",
+  n_steps: "Длительность одного прогона в дискретных шагах. Большое T лучше показывает динамику доверия, изоляции и восстановления после атаки.",
+  n_runs: "Число независимых прогонов в серии Монте-Карло. Больше прогонов дают стабильнее статистику и доверительные интервалы, но увеличивают время расчета.",
+  scenario: "Тип поведения нарушителей. Сценарий определяет форму атаки: постоянное смещение, слабое скрытое смещение, согласованную атаку или периодическое включение.",
+  attack_start_step: "Шаг, с которого нарушители начинают искажать предложения. Более ранняя атака дольше влияет на доверие, репутацию и итоговую ошибку.",
+  attack_intensity: "Готовый уровень силы атаки. Повышает величины смещений нарушителей, поэтому обычно снижает точность и вероятность правильного решения.",
+  trust_window_steps: "Сколько последних шагов используется при оценке доверия. Большое окно сглаживает случайный шум, малое быстрее реагирует на смену поведения.",
+  forgetting_factor: "Скорость уменьшения веса старых свидетельств. Чем выше λ, тем быстрее система забывает прошлое и тем чувствительнее становится к новым наблюдениям.",
+  initial_trust: "Стартовое доверие к агентам до накопления свидетельств. Высокое значение медленнее наказывает нарушителей, низкое делает систему изначально осторожной.",
+  minimum_weight: "Минимальный вес агента при агрегировании. Не дает полностью обнулить вклад агента, но слишком высокий минимум ослабляет защиту от нарушителей.",
+  isolation_threshold: "Порог репутации для перевода агента в изоляцию. Высокий порог изолирует агрессивнее, низкий снижает риск ложных изоляций.",
+  isolation_patience: "Сколько раз подряд агент должен быть ниже порога перед изоляцией. Большое k уменьшает ложные срабатывания, но замедляет реакцию на атаку.",
+  isolation_cooldown_steps: "Минимальное время до восстановления изолированного агента. Большое значение дольше удерживает нарушителей вне решения, но медленнее возвращает ошибочно изолированных.",
+  network_enabled: "Включает ограничения сетевой доставки сообщений. При включении доверие строится только по доступным наблюдениям, поэтому потери и разделения сильнее влияют на результат.",
+  n_sybil_agents: "Число ложных Sybil-идентичностей. Увеличивает эффективную долю нарушителей и может разрушить честное большинство.",
+  sybil_activation_step: "Шаг появления Sybil-идентичностей. Поздняя активация проверяет, успела ли система накопить доверие до усиления атаки.",
+  network_topology: "Структура связей между агентами. Топология влияет на доступность наблюдений, связность сети и скорость распространения искажений.",
+  network_edge_probability: "Вероятность ребра в случайном графе. Меньшее значение делает сеть разреженной и ухудшает доставку наблюдений.",
+  small_world_neighbors: "Число соседей в модели малого мира. Больше соседей повышает связность и надежность доставки, но приближает сеть к плотной.",
+  small_world_rewire_probability: "Вероятность перенаправления ребер в топологии малого мира. Рост значения добавляет дальние связи и меняет баланс локальности и связности.",
+  message_loss_probability: "Вероятность потери каждого сообщения. Рост потерь уменьшает число свидетельств, снижает качество доверия и может задерживать обнаружение.",
+  message_delay_min_steps: "Минимальная задержка доставки сообщения в шагах. Задержки делают наблюдения менее актуальными.",
+  message_delay_max_steps: "Максимальная задержка доставки сообщения. Большой разброс задержек увеличивает устаревание данных и шум в оценке доверия.",
+  max_message_staleness_steps: "Максимально допустимый возраст сообщения. Малое значение отбрасывает больше старых наблюдений, большое допускает менее актуальные свидетельства.",
+  bandwidth_messages_per_step: "Лимит сообщений, доставляемых за шаг. Низкая пропускная способность создает конкуренцию сообщений и снижает полноту наблюдений.",
+  partition_enabled: "Включает временное разделение сети на сегменты. Разделение снижает связность и проверяет устойчивость метода при частичной видимости.",
+  partition_start_step: "Шаг начала разделения сети. Если разделение совпадает с атакой, влияние нарушителей обычно усиливается.",
+  partition_end_step: "Шаг завершения разделения сети. Длинное разделение дольше ограничивает обмен наблюдениями.",
+  partition_fraction: "Доля узлов в отделенном сегменте. Определяет масштаб нарушения связности и доставки сообщений.",
+  bootstrap_samples: "Число bootstrap-перевыборок для интервалов сравнения методов. Больше выборок стабильнее, но медленнее.",
+  parallel_workers: "Число параллельных процессов. Значение 0 выбирает автоматически; больше процессов ускоряют серии при наличии CPU-ресурсов.",
+  n_sensitivity_runs: "Число прогонов для каждой точки однофакторного анализа. Больше прогонов уменьшают случайный разброс оценки чувствительности.",
+  factorial_runs_per_point: "Число прогонов на точку многофакторного плана. Повышает надежность оценки главных эффектов и взаимодействий.",
+  factorial_max_points: "Максимум точек многофакторного плана. Больше точек покрывают больше комбинаций факторов, но резко увеличивают время расчета.",
+  desired_action: "Истинное или желаемое скалярное действие, относительно которого считается ошибка. Сдвиг меняет базовую цель консенсуса.",
+  honest_noise_sigma: "Стандартное отклонение шума корректных агентов. Больший шум затрудняет отличить честные ошибки от атаки.",
+  reputation_damping: "Коэффициент демпфирования EigenTrust. Высокое значение сильнее учитывает сетевую репутацию, низкое быстрее ослабляет ее влияние.",
+  minimum_evidence_steps: "Минимум наблюдений перед уверенной оценкой агента. Большое значение снижает поспешные решения, но замедляет детекцию.",
+  trim_each_side: "Сколько крайних значений отбрасывается с каждой стороны при усеченном среднем. Рост повышает робастность к выбросам, но может терять полезные честные данные.",
+  clip_radius: "Радиус ограничения выбросов вокруг центральной оценки. Малое значение жестче ограничивает экстремальные предложения, большое пропускает больше вариативности.",
+  correctness_tolerance: "Допустимое отклонение от истинного действия для метрики правильного решения. Большой допуск повышает P(правильное решение), малый делает критерий строже.",
+};
+
 const SCENARIOS = [
   ["collusion", "Согласованная (злонамеренная координация)"],
   ["static_bias", "Постоянное сильное смещение"],
@@ -142,22 +187,44 @@ function Icon({ name }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 
-function NumberField({ label, value, min, max, step = 1, onChange, hint, id }) {
+function ParameterTooltip({ text }) {
+  if (!text) return null;
+  return (
+    <span
+      className="parameter-tooltip"
+      tabIndex={0}
+      aria-label={text}
+      onClick={(event) => {
+        event.preventDefault();
+        event.currentTarget.focus();
+      }}
+    >
+      <Icon name="help" />
+      <span role="tooltip">{text}</span>
+    </span>
+  );
+}
+
+function FieldLabel({ label, tooltip }) {
+  return <span className="field-label"><span>{label}</span><ParameterTooltip text={tooltip} /></span>;
+}
+
+function NumberField({ label, value, min, max, step = 1, onChange, hint, id, tooltip }) {
   return (
     <label className="field" htmlFor={id}>
-      <span>{label}</span>
+      <FieldLabel label={label} tooltip={tooltip} />
       <input id={id} aria-label={label} type="number" value={Number.isFinite(value) ? value : ""} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} />
       {hint ? <small>{hint}</small> : null}
     </label>
   );
 }
 
-function SelectField({ label, value, onChange, children }) {
-  return <label className="field"><span>{label}</span><select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
+function SelectField({ label, value, onChange, children, tooltip }) {
+  return <label className="field"><FieldLabel label={label} tooltip={tooltip} /><select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
 }
 
-function BoolField({ label, checked, onChange, hint }) {
-  return <label className="bool-field"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span>{label}{hint ? <small>{hint}</small> : null}</span></label>;
+function BoolField({ label, checked, onChange, hint, tooltip }) {
+  return <label className="bool-field"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span className="bool-label"><span>{label}</span><ParameterTooltip text={tooltip} />{hint ? <small>{hint}</small> : null}</span></label>;
 }
 
 function Kpi({ label, value, note, tone = "blue" }) {
@@ -247,48 +314,48 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     <aside className="sidebar">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
-        <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} />
-        <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={(value) => setConfig((current) => ({ ...current, n_byzantine: value, trim_each_side: value }))} hint={`f/N = ${ratio} %`} />
-        <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={500} onChange={set("n_runs")} /></div>
+        <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
+        <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={(value) => setConfig((current) => ({ ...current, n_byzantine: value, trim_each_side: value }))} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
+        <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={500} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
 
         <div className="sidebar-section">
           <h3>Сценарий атаки</h3>
-          <SelectField label="Сценарий" value={scenario} onChange={setScenario}>{SCENARIOS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</SelectField>
-          <NumberField label="Время начала атаки (шаг)" value={config.attack_start_step} min={1} max={config.n_steps} onChange={set("attack_start_step")} />
-          <SelectField label="Интенсивность атаки" value={attackLevel} onChange={changeLevel}>{Object.entries(ATTACK_LEVELS).map(([value, item]) => <option value={value} key={value}>{item.label}</option>)}</SelectField>
+          <SelectField label="Сценарий" value={scenario} onChange={setScenario} tooltip={PARAMETER_TOOLTIPS.scenario}>{SCENARIOS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</SelectField>
+          <NumberField label="Время начала атаки (шаг)" value={config.attack_start_step} min={1} max={config.n_steps} onChange={set("attack_start_step")} tooltip={PARAMETER_TOOLTIPS.attack_start_step} />
+          <SelectField label="Интенсивность атаки" value={attackLevel} onChange={changeLevel} tooltip={PARAMETER_TOOLTIPS.attack_intensity}>{Object.entries(ATTACK_LEVELS).map(([value, item]) => <option value={value} key={value}>{item.label}</option>)}</SelectField>
         </div>
 
         <div className="sidebar-section">
           <h3>Параметры доверия</h3>
-          <NumberField label="Окно наблюдения (шагов)" value={config.trust_window_steps} min={2} max={100} onChange={set("trust_window_steps")} />
-          <NumberField label="Скорость забывания (λ)" value={Number((1 - config.forgetting_factor).toFixed(3))} min={0} max={0.4} step={0.01} onChange={(value) => set("forgetting_factor")(1 - value)} />
-          <NumberField label="Начальное доверие (w₀)" value={config.initial_trust} min={0.05} max={0.95} step={0.05} onChange={set("initial_trust")} />
-          <NumberField label="Минимальный вес (wmin)" value={config.minimum_weight} min={0} max={0.5} step={0.01} onChange={set("minimum_weight")} />
+          <NumberField label="Окно наблюдения (шагов)" value={config.trust_window_steps} min={2} max={100} onChange={set("trust_window_steps")} tooltip={PARAMETER_TOOLTIPS.trust_window_steps} />
+          <NumberField label="Скорость забывания (λ)" value={Number((1 - config.forgetting_factor).toFixed(3))} min={0} max={0.4} step={0.01} onChange={(value) => set("forgetting_factor")(1 - value)} tooltip={PARAMETER_TOOLTIPS.forgetting_factor} />
+          <NumberField label="Начальное доверие (w₀)" value={config.initial_trust} min={0.05} max={0.95} step={0.05} onChange={set("initial_trust")} tooltip={PARAMETER_TOOLTIPS.initial_trust} />
+          <NumberField label="Минимальный вес (wmin)" value={config.minimum_weight} min={0} max={0.5} step={0.01} onChange={set("minimum_weight")} tooltip={PARAMETER_TOOLTIPS.minimum_weight} />
         </div>
 
         <div className="sidebar-section">
           <h3>Параметры изоляции</h3>
-          <NumberField label="Порог изоляции (τiso)" value={config.isolation_threshold} min={0.05} max={0.9} step={0.01} onChange={set("isolation_threshold")} />
-          <NumberField label="Подтверждений для изоляции (k)" value={config.isolation_patience} min={1} max={20} onChange={set("isolation_patience")} />
-          <NumberField label="Охлаждение изоляции (шагов)" value={config.isolation_cooldown_steps} min={1} max={100} onChange={set("isolation_cooldown_steps")} />
+          <NumberField label="Порог изоляции (τiso)" value={config.isolation_threshold} min={0.05} max={0.9} step={0.01} onChange={set("isolation_threshold")} tooltip={PARAMETER_TOOLTIPS.isolation_threshold} />
+          <NumberField label="Подтверждений для изоляции (k)" value={config.isolation_patience} min={1} max={20} onChange={set("isolation_patience")} tooltip={PARAMETER_TOOLTIPS.isolation_patience} />
+          <NumberField label="Охлаждение изоляции (шагов)" value={config.isolation_cooldown_steps} min={1} max={100} onChange={set("isolation_cooldown_steps")} tooltip={PARAMETER_TOOLTIPS.isolation_cooldown_steps} />
         </div>
 
         <details className="advanced network-settings">
           <summary>Сетевая модель и Sybil-атака</summary>
           <div className="advanced-body">
-            <BoolField label="Учитывать сетевые ограничения" checked={config.network_enabled} onChange={set("network_enabled")} />
-            <NumberField label="Число Sybil-идентичностей" value={config.n_sybil_agents} min={0} max={40} onChange={set("n_sybil_agents")} hint={`Итого ${effectiveTotal} агентов; нарушителей ${effectiveBad}. ${honestMajority ? "Честное большинство сохранено" : "Честное большинство нарушено"}`} />
-            {config.n_sybil_agents > 0 ? <NumberField label="Активация Sybil (шаг)" value={config.sybil_activation_step} min={1} max={config.n_steps} onChange={set("sybil_activation_step")} /> : null}
+            <BoolField label="Учитывать сетевые ограничения" checked={config.network_enabled} onChange={set("network_enabled")} tooltip={PARAMETER_TOOLTIPS.network_enabled} />
+            <NumberField label="Число Sybil-идентичностей" value={config.n_sybil_agents} min={0} max={40} onChange={set("n_sybil_agents")} hint={`Итого ${effectiveTotal} агентов; нарушителей ${effectiveBad}. ${honestMajority ? "Честное большинство сохранено" : "Честное большинство нарушено"}`} tooltip={PARAMETER_TOOLTIPS.n_sybil_agents} />
+            {config.n_sybil_agents > 0 ? <NumberField label="Активация Sybil (шаг)" value={config.sybil_activation_step} min={1} max={config.n_steps} onChange={set("sybil_activation_step")} tooltip={PARAMETER_TOOLTIPS.sybil_activation_step} /> : null}
             {config.network_enabled ? <>
-              <SelectField label="Топология" value={config.network_topology} onChange={set("network_topology")}><option value="complete">Полносвязная</option><option value="ring">Кольцевая</option><option value="random">Случайный граф</option><option value="small_world">Малый мир</option></SelectField>
-              {config.network_topology === "random" ? <NumberField label="Вероятность ребра" value={config.network_edge_probability} min={0.02} max={1} step={0.01} onChange={set("network_edge_probability")} /> : null}
-              {config.network_topology === "small_world" ? <><NumberField label="Число соседей k" value={config.small_world_neighbors} min={2} max={20} step={2} onChange={set("small_world_neighbors")} /><NumberField label="Вероятность перенаправления" value={config.small_world_rewire_probability} min={0} max={1} step={0.01} onChange={set("small_world_rewire_probability")} /></> : null}
-              <NumberField label="Вероятность потери сообщения" value={config.message_loss_probability} min={0} max={1} step={0.01} onChange={set("message_loss_probability")} />
-              <div className="two-fields"><NumberField label="Мин. задержка" value={config.message_delay_min_steps} min={0} max={20} onChange={set("message_delay_min_steps")} /><NumberField label="Макс. задержка" value={config.message_delay_max_steps} min={config.message_delay_min_steps} max={20} onChange={set("message_delay_max_steps")} /></div>
-              <NumberField label="Допустимая устарелость" value={config.max_message_staleness_steps} min={0} max={50} onChange={set("max_message_staleness_steps")} />
-              <NumberField label="Пропускная способность, сообщ./шаг" value={config.bandwidth_messages_per_step} min={1} max={1000000} onChange={set("bandwidth_messages_per_step")} />
-              <BoolField label="Моделировать разделение сети" checked={config.partition_enabled} onChange={set("partition_enabled")} />
-              {config.partition_enabled ? <><div className="two-fields"><NumberField label="Начало разделения" value={config.partition_start_step} min={1} max={config.n_steps} onChange={set("partition_start_step")} /><NumberField label="Конец разделения" value={config.partition_end_step} min={config.partition_start_step} max={config.n_steps} onChange={set("partition_end_step")} /></div><NumberField label="Доля узлов в сегменте" value={config.partition_fraction} min={0.05} max={0.95} step={0.05} onChange={set("partition_fraction")} /></> : null}
+              <SelectField label="Топология" value={config.network_topology} onChange={set("network_topology")} tooltip={PARAMETER_TOOLTIPS.network_topology}><option value="complete">Полносвязная</option><option value="ring">Кольцевая</option><option value="random">Случайный граф</option><option value="small_world">Малый мир</option></SelectField>
+              {config.network_topology === "random" ? <NumberField label="Вероятность ребра" value={config.network_edge_probability} min={0.02} max={1} step={0.01} onChange={set("network_edge_probability")} tooltip={PARAMETER_TOOLTIPS.network_edge_probability} /> : null}
+              {config.network_topology === "small_world" ? <><NumberField label="Число соседей k" value={config.small_world_neighbors} min={2} max={20} step={2} onChange={set("small_world_neighbors")} tooltip={PARAMETER_TOOLTIPS.small_world_neighbors} /><NumberField label="Вероятность перенаправления" value={config.small_world_rewire_probability} min={0} max={1} step={0.01} onChange={set("small_world_rewire_probability")} tooltip={PARAMETER_TOOLTIPS.small_world_rewire_probability} /></> : null}
+              <NumberField label="Вероятность потери сообщения" value={config.message_loss_probability} min={0} max={1} step={0.01} onChange={set("message_loss_probability")} tooltip={PARAMETER_TOOLTIPS.message_loss_probability} />
+              <div className="two-fields"><NumberField label="Мин. задержка" value={config.message_delay_min_steps} min={0} max={20} onChange={set("message_delay_min_steps")} tooltip={PARAMETER_TOOLTIPS.message_delay_min_steps} /><NumberField label="Макс. задержка" value={config.message_delay_max_steps} min={config.message_delay_min_steps} max={20} onChange={set("message_delay_max_steps")} tooltip={PARAMETER_TOOLTIPS.message_delay_max_steps} /></div>
+              <NumberField label="Допустимая устарелость" value={config.max_message_staleness_steps} min={0} max={50} onChange={set("max_message_staleness_steps")} tooltip={PARAMETER_TOOLTIPS.max_message_staleness_steps} />
+              <NumberField label="Пропускная способность, сообщ./шаг" value={config.bandwidth_messages_per_step} min={1} max={1000000} onChange={set("bandwidth_messages_per_step")} tooltip={PARAMETER_TOOLTIPS.bandwidth_messages_per_step} />
+              <BoolField label="Моделировать разделение сети" checked={config.partition_enabled} onChange={set("partition_enabled")} tooltip={PARAMETER_TOOLTIPS.partition_enabled} />
+              {config.partition_enabled ? <><div className="two-fields"><NumberField label="Начало разделения" value={config.partition_start_step} min={1} max={config.n_steps} onChange={set("partition_start_step")} tooltip={PARAMETER_TOOLTIPS.partition_start_step} /><NumberField label="Конец разделения" value={config.partition_end_step} min={config.partition_start_step} max={config.n_steps} onChange={set("partition_end_step")} tooltip={PARAMETER_TOOLTIPS.partition_end_step} /></div><NumberField label="Доля узлов в сегменте" value={config.partition_fraction} min={0.05} max={0.95} step={0.05} onChange={set("partition_fraction")} tooltip={PARAMETER_TOOLTIPS.partition_fraction} /></> : null}
             </> : null}
           </div>
         </details>
@@ -296,24 +363,24 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
         <details className="advanced">
           <summary>Статистика и вычисления</summary>
           <div className="advanced-body">
-            <NumberField label="Bootstrap-выборок" value={config.bootstrap_samples} min={100} max={10000} step={100} onChange={set("bootstrap_samples")} />
-            <NumberField label="Параллельных процессов (0 — авто)" value={config.parallel_workers} min={0} max={32} onChange={set("parallel_workers")} />
-            <NumberField label="Прогонов на точку чувствительности" value={config.n_sensitivity_runs} min={1} max={100} onChange={set("n_sensitivity_runs")} />
-            <NumberField label="Прогонов на точку факторного плана" value={config.factorial_runs_per_point} min={1} max={50} onChange={set("factorial_runs_per_point")} />
-            <NumberField label="Максимум точек факторного плана" value={config.factorial_max_points} min={4} max={64} onChange={set("factorial_max_points")} />
+            <NumberField label="Bootstrap-выборок" value={config.bootstrap_samples} min={100} max={10000} step={100} onChange={set("bootstrap_samples")} tooltip={PARAMETER_TOOLTIPS.bootstrap_samples} />
+            <NumberField label="Параллельных процессов (0 — авто)" value={config.parallel_workers} min={0} max={32} onChange={set("parallel_workers")} tooltip={PARAMETER_TOOLTIPS.parallel_workers} />
+            <NumberField label="Прогонов на точку чувствительности" value={config.n_sensitivity_runs} min={1} max={100} onChange={set("n_sensitivity_runs")} tooltip={PARAMETER_TOOLTIPS.n_sensitivity_runs} />
+            <NumberField label="Прогонов на точку факторного плана" value={config.factorial_runs_per_point} min={1} max={50} onChange={set("factorial_runs_per_point")} tooltip={PARAMETER_TOOLTIPS.factorial_runs_per_point} />
+            <NumberField label="Максимум точек факторного плана" value={config.factorial_max_points} min={4} max={64} onChange={set("factorial_max_points")} tooltip={PARAMETER_TOOLTIPS.factorial_max_points} />
           </div>
         </details>
 
         <details className="advanced">
           <summary>Дополнительно</summary>
           <div className="advanced-body">
-            <NumberField label="Желаемое действие x*" value={config.desired_action} min={-2} max={2} step={0.05} onChange={set("desired_action")} />
-            <NumberField label="СКО шума корректного агента" value={config.honest_noise_sigma} min={0.01} max={1} step={0.01} onChange={set("honest_noise_sigma")} />
-            <NumberField label="Коэффициент EigenTrust γ" value={config.reputation_damping} min={0} max={0.99} step={0.01} onChange={set("reputation_damping")} />
-            <NumberField label="Минимум наблюдений" value={config.minimum_evidence_steps} min={1} max={100} onChange={set("minimum_evidence_steps")} />
-            <NumberField label="Усечение с каждой стороны" value={config.trim_each_side} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("trim_each_side")} />
-            <NumberField label="Радиус ограничения выбросов" value={config.clip_radius} min={0.05} max={10} step={0.05} onChange={set("clip_radius")} />
-            <NumberField label="Допуск правильного решения" value={config.correctness_tolerance} min={0.01} max={2} step={0.05} onChange={set("correctness_tolerance")} />
+            <NumberField label="Желаемое действие x*" value={config.desired_action} min={-2} max={2} step={0.05} onChange={set("desired_action")} tooltip={PARAMETER_TOOLTIPS.desired_action} />
+            <NumberField label="СКО шума корректного агента" value={config.honest_noise_sigma} min={0.01} max={1} step={0.01} onChange={set("honest_noise_sigma")} tooltip={PARAMETER_TOOLTIPS.honest_noise_sigma} />
+            <NumberField label="Коэффициент EigenTrust γ" value={config.reputation_damping} min={0} max={0.99} step={0.01} onChange={set("reputation_damping")} tooltip={PARAMETER_TOOLTIPS.reputation_damping} />
+            <NumberField label="Минимум наблюдений" value={config.minimum_evidence_steps} min={1} max={100} onChange={set("minimum_evidence_steps")} tooltip={PARAMETER_TOOLTIPS.minimum_evidence_steps} />
+            <NumberField label="Усечение с каждой стороны" value={config.trim_each_side} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("trim_each_side")} tooltip={PARAMETER_TOOLTIPS.trim_each_side} />
+            <NumberField label="Радиус ограничения выбросов" value={config.clip_radius} min={0.05} max={10} step={0.05} onChange={set("clip_radius")} tooltip={PARAMETER_TOOLTIPS.clip_radius} />
+            <NumberField label="Допуск правильного решения" value={config.correctness_tolerance} min={0.01} max={2} step={0.05} onChange={set("correctness_tolerance")} tooltip={PARAMETER_TOOLTIPS.correctness_tolerance} />
           </div>
         </details>
       </div>
