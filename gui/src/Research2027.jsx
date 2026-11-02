@@ -123,7 +123,7 @@ function ResearchKpis({studyId,result}){
    <div className="kpi-note">{i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"}</div>
   </div>)}</div>;
 }
-export function ResearchStudy({studyId}){
+export function ResearchStudy({studyId,navigation}){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
  const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),worker=useRef(null);
  useEffect(()=>{setConfig({...def.defaults});setResult(null);setError("");setMetric("");},[def.id]);
@@ -139,13 +139,15 @@ export function ResearchStudy({studyId}){
  const stop=()=>{worker.current?.terminate();worker.current=null;setRunning(false);};
  const opts=result?.rows?.length?Object.keys(result.rows[0]).filter(x=>x in metricNames):[];
  const theory=THEORY[studyId];
- return <div className="r27-study-shell">
+ return <>
   <ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");}} running={running}/>
-  <div className="r27-study-content"><div className="r27-root"><header className="r27-heading"><div className="r27-kicker">IMAS-lab · Эксперименты 2027 · {def.origin}</div><h1>{def.title}</h1><p>{theory.goal}</p></header>
+  <main className="content r27-experiment-content" data-study={studyId}>
+   {navigation}
+   <div className="r27-study-content"><div className="r27-root"><header className="r27-heading"><div className="r27-kicker">Эксперименты 2027 · {def.origin}</div><h2 className="r27-study-title">{def.title}</h2><p>{theory.goal}</p></header>
   <section className="r27-results"><h2>Результаты вычислительного эксперимента</h2>{running?<p role="status">Выполняются независимые вычислительные прогоны…</p>:null}{error?<p className="r27-error" role="alert">{error}</p>:null}
    <ResearchKpis studyId={studyId} result={result}/>
    <TopologyPlayback replay={result?.replay||previewReplay}/>
-   {!result?<div className="r27-empty">Задайте параметры и запустите эксперимент. Для каждого исследования предусмотрены независимые результаты и своя математическая постановка.</div>:<>
+   {!result?<div className="r27-empty">Задайте параметры и запустите эксперимент. Математическая модель, алгоритмы и ограничения подробно изложены в единой справке.</div>:<>
     <p>{result.summary}</p><div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
     {studyId==="petri"?<><div className="r27-petri-report"><div><h3>Результат верификации</h3><p>{result.witness?.length?"Найден контрпример достижения опасной маркировки.":"Контрпример не найден на заданном горизонте и при указанном ограничении перебора."}</p><ol>{(result.witness||[]).map((s,i)=><li key={i}>{s}</li>)}</ol><p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p></div></div></>:<>
     <label className="r27-metric">Показатель визуализации <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label><ScientificGraph result={result} metric={metric}/></>}
@@ -153,8 +155,7 @@ export function ResearchStudy({studyId}){
     <div className="r27-result-tools"><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button></div>
     <h3>Сводная таблица результатов</h3><ResultTable rows={result.rows}/><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p>
    </>}
-   <div className="r27-theory-short"><h3>Математическая постановка</h3><p>{theory.model}</p>{theory.formulas.map((f,i)=><div className="r27-formula" key={i}>{f}</div>)}<p>Подробное описание процессов, формул и алгоритмов находится в единой справке, в разделе соответствующего эксперимента.</p></div>
-  </section></div></div></div>;
+  </section></div></div></main></>;
 }
 export function ResearchHelp({baselineArticle,baselineSections}){
  return <UnifiedHelp baselineArticle={baselineArticle} baselineSections={baselineSections} researchTheory={THEORY}/>;
