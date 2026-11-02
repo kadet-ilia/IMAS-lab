@@ -46,3 +46,30 @@ test("validation rejects nonphysical configuration",()=>{
  assert.throws(()=>validateStudy("cascade",{agents:9}));
  assert.throws(()=>validateStudy("petri",{stateLimit:5}));
 });
+
+
+test("all research modules provide reproducible directed graphs and stepped replays",()=>{
+ for(const study of STUDY_DEFS){
+  const cfg=small[study.id],a=executeStudy(study.id,cfg),b=executeStudy(study.id,cfg),replay=a.replay;
+  assert.ok(Array.isArray(replay.vertices)&&replay.vertices.length===a.config.agents,study.id+" vertices");
+  assert.ok(Array.isArray(replay.edges)&&replay.edges.length>0,study.id+" edges");
+  assert.ok(Array.isArray(replay.frames)&&replay.frames.length>=2,study.id+" frames");
+  assert.deepEqual(replay,b.replay,study.id+" replay seed determinism");
+  for(let i=0;i<replay.frames.length;i++){
+   const frame=replay.frames[i];
+   assert.equal(frame.status.length,a.config.agents,study.id+" status coverage");
+   if(i)assert.ok(frame.step>replay.frames[i-1].step,study.id+" frame ordering");
+   for(const [u,v] of frame.activeEdges)assert.ok(replay.edges.some(([x,y])=>x===u&&y===v),study.id+" activity must follow edge");
+  }
+ }
+});
+test("replay respects zero-propagation and simulated state transitions",()=>{
+ const p=executeStudy("probgraph",{runs:8,spread:0,steps:5});
+ assert.ok(p.replay.frames.every(f=>f.status.filter(x=>x==="compromised").length===1));
+ const c=executeStudy("cascade",{runs:8,spread:0});
+ assert.ok(c.replay.frames.every(f=>f.status.filter(x=>x==="affected").length===1));
+ const m=executeStudy("misinformation",{runs:8,spread:0});
+ assert.ok(m.replay.frames.every(f=>f.status.filter(x=>x==="misled").length===0));
+ const n=executeStudy("petri",{criticalCount:3,steps:4,detectionDelay:10});
+ assert.ok(n.replay.frames.at(-1).status.filter(s=>s==="compromised").length>=3);
+});
