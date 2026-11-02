@@ -1,4 +1,4 @@
-import React, {useEffect,useMemo,useRef,useState} from "react";
+import React, {forwardRef,useEffect,useImperativeHandle,useMemo,useRef,useState} from "react";
 import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
 import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
@@ -123,40 +123,80 @@ function ResearchKpis({studyId,result}){
    <div className="kpi-note">{i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"}</div>
   </div>)}</div>;
 }
-export function ResearchStudy({studyId,navigation}){
+export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation,onRuntimeChange},actionsRef){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
- const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),worker=useRef(null);
+ const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),[lastCompletedAt,setLastCompletedAt]=useState(null),worker=useRef(null);
  useEffect(()=>{setConfig({...def.defaults});setResult(null);setError("");setMetric("");},[def.id]);
  useEffect(()=>()=>{worker.current?.terminate();worker.current=null;},[]);
  const previewReplay=useMemo(()=>{try{return buildResearchReplay(studyId,validateStudy(studyId,config),result||{});}catch{return null;}},[studyId,config,result]);
  const update=(k,v)=>{worker.current?.terminate();worker.current=null;setRunning(false);setResult(null);setMetric("");setConfig(old=>({...old,[k]:v}));};
  const start=()=>{try{const validated=validateStudy(studyId,config);worker.current?.terminate();setError("");setRunning(true);
   const w=new Worker(new URL("./research2027.worker.js",import.meta.url),{type:"module"});worker.current=w;
-  w.onmessage=({data})=>{setRunning(false);if(data.ok){setResult(data.result);setMetric(data.result.chartKey||"");}else setError(data.error||"Ошибка моделирования");w.terminate();if(worker.current===w)worker.current=null;};
+  w.onmessage=({data})=>{setRunning(false);if(data.ok){setResult(data.result);setMetric(data.result.chartKey||"");setLastCompletedAt(new Date());}else setError(data.error||"Ошибка моделирования");w.terminate();if(worker.current===w)worker.current=null;};
   w.onerror=(event)=>{setRunning(false);setError(event.message||"Ошибка вычислительного процесса");w.terminate();if(worker.current===w)worker.current=null;};
   w.postMessage({id:studyId,config:validated});
  }catch(e){setError(e.message);}};
  const stop=()=>{worker.current?.terminate();worker.current=null;setRunning(false);};
+ const resetStudy=()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");setLastCompletedAt(null);};
+ const newStudySeed=()=>update("seed",Math.floor((Date.now()+Math.random()*100000)%2147483647));
+ useImperativeHandle(actionsRef,()=>({start,stop,reset:resetStudy,newSeed:newStudySeed}));
+ useEffect(()=>{onRuntimeChange?.({studyId,running,seed:config.seed,lastCompletedAt,hasResult:Boolean(result)});},[studyId,running,config.seed,lastCompletedAt,Boolean(result),onRuntimeChange]);
  const opts=result?.rows?.length?Object.keys(result.rows[0]).filter(x=>x in metricNames):[];
  const theory=THEORY[studyId];
+ const author=studyId==="petri"||studyId==="misinformation"?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
  return <>
-  <ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");}} running={running}/>
+  <ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={resetStudy} running={running}/>
   <main className="content r27-experiment-content" data-study={studyId}>
    {navigation}
-   <div className="r27-study-content"><div className="r27-root"><header className="r27-heading"><div className="r27-kicker">{["petri","misinformation"].includes(studyId)?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А."}</div><h2 className="r27-study-title">{def.title}</h2><p>{theory.goal}</p></header>
-  <section className="r27-results"><h2>Результаты вычислительного эксперимента</h2>{running?<p role="status">Выполняются независимые вычислительные прогоны…</p>:null}{error?<p className="r27-error" role="alert">{error}</p>:null}
+   <div className="r27-kicker">{author}</div>
+   <h2 className="r27-study-title">{def.title}</h2>
+   <p className="r27-study-purpose">{theory.goal}</p>
+   {running?<div className="progress-strip r27-study-progress" role="status"><div className="progress-head"><strong>Выполняются независимые вычислительные прогоны…</strong><span>Модель: {def.short}</span></div><div className="progress-track"><i className="r27-progress-indeterminate"/></div></div>:null}
+   {error?<div className="error-banner" role="alert">{error}</div>:null}
+   <div className="trust-overview-grid r27-study-overview">
+     <TopologyPlayback replay={result?.replay||previewReplay} compact/>
+     <section className="panel r27-summary-panel">
+       <header className="panel-header"><div><h2>Сводная таблица результатов</h2><p>Показатели расчётов по сценариям и методам</p></div></header>
+       <div className="panel-body">
+         {result?<ResultTable rows={result.rows}/>:<div className="r27-summary-empty">Таблица формируется после запуска вычислительного эксперимента.</div>}
+       </div>
+     </section>
+   </div>
    <ResearchKpis studyId={studyId} result={result}/>
-   <TopologyPlayback replay={result?.replay||previewReplay}/>
-   {!result?<div className="r27-empty">Задайте параметры и запустите эксперимент. Математическая модель, алгоритмы и ограничения подробно изложены в единой справке.</div>:<>
-    <p>{result.summary}</p><div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
-    {studyId==="petri"?<><div className="r27-petri-report"><div><h3>Результат верификации</h3><p>{result.witness?.length?"Найден контрпример достижения опасной маркировки.":"Контрпример не найден на заданном горизонте и при указанном ограничении перебора."}</p><ol>{(result.witness||[]).map((s,i)=><li key={i}>{s}</li>)}</ol><p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p></div></div></>:<>
-    <label className="r27-metric">Показатель визуализации <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label><ScientificGraph result={result} metric={metric}/></>}
-    <StudyVisualization result={result} metric={metric}/>
-    <div className="r27-result-tools"><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button></div>
-    <h3>Сводная таблица результатов</h3><ResultTable rows={result.rows}/><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p>
-   </>}
-  </section></div></div></main></>;
-}
+   {result?<>
+     <section className="panel r27-study-summary">
+       <header className="panel-header"><div><h2>Основные результаты исследования</h2><p>Сводные оценки и исходные параметры расчёта</p></div></header>
+       <div className="panel-body">
+         <p>{result.summary}</p>
+         <div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
+       </div>
+     </section>
+     {studyId==="petri"?
+       <section className="panel r27-petri-report">
+         <header className="panel-header"><div><h2>Результат верификации</h2><p>Достижимость опасной маркировки</p></div></header>
+         <div className="panel-body">
+           <p>{result.witness?.length?"Найден контрпример достижения опасной маркировки.":"Контрпример не найден на заданном горизонте и при указанном ограничении перебора."}</p>
+           <ol>{(result.witness||[]).map((state,i)=><li key={i}>{state}</li>)}</ol>
+           <p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p>
+         </div>
+       </section>:
+       <section className="panel r27-comparison-panel">
+         <header className="panel-header"><div><h2>Сравнение сценариев и методов</h2><p>Групповые показатели вычислительного эксперимента</p></div>
+           <label className="r27-metric">Показатель <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label>
+         </header>
+         <div className="panel-body"><ScientificGraph result={result} metric={metric}/></div>
+       </section>}
+     <StudyVisualization result={result} metric={metric}/>
+     <section className="panel r27-study-limits">
+       <header className="panel-header"><div><h2>Интерпретация и экспорт</h2><p>Границы применимости и результаты воспроизводимых расчётов</p></div>
+         <div className="r27-result-tools"><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button></div>
+       </header>
+       <div className="panel-body"><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p></div>
+     </section>
+   </>:<div className="empty r27-study-empty">Задайте параметры в боковом меню и запустите эксперимент. Математическая модель и ограничения изложены в единой справке.</div>}
+  </main>
+ </>;
+});
 export function ResearchHelp({baselineArticle,baselineSections}){
  return <UnifiedHelp baselineArticle={baselineArticle} baselineSections={baselineSections} researchTheory={THEORY}/>;
 }
