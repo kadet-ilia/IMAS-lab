@@ -97,7 +97,7 @@ export function baselineReplay(data,config){
  const n=Math.min(data?.configuration?.effective_agent_count||config.n_agents||21,100),agents=data?.agents||[],states=data?.states||[],reps=data?.reputation||[];
  const vertices=Array.from({length:n},(_,i)=>({id:i,label:"А"+(i+1)}));
  const edges=[],topology=config.network_topology;
- if(topology==="complete"&&n<=35){for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j)edges.push([i,j]);}
+ if(topology==="complete"){for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j)edges.push([i,j]);}
  else if(topology==="ring"||topology==="small_world"){for(let i=0;i<n;i++){edges.push([i,(i+1)%n]);edges.push([i,(i+2)%n]);}}
  else{for(let i=0;i<n;i++){edges.push([i,(i+1)%n]);edges.push([i,(i+3)%n]);}}
  const byAgent=new Map(),byState=new Map(),repMap=new Map();
