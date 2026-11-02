@@ -167,6 +167,17 @@ async function pageChromeSnapshot(){
 }
 const baselineChrome=await pageChromeSnapshot();
 if(baselineChrome.kpiCount!==4)throw Error("Trust must have four KPI cards");
+const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigation').evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:typeof child.className==="string"?child.className:"",role:child.getAttribute("role"),type:child.getAttribute("type")})));
+const trustNavigation=await navSignature();
+const toolbarSignature=()=>page.locator(".topbar .toolbar").evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:child.className||"",title:child.title||""})));
+const trustToolbar=await toolbarSignature();
+// Original trust submodes are now parameters, not a second row of navigation controls.
+const modeSelector=page.getByRole("combobox",{name:"Режим исследования"});
+await modeSelector.selectOption("mc");
+if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue())!=="trace")throw Error("Trust mode switch changed main experiment");
+if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error("Main navigation altered after switching trust submode");
+await modeSelector.selectOption("trace");
+
 
 
 const authorA = "Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
@@ -275,6 +286,9 @@ for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
   await page.locator("main.r27-experiment-content > .imas-experiment-heading > h2.r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
+  if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error(researchTabs[i]+": different experiment navigation markup");
+  if(JSON.stringify(await toolbarSignature())!==JSON.stringify(trustToolbar))throw Error(researchTabs[i]+": different toolbar markup");
+
 
   const currentChrome=await pageChromeSnapshot();
   const comparable=structure=>{
