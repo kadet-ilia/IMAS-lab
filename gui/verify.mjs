@@ -84,10 +84,26 @@ await page.getByLabel("Параллельных процессов (0 — авт
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
 
-await page.locator(".tabs").getByRole("button", { name: "Справка", exact: true }).click();
+await page.locator(".tabs").getByRole("button", { name: "Справка 3.2", exact: true }).click();
 await page.getByRole("heading", { name: "Справка по модельному эксперименту ИМАС" }).waitFor();
 const helpScreenshot = path.join(here, "help.png");
 await page.screenshot({ path: helpScreenshot, fullPage: false });
+
+const researchTabs = ["Неопределённость", "Граф угроз", "Сети Петри", "Каскадные риски", "Риски решений"];
+for (const name of researchTabs) {
+  await page.locator(".tabs").getByRole("button", { name, exact: true }).click();
+  await page.locator(".r27-heading h1").waitFor({ timeout: 10000 });
+  if (!(await page.locator(".r27-field input").count())) throw new Error("Missing parameter inputs: " + name);
+}
+await page.locator(".tabs").getByRole("button", { name: "Неопределённость", exact: true }).click();
+await page.locator(".r27-field input").nth(1).fill("10");
+await page.getByRole("button", { name: "Запустить расчёт", exact: true }).click();
+await page.getByText("Численные результаты").waitFor({ timeout: 30000 });
+const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
+const researchScreenshot = path.join(here, "research2027.png");
+await page.screenshot({ path: researchScreenshot, fullPage: false });
+await page.locator(".tabs").getByRole("button", { name: "Справка 2027", exact: true }).click();
+await page.getByRole("heading", { name: "Справка по пяти вычислительным экспериментам 2027 года" }).waitFor();
 
 const report = {
   title: await page.title(),
@@ -102,9 +118,12 @@ const report = {
     bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
     parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
   },
+  researchTabs,
+  researchComputed,
+  researchHelp: await page.locator(".r27-help-content").count(),
   errors,
   warnings,
-  screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot },
+  screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot, research: researchScreenshot },
 };
 
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
@@ -117,5 +136,7 @@ if (
   report.bodyLength < 2000 ||
   report.helpSections < 18 ||
   !controlsPresent ||
+  !report.researchComputed ||
+  report.researchHelp === 0 ||
   errors.length
 ) process.exit(1);
