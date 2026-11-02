@@ -3,7 +3,7 @@ import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxi
 import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
 import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
 import {ResearchSettings} from "./ResearchSettings.jsx";
-import {ExperimentLayout,ExperimentPanel,ExperimentKpi} from "./ExperimentLayout.jsx";
+import {ExperimentLayout,ExperimentPanel,ExperimentKpi,ExperimentProgress} from "./ExperimentLayout.jsx";
 import {UnifiedHelp} from "./UnifiedHelp.jsx";
 import "./research2027.css";
 
@@ -151,7 +151,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
   authors={author}
   title={def.title}
   description={theory.goal}
-  progress={running?<div className="progress-strip r27-study-progress" role="status"><div className="progress-head"><strong>Выполняются независимые вычислительные прогоны…</strong><span>Модель: {def.short}</span></div><div className="progress-track"><i className="r27-progress-indeterminate"/></div></div>:null}
+  progress={<ExperimentProgress running={running} progress={running?{message:"Выполняются независимые вычислительные прогоны…",completed:0,total:1,percent:0,indeterminate:true}:result?{message:"Расчёт завершён · "+def.short,completed:1,total:1,percent:100,eta_seconds:0}:{message:"Готов к запуску",completed:0,total:1,percent:0}}/>}
   error={error?<div className="error-banner" role="alert">{error}</div>:null}
  >
    <div className="trust-overview-grid">
