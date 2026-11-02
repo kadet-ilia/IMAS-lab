@@ -84,7 +84,8 @@ await page.getByLabel("Параллельных процессов (0 — авт
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
 
-await page.locator(".tabs").getByRole("button", { name: "Справка 3.2", exact: true }).click();
+await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
+await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка исходной модели 3.2", exact: true }).click();
 await page.getByRole("heading", { name: "Справка по модельному эксперименту ИМАС" }).waitFor();
 const helpScreenshot = path.join(here, "help.png");
 await page.screenshot({ path: helpScreenshot, fullPage: false });
@@ -95,20 +96,27 @@ const legacyControls = {
   bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
   parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
 };
-const researchTabs = ["Неопределённость", "Граф угроз", "Сети Петри", "Каскадные риски", "Риски решений"];
-for (const name of researchTabs) {
-  await page.locator(".tabs").getByRole("button", { name, exact: true }).click();
+const researchTabs = ["Автоматические решения", "Коллективное решение", "Опасные состояния", "Каскадные последствия", "Нарушение коллективного решения"];
+const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
+for (let i=0; i<researchTabs.length; i++) {
+  await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
   await page.locator(".r27-heading h1").waitFor({ timeout: 10000 });
-  if (!(await page.locator(".r27-field input").count())) throw new Error("Missing parameter inputs: " + name);
+  if (!(await page.locator(".r27-field input").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
+  if (!(await page.locator(".r27-playback-svg").count())) throw new Error("Missing topology graph: " + researchTabs[i]);
 }
-await page.locator(".tabs").getByRole("button", { name: "Неопределённость", exact: true }).click();
+await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 await page.locator(".r27-field input").nth(1).fill("10");
 await page.getByRole("button", { name: "Запустить расчёт", exact: true }).click();
-await page.getByText("Численные результаты").waitFor({ timeout: 30000 });
+await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
+await page.getByRole("button", {name:"▶ Воспроизвести"}).click();
+await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
+await page.getByRole("button", {name:"Пауза"}).click();
+await page.getByRole("slider", {name:"Выбор такта"}).fill("3");
+if(!(await page.locator(".r27-state-matrix").count()))throw Error("Missing state heatmap");
 const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
 const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
-await page.locator(".tabs").getByRole("button", { name: "Справка 2027", exact: true }).click();
+await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
 await page.getByRole("heading", { name: "Справка по пяти вычислительным экспериментам 2027 года" }).waitFor();
 
 const report = {
@@ -122,6 +130,7 @@ const report = {
   requiredControls: legacyControls,
   researchTabs,
   researchComputed,
+  topology: await page.locator(".r27-playback-svg").count(),
   researchHelp: await page.locator(".r27-help-content").count(),
   errors,
   warnings,
