@@ -11,6 +11,7 @@ import {
   Line,
   LineChart,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -414,6 +415,8 @@ function DecisionAreas({ hasBands, mode }) {
 function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) {
   const [bandMode, setBandMode] = useState("sigma");
   const [showTolerance, setShowTolerance] = useState(false);
+  const [zoomRange, setZoomRange] = useState(null);
+  const [dragRange, setDragRange] = useState(null);
   const trustReplay=useMemo(()=>baselineReplay(data,config),[data,config]);
   if (!data) return <><TopologyPlayback replay={trustReplay} compact/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
   const robust = data.metrics.find((item) => item.method === "proposed_robust");
@@ -428,6 +431,37 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   const runCount = hasBands ? trajectoryStatistics[0]?.run_count ?? config.n_runs : 0;
   const decisionChart = data.series.map((row) => ({ ...row, tolerance_band: [row.truth - config.correctness_tolerance, row.truth + config.correctness_tolerance], ...(statisticsByStep.get(row.step) || {}) }));
   const rep = buildReputationChart(data.reputation, totalAgents);
+  const allSteps = data.series.map(row => Number(row.step)).filter(Number.isFinite);
+  const firstStep = Math.min(...allSteps);
+  const lastStep = Math.max(...allSteps);
+  const clampStep = value => Math.max(firstStep, Math.min(lastStep, Math.round(Number(value))));
+  const startStep = zoomRange ? Math.max(firstStep, Math.min(lastStep, zoomRange[0])) : firstStep;
+  const endStep = zoomRange ? Math.max(startStep, Math.min(lastStep, zoomRange[1])) : lastStep;
+  const visibleDecision = decisionChart.filter(row => row.step >= startStep && row.step <= endStep);
+  const visibleReputation = rep.chart.filter(row => row.step >= startStep && row.step <= endStep);
+  const changeZoom = (from, to) => {
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+    const a = clampStep(from), b = clampStep(to);
+    if (a <= b) setZoomRange([a, b]);
+  };
+  const onZoomStart = event => {
+    const step = Number(event?.activeLabel);
+    if (Number.isFinite(step)) setDragRange([step, step]);
+  };
+  const onZoomMove = event => {
+    const step = Number(event?.activeLabel);
+    if (Number.isFinite(step)) setDragRange(previous => previous ? [previous[0], step] : null);
+  };
+  const onZoomEnd = event => {
+    if (!dragRange) return;
+    const end = Number(event?.activeLabel);
+    const [a, b] = [dragRange[0], Number.isFinite(end) ? end : dragRange[1]].sort((x,y)=>x-y);
+    if (b > a) changeZoom(a, b);
+    setDragRange(null);
+  };
+  const zoomSelection = dragRange && dragRange[0] !== dragRange[1] ? 
+    <ReferenceArea x1={Math.min(...dragRange)} x2={Math.max(...dragRange)} strokeOpacity={0.2} fill="#5195cf" fillOpacity={0.22} /> : null;
+
   const metricChart = [
     { metric: "RMSE (↓)", ...Object.fromEntries(data.metrics.map((item) => [item.method, item.rmse])) },
     { metric: "MAE (↓)", ...Object.fromEntries(data.metrics.map((item) => [item.method, item.mae])) },
@@ -436,15 +470,28 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   ];
   const networkVisible = config.network_enabled || config.n_sybil_agents > 0 || data.summary.delivery_ratio < 0.999;
   return <>
-    <TopologyPlayback replay={trustReplay} compact />
+    <div className="trust-overview-grid">
+      <TopologyPlayback replay={trustReplay} compact />
+      <Panel title="Сводная таблица результатов расчёта доверия" subtitle="Результаты одного прогона для всех методов агрегирования">
+        <div className="table-wrap trust-summary-table"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>|Смещение|</th><th>Покрытие 95%</th></tr></thead>
+        <tbody>{data.metrics.map(item=><tr key={item.method}><td>{METHODS[item.method]||item.method}</td><td>{item.rmse.toFixed(4)}</td><td>{item.mae.toFixed(4)}</td><td>{Math.abs(item.bias).toFixed(4)}</td><td>{(item.coverage95*100).toFixed(2)}%</td></tr>)}</tbody></table></div>
+      </Panel>
+    </div>
     {data.partial ? <div className="partial-banner">Отображены частичные результаты: выполнено {data.summary.completed_steps} из {config.n_steps} шагов.</div> : null}
     <div className="kpi-grid"><Kpi label={`Текущее решение (шаг ${last.step})`} value={last.proposed_robust.toFixed(3)} note="Трассировка выбранного прогона" /><Kpi label="Ошибка робастного решения (RMSE)" value={robust.rmse.toFixed(3)} note="За выбранный прогон" /><Kpi label="Изолированные нарушители/агенты" value={`${data.agents.filter((item) => item.byzantine && item.isolated_at !== null).length} / ${isolated}`} note={`Всего нарушителей: ${totalBad}`} tone="teal" /><Kpi label="Доставка сообщений" value={`${(data.summary.delivery_ratio * 100).toFixed(1)}%`} note={`Доверие корректных: ${honestTrust.toFixed(3)}`} tone="teal" /></div>
-    <div className="main-grid">
+    <div className="trust-zoom-toolbar" role="group" aria-label="Общий масштаб временных графиков">
+      <span className="trust-zoom-title">Общий масштаб по оси X</span>
+      <label>С шага <input type="number" aria-label="Начальный шаг увеличения" min={firstStep} max={endStep} value={startStep} onChange={e=>changeZoom(Number(e.target.value),endStep)} /></label>
+      <label>По шаг <input type="number" aria-label="Конечный шаг увеличения" min={startStep} max={lastStep} value={endStep} onChange={e=>changeZoom(startStep,Number(e.target.value))} /></label>
+      <button type="button" className="trust-zoom-reset" onClick={()=>{setZoomRange(null);setDragRange(null);}} disabled={!zoomRange}>Показать весь интервал</button>
+      <span className="trust-zoom-hint">Выделите мышью участок на любом графике — масштаб изменится на обоих</span>
+    </div>
+    <div className="main-grid trust-synced-grid">
       <Panel title="Динамика решений и оценок" subtitle={hasBands ? `Линии выбранного прогона; статистические области рассчитаны по ${runCount} независимым прогонам` : "Для межпрогонных областей выполните серию Монте-Карло."} headerAside={<BandControls hasBands={hasBands} runCount={runCount} mode={bandMode} setMode={setBandMode} showTolerance={showTolerance} setShowTolerance={setShowTolerance} onRunBands={onRunBands} running={running} />}>
-        <ResponsiveContainer width="100%" height={320}><ComposedChart data={decisionChart} margin={{ top: 12, right: 18, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} label={{ value: "Шаг", position: "insideBottom", offset: -4, fontSize: 10 }} /><YAxis domain={[config.safe_action_min - 0.5, config.safe_action_max + 0.5]} tick={{ fontSize: 10 }} label={{ value: "Значение", angle: -90, position: "insideLeft", fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 11, borderColor: "#d8e0e8" }} formatter={formatChartValue} /><Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />{showTolerance ? <Area dataKey="tolerance_band" name="Допустимое отклонение ±δ" stroke="none" fill="#dff4ea" fillOpacity={0.52} isAnimationActive={false} /> : null}<DecisionAreas hasBands={hasBands} mode={bandMode} /><ReferenceLine x={config.attack_start_step} stroke={COLORS.danger} strokeDasharray="4 4" label={{ value: "Начало атаки", fill: COLORS.danger, fontSize: 9, position: "insideTopRight" }} /><Line dataKey="truth" name="Желаемое действие (x*)" stroke="#7d8792" strokeDasharray="5 4" dot={false} strokeWidth={1.4} isAnimationActive={false} /><Line dataKey="arithmetic_mean" name={METHODS.arithmetic_mean} stroke={COLORS.arithmetic_mean} strokeDasharray="5 3" dot={false} strokeWidth={1.6} isAnimationActive={false} /><Line dataKey="trust_weighted_mean" name={METHODS.trust_weighted_mean} stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={1.8} isAnimationActive={false} />{hasBands ? <Line dataKey="proposed_robust_mean" name="Среднее робастное по прогонам" stroke="#6d8caf" strokeDasharray="4 3" dot={false} strokeWidth={1.5} isAnimationActive={false} /> : null}<Line dataKey="proposed_robust" name="Робастное — выбранный прогон" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2.2} isAnimationActive={false} /></ComposedChart></ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={320}><ComposedChart data={visibleDecision} onMouseDown={onZoomStart} onMouseMove={onZoomMove} onMouseUp={onZoomEnd} onMouseLeave={()=>setDragRange(null)} onDoubleClick={()=>setZoomRange(null)} margin={{ top: 12, right: 18, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} label={{ value: "Шаг", position: "insideBottom", offset: -4, fontSize: 10 }} /><YAxis domain={[config.safe_action_min - 0.5, config.safe_action_max + 0.5]} tick={{ fontSize: 10 }} label={{ value: "Значение", angle: -90, position: "insideLeft", fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 11, borderColor: "#d8e0e8" }} formatter={formatChartValue} /><Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />{showTolerance ? <Area dataKey="tolerance_band" name="Допустимое отклонение ±δ" stroke="none" fill="#dff4ea" fillOpacity={0.52} isAnimationActive={false} /> : null}<DecisionAreas hasBands={hasBands} mode={bandMode} /><ReferenceLine x={config.attack_start_step} stroke={COLORS.danger} strokeDasharray="4 4" label={{ value: "Начало атаки", fill: COLORS.danger, fontSize: 9, position: "insideTopRight" }} /><Line dataKey="truth" name="Желаемое действие (x*)" stroke="#7d8792" strokeDasharray="5 4" dot={false} strokeWidth={1.4} isAnimationActive={false} /><Line dataKey="arithmetic_mean" name={METHODS.arithmetic_mean} stroke={COLORS.arithmetic_mean} strokeDasharray="5 3" dot={false} strokeWidth={1.6} isAnimationActive={false} /><Line dataKey="trust_weighted_mean" name={METHODS.trust_weighted_mean} stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={1.8} isAnimationActive={false} />{hasBands ? <Line dataKey="proposed_robust_mean" name="Среднее робастное по прогонам" stroke="#6d8caf" strokeDasharray="4 3" dot={false} strokeWidth={1.5} isAnimationActive={false} /> : null}<Line dataKey="proposed_robust" name="Робастное — выбранный прогон" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2.2} isAnimationActive={false} />{zoomSelection}</ComposedChart></ResponsiveContainer>
       </Panel>
       <Panel title="Доверие (репутация) агентов" subtitle="Индивидуальная динамика и средние значения по группам">
-        <ResponsiveContainer width="100%" height={320}><LineChart data={rep.chart} margin={{ top: 12, right: 16, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 10 }} formatter={(value, name) => [Number(value).toFixed(3), name]} /><ReferenceLine y={config.isolation_threshold} stroke={COLORS.trust_weighted_mean} strokeDasharray="5 4" label={{ value: "Порог изоляции", fill: COLORS.trust_weighted_mean, fontSize: 9 }} />{rep.agents.map((agent) => <Line key={agent} dataKey={`a${agent}`} name={`Агент ${agent}`} stroke={rep.types.get(agent) === "sybil" ? COLORS.violet : rep.types.get(agent) === "byzantine" ? COLORS.danger : COLORS.trust_weighted_mean} strokeOpacity={0.24} dot={false} strokeWidth={0.8} legendType="none" isAnimationActive={false} />)}<Line dataKey="honestMean" name="Корректные" stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={2.1} isAnimationActive={false} /><Line dataKey="byzantineMean" name="Византийские" stroke={COLORS.danger} dot={false} strokeWidth={2.1} isAnimationActive={false} />{config.n_sybil_agents > 0 ? <Line dataKey="sybilMean" name="Sybil" stroke={COLORS.violet} dot={false} strokeWidth={2.1} isAnimationActive={false} /> : null}<Legend wrapperStyle={{ fontSize: 10 }} /></LineChart></ResponsiveContainer>
+        <ResponsiveContainer width="100%" height={320}><LineChart data={visibleReputation} onMouseDown={onZoomStart} onMouseMove={onZoomMove} onMouseUp={onZoomEnd} onMouseLeave={()=>setDragRange(null)} onDoubleClick={()=>setZoomRange(null)} margin={{ top: 12, right: 16, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 10 }} formatter={(value, name) => [Number(value).toFixed(3), name]} /><ReferenceLine y={config.isolation_threshold} stroke={COLORS.trust_weighted_mean} strokeDasharray="5 4" label={{ value: "Порог изоляции", fill: COLORS.trust_weighted_mean, fontSize: 9 }} />{rep.agents.map((agent) => <Line key={agent} dataKey={`a${agent}`} name={`Агент ${agent}`} stroke={rep.types.get(agent) === "sybil" ? COLORS.violet : rep.types.get(agent) === "byzantine" ? COLORS.danger : COLORS.trust_weighted_mean} strokeOpacity={0.24} dot={false} strokeWidth={0.8} legendType="none" isAnimationActive={false} />)}<Line dataKey="honestMean" name="Корректные" stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={2.1} isAnimationActive={false} /><Line dataKey="byzantineMean" name="Византийские" stroke={COLORS.danger} dot={false} strokeWidth={2.1} isAnimationActive={false} />{config.n_sybil_agents > 0 ? <Line dataKey="sybilMean" name="Sybil" stroke={COLORS.violet} dot={false} strokeWidth={2.1} isAnimationActive={false} /> : null}<Legend wrapperStyle={{ fontSize: 10 }} />{zoomSelection}</LineChart></ResponsiveContainer>
       </Panel>
     </div>
     {networkVisible ? <Panel title="Сетевые ограничения и доступность данных" subtitle="Размер компоненты связности, число доступных предложений и доля доставки сообщений"><ResponsiveContainer width="100%" height={260}><LineChart data={data.network_series} margin={{ top: 12, right: 40, left: -5, bottom: 10 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis yAxisId="count" domain={[0, totalAgents]} tick={{ fontSize: 9 }} /><YAxis yAxisId="ratio" orientation="right" domain={[0, 1]} tick={{ fontSize: 9 }} /><Tooltip contentStyle={{ fontSize: 10 }} /><Legend wrapperStyle={{ fontSize: 9 }} /><Line yAxisId="count" dataKey="largest_component" name="Крупнейшая компонента" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2} isAnimationActive={false} /><Line yAxisId="count" dataKey="available_agents" name="Доступные предложения" stroke={COLORS.arithmetic_mean} dot={false} isAnimationActive={false} /><Line yAxisId="ratio" dataKey="delivery_ratio" name="Доля доставки" stroke={COLORS.trust_weighted_mean} dot={false} isAnimationActive={false} /><ReferenceLine yAxisId="count" x={config.partition_start_step} stroke={COLORS.warning} strokeDasharray="4 4" /></LineChart></ResponsiveContainer></Panel> : null}
@@ -453,10 +500,6 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
       <Panel title="Состояния агентов (тепловая карта)" className="heat-panel"><StateHeatmap states={data.states} agents={totalAgents} steps={data.series.length} /></Panel>
       <Panel title="События изоляции" subtitle={`Показано событий: ${data.events.length}`}><div className="table-wrap"><table><thead><tr><th>Шаг</th><th>Агент</th><th>Тип</th><th>Подтв.</th><th>Длит.</th></tr></thead><tbody>{data.events.length ? data.events.map((event, index) => <tr key={`${event.agent}-${event.step}-${index}`}><td>{event.step}</td><td>{event.agent}</td><td className={event.type === "false_positive" ? "danger-text" : ""}>{event.type === "sybil" ? "Sybil" : event.type === "byzantine" ? "Визант." : "Ложная"}</td><td>{event.confirmations}</td><td>{event.duration}</td></tr>) : <tr><td colSpan="5" className="muted-cell">События отсутствуют</td></tr>}</tbody></table></div></Panel>
     </div>
-    <Panel title="Сводная таблица результатов расчёта доверия" subtitle="Результаты одного прогона для всех методов агрегирования">
-      <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>|Смещение|</th><th>Покрытие 95%</th></tr></thead>
-      <tbody>{data.metrics.map(item=><tr key={item.method}><td>{METHODS[item.method]||item.method}</td><td>{item.rmse.toFixed(4)}</td><td>{item.mae.toFixed(4)}</td><td>{Math.abs(item.bias).toFixed(4)}</td><td>{(item.coverage95*100).toFixed(2)}%</td></tr>)}</tbody></table></div>
-    </Panel>
   </>;
 }
 
