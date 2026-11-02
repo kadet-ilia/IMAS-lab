@@ -56,3 +56,11 @@
 .r27-glossary dd{margin:4px 0 0;font-size:12px}
 @media(max-width:1150px){.r27-root{padding:18px}.r27-work{grid-template-columns:230px minmax(0,1fr)}.r27-petri{grid-template-columns:1fr}.r27-heading h1{font-size:19px}}
 @media(max-width:760px){.r27-work{grid-template-columns:1fr}.r27-settings{max-height:none}.r27-glossary{grid-template-columns:1fr}.r27-root{padding:14px}}
+
+/* The legacy controls must not launch the original experiment from a 2027 tab. */
+.workspace.research-2027-workspace{grid-template-columns:minmax(0,1fr)}
+.workspace.research-2027-workspace>.content{padding-left:12px;padding-right:12px}
+.toolbar.research-toolbar button:not(.icon-button){display:none}
+.tabs{overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.tabs>button:not(.export-button){flex-shrink:0;min-width:auto;padding:0 10px;font-size:12px;white-space:nowrap}
+.tabs .export-button{flex-shrink:0;white-space:nowrap}
