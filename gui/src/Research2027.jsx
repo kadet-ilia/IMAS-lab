@@ -140,7 +140,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
  const resetStudy=()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");setLastCompletedAt(null);};
  const newStudySeed=()=>update("seed",Math.floor((Date.now()+Math.random()*100000)%2147483647));
  useImperativeHandle(actionsRef,()=>({start,stop,reset:resetStudy,newSeed:newStudySeed}));
- useEffect(()=>{onRuntimeChange?.({studyId,running,seed:config.seed,lastCompletedAt,hasResult:Boolean(result)});},[studyId,running,config.seed,lastCompletedAt,Boolean(result),onRuntimeChange]);
+ useEffect(()=>{onRuntimeChange?.({studyId,running,seed:config.seed,lastCompletedAt,hasResult:Boolean(result),steps:result?.config?.steps??config.steps??null,elapsedMs:result?.elapsedMs??null,rows:result?.rows?.length??0});},[studyId,running,config.seed,lastCompletedAt,Boolean(result),onRuntimeChange]);
  const opts=result?.rows?.length?Object.keys(result.rows[0]).filter(x=>x in metricNames):[];
  const theory=THEORY[studyId];
  const author=studyId==="petri"||studyId==="misinformation"?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
