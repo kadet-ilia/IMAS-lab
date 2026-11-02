@@ -36,3 +36,22 @@ export function ExperimentParameterTooltip({text}){
   <span role="tooltip">{text}</span>
  </span>;
 }
+
+/** Uniform progress indicator; research workers can flag indeterminate progress. */
+export function ExperimentProgress({progress=null,running=false,cacheHit=false}){
+ const data=progress||{message:"Готов к запуску",completed:0,total:1,percent:0};
+ const percentage=Math.max(0,Math.min(100,Number(data.percent||0)));
+ const seconds=Number(data.eta_seconds);
+ const remaining=Number.isFinite(seconds)&&seconds>=0
+  ? (seconds<60?Math.ceil(seconds)+" с":Math.floor(seconds/60)+" мин "+Math.ceil(seconds%60)+" с")
+  : "—";
+ return <div className={"progress-strip "+(running?"running":"done")} role="status">
+  <div className="progress-head">
+   <strong>{data.message||(running?"Выполняется":"Готов к запуску")}</strong>
+   <span>{Number(data.completed||0)} / {Number(data.total||1)} · {percentage.toFixed(1)}%</span>
+   {cacheHit?<em>кэш</em>:null}
+   <span>Осталось: {remaining}</span>
+  </div>
+  <div className="progress-track"><i className={data.indeterminate?"r27-progress-indeterminate":""} style={data.indeterminate?undefined:{width:percentage+"%"}}/></div>
+ </div>;
+}
