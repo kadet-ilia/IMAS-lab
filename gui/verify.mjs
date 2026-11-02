@@ -121,11 +121,33 @@ async function assertStandardWorkspace(section) {
 }
 await assertStandardWorkspace("Расчет доверия");
 
+const authorA = "Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
+const authorB = "Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.";
+if((await page.locator("main .r27-trust-authors").innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
+async function assertNavButtonsEqual(section){
+ const help=await page.locator(".r27-experiment-navigation .r27-nav-right").boundingBox();
+ const svg=await page.locator(".r27-experiment-navigation .r27-export-control").boundingBox();
+ if(!help || !svg || Math.abs(help.width-svg.width)>1 || Math.abs(help.height-svg.height)>1){
+  throw Error(section+": Help and SVG buttons differ: "+JSON.stringify({help,svg}));
+ }
+}
+await assertNavButtonsEqual("Расчет доверия");
+
+
 
 const trustOverview = page.locator(".trust-overview-grid");
 await trustOverview.waitFor();
 const topologyBox = await trustOverview.locator(".r27-replay").boundingBox();
 const summaryBox = await trustOverview.locator(".panel").boundingBox();
+const replay = trustOverview.locator(".r27-replay-compact");
+const figureBox = await replay.locator(".r27-playback-figure").boundingBox();
+const playbackInfo = await replay.locator(".r27-playback-aside").boundingBox();
+const playbackControls = await replay.locator(".r27-playback-controls").boundingBox();
+if(!figureBox||figureBox.height<380)throw Error("Compact network canvas not enlarged: "+JSON.stringify(figureBox));
+if(!playbackInfo||playbackInfo.height>150)throw Error("Compact network state area too tall: "+JSON.stringify(playbackInfo));
+if(!playbackControls||playbackControls.height>90)throw Error("Playback controls use too many rows: "+JSON.stringify(playbackControls));
+if((await replay.locator(".r27-replay-notes summary").count())!==1)throw Error("Scientific network caveat should be preserved in collapsed details");
+
 if (!topologyBox || !summaryBox || !(summaryBox.x > topologyBox.x + topologyBox.width - 2)) {
   throw new Error("Trust topology and summary table are not side-by-side");
 }
@@ -202,6 +224,9 @@ for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
   await page.locator(".r27-heading .r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
+  await assertNavButtonsEqual(researchTabs[i]);
+  const authors=(await page.locator(".r27-study-content .r27-kicker").innerText()).trim();
+  if(authors!==((i===2||i===4)?authorB:authorA))throw Error("Wrong researcher attribution on "+researchTabs[i]+": "+authors);
   if ((await page.locator(".r27-theory-short").count())!==0) throw new Error("Inline mathematical theory must only be in unified help: "+researchTabs[i]);
   if ((await page.locator(".r27-study-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
   if (!(await page.locator(".r27-unified-settings input[type=number]").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
