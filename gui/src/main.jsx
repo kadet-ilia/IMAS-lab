@@ -20,6 +20,7 @@ import {
 import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
+import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -663,50 +664,28 @@ function App() {
     setRunning(true);
     setError("");
     setCacheHit(false);
-    setProgress({ stage: "queued", completed: 0, total: 1, percent: 0, message: "Подготовка задания" });
-    const started = performance.now();
+    setProgress({stage:"queued",completed:0,total:1,percent:0,message:"Подготовка браузерного вычислительного потока"});
+    const started=performance.now();
     try {
-      const maxF = Math.floor((config.n_agents - 1) / 2);
-      const candidates = [0, Math.round(maxF * 0.2), Math.round(maxF * 0.4), Math.round(maxF * 0.6), Math.round(maxF * 0.8), maxF];
-      const payload = { action, scenario, config, sensitivity_mode: mode, f_values: [...new Set(candidates)] };
-      const response = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const created = await response.json();
-      if (!response.ok) throw new Error(created.error || "Не удалось создать задание");
-      jobRef.current = created.id;
-      let terminal = null;
-      while (!terminal) {
-        const statusResponse = await fetch(`/api/jobs/${created.id}`);
-        const status = await statusResponse.json();
-        if (!statusResponse.ok) throw new Error(status.error || "Не удалось получить состояние задания");
-        setProgress(status.progress || null);
-        setCacheHit(Boolean(status.cache_hit));
-        if (["completed", "stopped", "failed"].includes(status.state)) terminal = status;
-        else await sleep(350);
-      }
-      if (terminal.state === "failed") throw new Error(terminal.error || "Ошибка моделирования");
-      const body = terminal.result;
-      if (!body) throw new Error("Вычислительный процесс не вернул результат");
-      const wrapped = { ...body, client_signature: requestSignature };
-      if (action === "trace") setTrace(wrapped);
-      if (action === "monte_carlo") setMonteCarlo(wrapped);
-      if (action === "sensitivity") setSensitivityByMode((current) => ({ ...current, [mode]: wrapped }));
-      setLastRun({ action, mode, seconds: (performance.now() - started) / 1000, at: new Date(), log: body.log_file, partial: Boolean(body.partial), cacheHit: terminal.cache_hit });
-      if (terminal.state === "stopped" || body.partial) setError("Расчет остановлен. Частичные результаты и контрольная точка сохранены.");
-    } catch (reason) {
-      setError(reason.message || String(reason));
-    } finally {
-      jobRef.current = null;
-      runningRef.current = false;
-      setRunning(false);
-    }
+      const maxF=Math.floor((config.n_agents-1)/2);
+      const candidates=[0,Math.round(maxF*.2),Math.round(maxF*.4),Math.round(maxF*.6),Math.round(maxF*.8),maxF];
+      const payload={action,scenario,config,sensitivity_mode:mode,f_values:[...new Set(candidates)]};
+      const terminal=await runBrowserExperiment(payload,progress=>setProgress(progress));
+      const body=terminal.result;
+      if(!body)throw Error("Вычислительный поток не вернул результата");
+      const wrapped={...body,client_signature:requestSignature};
+      if(action==="trace")setTrace(wrapped);
+      if(action==="monte_carlo")setMonteCarlo(wrapped);
+      if(action==="sensitivity")setSensitivityByMode(current=>({...current,[mode]:wrapped}));
+      setCacheHit(Boolean(terminal.cache_hit));
+      setLastRun({action,mode,seconds:(performance.now()-started)/1000,at:new Date(),log:"IndexedDB (локально)",partial:Boolean(body.partial),cacheHit:terminal.cache_hit});
+      setProgress({stage:action,completed:1,total:1,percent:100,message:terminal.cache_hit?"Результаты загружены из локального кэша":"Вычисления завершены"});
+      if(terminal.state==="stopped"||body.partial)setError("Расчет остановлен. Выполненные прогоны сохранены локально; повторный запуск продолжит серию.");
+    }catch(reason){setError(reason.message||String(reason));}
+    finally{jobRef.current=null;runningRef.current=false;setRunning(false);}
   };
-
-  useEffect(() => { request("trace"); }, []);
-
-  const stop = async () => {
-    if (!jobRef.current) return;
-    try { await fetch(`/api/jobs/${jobRef.current}`, { method: "DELETE" }); } catch { /* status polling will surface an error */ }
-  };
+  useEffect(()=>{request("trace");},[]);
+  const stop=()=>stopBrowserExperiment();
   const reset = () => {
     stop();
     setConfig(DEFAULT_CONFIG);
