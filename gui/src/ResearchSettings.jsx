@@ -79,7 +79,7 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
    </div></details>
   </div>
   <div className="r27-sidebar-actions">
-   <button type="button" className="run-button" disabled={running} onClick={onStart}>{running?"Выполняется…":"▶ Запустить эксперимент"}</button>
+   <button type="button" className="run-button" disabled={running} onClick={onStart}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8 18.4 12 7 19.2Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>{running?"Выполняется…":"Запустить эксперимент"}</button>
    {running?<button type="button" className="r27-settings-stop" onClick={onStop}>Остановить расчёт</button>:null}
   </div>
  </aside>;
