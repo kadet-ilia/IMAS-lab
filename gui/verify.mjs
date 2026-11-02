@@ -108,10 +108,10 @@ await page.getByRole("combobox", { name: "Выбор эксперимента" }
 await page.locator(".r27-field input").nth(1).fill("10");
 await page.getByRole("button", { name: "Запустить расчёт", exact: true }).click();
 await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
-await page.getByRole("button", {name:"▶ Воспроизвести"}).click();
+await page.getByRole("button", {name:"Воспроизвести"}).click();
 await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
 await page.getByRole("button", {name:"Пауза"}).click();
-await page.getByRole("slider", {name:"Выбор такта"}).fill("3");
+await page.getByRole("slider", {name:"Выбор такта"}).press("ArrowRight");
 if(!(await page.locator(".r27-state-matrix").count()))throw Error("Missing state heatmap");
 const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
 const researchScreenshot = path.join(here, "research2027.png");
