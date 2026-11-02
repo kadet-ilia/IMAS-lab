@@ -18,6 +18,7 @@ import {
 } from "recharts";
 import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
+import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -413,7 +414,7 @@ function DecisionAreas({ hasBands, mode }) {
 function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) {
   const [bandMode, setBandMode] = useState("sigma");
   const [showTolerance, setShowTolerance] = useState(false);
-  if (!data) return <div className="empty">Запустите эксперимент для построения трассировки.</div>;
+  if (!data) return <><TopologyPlayback replay={baselineReplay(null,config)} compact/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
   const robust = data.metrics.find((item) => item.method === "proposed_robust");
   const last = data.series.at(-1);
   const totalBad = data.configuration.effective_byzantine_count ?? config.n_byzantine;
@@ -434,6 +435,7 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   ];
   const networkVisible = config.network_enabled || config.n_sybil_agents > 0 || data.summary.delivery_ratio < 0.999;
   return <>
+    <TopologyPlayback replay={baselineReplay(data,config)} compact />
     {data.partial ? <div className="partial-banner">Отображены частичные результаты: выполнено {data.summary.completed_steps} из {config.n_steps} шагов.</div> : null}
     <div className="kpi-grid"><Kpi label={`Текущее решение (шаг ${last.step})`} value={last.proposed_robust.toFixed(3)} note="Трассировка выбранного прогона" /><Kpi label="Ошибка робастного решения (RMSE)" value={robust.rmse.toFixed(3)} note="За выбранный прогон" /><Kpi label="Изолированные нарушители/агенты" value={`${data.agents.filter((item) => item.byzantine && item.isolated_at !== null).length} / ${isolated}`} note={`Всего нарушителей: ${totalBad}`} tone="teal" /><Kpi label="Доставка сообщений" value={`${(data.summary.delivery_ratio * 100).toFixed(1)}%`} note={`Доверие корректных: ${honestTrust.toFixed(3)}`} tone="teal" /></div>
     <div className="main-grid">
@@ -450,6 +452,10 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
       <Panel title="Состояния агентов (тепловая карта)" className="heat-panel"><StateHeatmap states={data.states} agents={totalAgents} steps={data.series.length} /></Panel>
       <Panel title="События изоляции" subtitle={`Показано событий: ${data.events.length}`}><div className="table-wrap"><table><thead><tr><th>Шаг</th><th>Агент</th><th>Тип</th><th>Подтв.</th><th>Длит.</th></tr></thead><tbody>{data.events.length ? data.events.map((event, index) => <tr key={`${event.agent}-${event.step}-${index}`}><td>{event.step}</td><td>{event.agent}</td><td className={event.type === "false_positive" ? "danger-text" : ""}>{event.type === "sybil" ? "Sybil" : event.type === "byzantine" ? "Визант." : "Ложная"}</td><td>{event.confirmations}</td><td>{event.duration}</td></tr>) : <tr><td colSpan="5" className="muted-cell">События отсутствуют</td></tr>}</tbody></table></div></Panel>
     </div>
+    <Panel title="Сводная таблица результатов расчёта доверия" subtitle="Результаты одного прогона для всех методов агрегирования">
+      <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>|Смещение|</th><th>Покрытие 95%</th></tr></thead>
+      <tbody>{data.metrics.map(item=><tr key={item.method}><td>{METHODS[item.method]||item.method}</td><td>{item.rmse.toFixed(4)}</td><td>{item.mae.toFixed(4)}</td><td>{Math.abs(item.bias).toFixed(4)}</td><td>{(item.coverage95*100).toFixed(2)}%</td></tr>)}</tbody></table></div>
+    </Panel>
   </>;
 }
 
@@ -655,8 +661,31 @@ function App() {
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   const lastTimestamp = lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—";
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>{activeTab.startsWith("study-")||activeTab==="help2027"?"IMAS-lab · Исследования 2027":"Модельный эксперимент ИМАС"}</h1></div><div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div><div className={"toolbar"+((activeTab.startsWith("study-")||activeTab==="help2027")?" research-toolbar":"")}><button onClick={newSeed} disabled={running}><Icon name="seed" />Новый сид</button><button className="primary-small" onClick={runForTab} disabled={running || ["help", "data"].includes(activeTab)}><Icon name="play" />Запустить</button><button onClick={stop} disabled={!running}><Icon name="stop" />Остановить</button><button onClick={reset} disabled={running}><Icon name="reset" />Сбросить</button><button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen" /></button><button className="icon-button" title="Справка" onClick={() => setActiveTab(activeTab.startsWith("study-")||activeTab==="help2027"?"help2027":"help")}><Icon name="help" /></button></div></header>
-    <div className={"workspace"+((activeTab.startsWith("study-")||activeTab==="help2027")?" research-2027-workspace":"")}>{(activeTab.startsWith("study-")||activeTab==="help2027")?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}<main className="content"><nav className="tabs" aria-label="Разделы эксперимента">{[["trace", "Один прогон"], ["mc", "Монте-Карло"], ["sensitivity", "Чувствительность"], ["data", "Данные"], ["study-uncertainty", "Неопределённость"], ["study-probgraph", "Граф угроз"], ["study-petri", "Сети Петри"], ["study-cascade", "Каскадные риски"], ["study-misinformation", "Риски решений"], ["help2027", "Справка 2027"], ["help", "Справка 3.2"]].map(([value, label]) => <button className={activeTab === value ? "active" : ""} onClick={() => setActiveTab(value)} key={value}>{label}</button>)}<span className="tabs-spacer" /><button className="export-button" onClick={exportVisibleCharts} disabled={["data", "help", "help2027"].includes(activeTab)||activeTab.startsWith("study-")}><Icon name="export" />Экспорт SVG</button></nav><ProgressStrip progress={progress} running={running} cacheHit={cacheHit} />{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help" ? <HelpTab /> : null}{activeTab === "help2027" ? <ResearchHelp /> : null}{activeTab.startsWith("study-") ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} /> : null}</main></div>
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>{activeTab.startsWith("study-")||activeTab==="help2027"?"IMAS-lab · Исследования 2027":"Модельный эксперимент ИМАС"}</h1></div><div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div><div className="toolbar">
+{["trace","mc","sensitivity","data"].includes(activeTab)?<>
+<button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
+<button onClick={stop} disabled={!running}><Icon name="stop"/>Остановить</button>
+<button onClick={reset} disabled={running}><Icon name="reset"/>Сбросить</button>
+</>:null}
+<button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
+<button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
+</div></header>
+    <div className={"workspace"+((activeTab.startsWith("study-")||activeTab==="help2027")?" research-2027-workspace":"")}>{(activeTab.startsWith("study-")||activeTab==="help2027")?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}<main className="content"><nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
+<label htmlFor="imas-experiment-select">Эксперимент
+<select id="imas-experiment-select" aria-label="Выбор эксперимента" value={activeTab.startsWith("study-")?activeTab:"trace"} onChange={e=>setActiveTab(e.target.value)}>
+<option value="trace">Расчет доверия</option>
+<option value="study-uncertainty">Автоматические решения</option>
+<option value="study-probgraph">Коллективное решение</option>
+<option value="study-petri">Опасные состояния</option>
+<option value="study-cascade">Каскадные последствия</option>
+<option value="study-misinformation">Нарушение коллективного решения</option>
+</select></label>
+{["trace","mc","sensitivity","data","help"].includes(activeTab)?<div className="r27-baseline-subtabs">{[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=><button type="button" key={id} className={activeTab===id?"active":""} onClick={()=>setActiveTab(id)}>{name}</button>)}</div>:null}
+<button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
+{activeTab==="help2027"?<button type="button" onClick={()=>setActiveTab("help")}>Справка исходной модели 3.2</button>:null}
+<button type="button" onClick={exportVisibleCharts} disabled={["data","help","help2027"].includes(activeTab)}><Icon name="export"/>Экспорт SVG</button>
+</nav>{["trace","mc","sensitivity","data"].includes(activeTab)?<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>:null}{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help" ? <HelpTab /> : null}{activeTab === "help2027" ? <ResearchHelp /> : null}{activeTab.startsWith("study-") ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} /> : null}</main></div>
     <footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>
   </div>;
 }
