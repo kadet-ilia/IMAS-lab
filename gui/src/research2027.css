@@ -220,7 +220,7 @@
 
 /* Unified author line and equal-size Help/SVG controls. */
 .r27-study-content .r27-heading .r27-kicker,
-.r27-trust-authors{
+.content[data-study="trust"] > .r27-kicker{
   text-transform:none;
   letter-spacing:0;
   font-size:11px;
@@ -228,7 +228,7 @@
   color:#426584;
   line-height:1.35;
 }
-.r27-trust-authors{margin:8px 12px 5px}
+.content[data-study="trust"] > .r27-kicker{margin:8px 12px 5px}
 .r27-experiment-navigation button.r27-nav-right,
 .r27-experiment-navigation button.r27-export-control{
   display:inline-flex;
