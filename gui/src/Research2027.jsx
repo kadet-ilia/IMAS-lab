@@ -102,6 +102,27 @@ function PetriGraph({result}) {
  </svg>;
 }
 function ResultTable({rows}){if(!rows?.length)return null;const cols=Object.keys(rows[0]);return <div className="r27-table-scroll"><table className="r27-table"><thead><tr>{cols.map(col=><th key={col}>{metricNames[col]||col}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i}>{cols.map(col=><td key={col}>{pctFields.has(col)&&typeof row[col]==="number"?(row[col]*100).toFixed(2)+"%":fmt(row[col])}</td>)}</tr>)}</tbody></table></div>;}
+const KEY_STATS={
+ uncertainty:[["correctUnconditional","Правильных решений"],["coverage","Покрытие"],["errorRate","Ошибочных решений"]],
+ probgraph:[["dangerProbability","Опасных состояний"],["expectedFraction","Доля поражённых"],["p95Fraction","95-й процентиль"]],
+ cascade:[["expectedDamage","Ожидаемый ущерб"],["dangerProbability","Опасных состояний"],["cvar95","Верхнехвостовой ущерб"]],
+ misinformation:[["wrongProbability","Ошибочных решений"],["abstentionProbability","Отказов"],["meanExposedFraction","Информационный охват"]]
+};
+function ResearchKpis({studyId,result}){
+ if(!result)return null;
+ const rows=result.rows||[],keys=KEY_STATS[studyId]||[];
+ const items=studyId==="petri"
+ ? [["Достижимость",rows[0]?.value||"—"],["Исследовано маркировок",rows[1]?.value||"—"],["Горизонт, тактов",result.config.steps],["Порог поражения",result.config.criticalCount]]
+ : [["Число агентов",result.config.agents],["Прогонов/сценарий",result.config.runs],...keys.slice(0,2).map(([key,label])=>{
+    const values=rows.map(r=>r[key]).filter(Number.isFinite);
+    const average=values.length?values.reduce((a,b)=>a+b,0)/values.length:NaN;
+    return [label,Number.isFinite(average)?(pctFields.has(key)?(100*average).toFixed(1)+"%":average.toFixed(3)):"—"];
+   })];
+ return <div className="kpi-grid r27-research-kpis">{items.map(([label,value],i)=><div className="kpi" key={label}>
+   <div className="kpi-label">{label}</div><div className={"kpi-value "+(i===3?"teal":"")}>{value}</div>
+   <div className="kpi-note">{i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"}</div>
+  </div>)}</div>;
+}
 export function ResearchStudy({studyId}){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
  const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),worker=useRef(null);
@@ -122,6 +143,7 @@ export function ResearchStudy({studyId}){
   <ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");}} running={running}/>
   <div className="r27-study-content"><div className="r27-root"><header className="r27-heading"><div className="r27-kicker">IMAS-lab · Эксперименты 2027 · {def.origin}</div><h1>{def.title}</h1><p>{theory.goal}</p></header>
   <section className="r27-results"><h2>Результаты вычислительного эксперимента</h2>{running?<p role="status">Выполняются независимые вычислительные прогоны…</p>:null}{error?<p className="r27-error" role="alert">{error}</p>:null}
+   <ResearchKpis studyId={studyId} result={result}/>
    <TopologyPlayback replay={result?.replay||previewReplay}/>
    {!result?<div className="r27-empty">Задайте параметры и запустите эксперимент. Для каждого исследования предусмотрены независимые результаты и своя математическая постановка.</div>:<>
     <p>{result.summary}</p><div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
@@ -131,7 +153,7 @@ export function ResearchStudy({studyId}){
     <div className="r27-result-tools"><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button></div>
     <h3>Сводная таблица результатов</h3><ResultTable rows={result.rows}/><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p>
    </>}
-   <div className="r27-theory-short"><h3>Математическая постановка</h3><p>{theory.model}</p>{theory.formulas.map((f,i)=><div className="r27-formula" key={i}>{f}</div>)}<p>Подробное описание процесса, терминов и алгоритма находится во вкладке «Справка 2027».</p></div>
+   <div className="r27-theory-short"><h3>Математическая постановка</h3><p>{theory.model}</p>{theory.formulas.map((f,i)=><div className="r27-formula" key={i}>{f}</div>)}<p>Подробное описание процессов, формул и алгоритмов находится в единой справке, в разделе соответствующего эксперимента.</p></div>
   </section></div></div></div>;
 }
 export function ResearchHelp({baselineArticle,baselineSections}){
