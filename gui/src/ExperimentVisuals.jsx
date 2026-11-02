@@ -40,7 +40,7 @@ export function TopologyPlayback({replay,compact=false}){
  const title=replay.title||"Граф взаимодействия агентов";
  const activeNodes=new Set(moving.flat());
  const visibleEdges=edges.length>650?edges.slice(0,650):edges;
- const graph=<svg className="r27-playback-svg" viewBox="0 0 550 464" role="img" aria-label={"Ориентированный граф взаимодействий. "+title}>
+ const graph=<svg className="r27-playback-svg" viewBox={compact?"40 9 470 446":"0 0 550 464"} role="img" aria-label={"Ориентированный граф взаимодействий. "+title}>
   <defs><marker id="imas-replay-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="context-stroke"/></marker></defs>
   {visibleEdges.map(([a,b],i)=>{if(!pos[a]||!pos[b])return null;const segment=edgeSegment(pos[a],pos[b]),on=moving.some(e=>directed(e,[a,b]));return <line key={i} {...segment} stroke={on?"#df862e":"#95abc0"} strokeWidth={on?3.8:1.1} opacity={on?1:.49} markerEnd="url(#imas-replay-arrow)" className={on&&playing?"r27-pulse-edge":""}/>;})}
   {pos.map((p,i)=>{const state=frame.status[i]||"normal",active=activeNodes.has(i),r=vertices.length>36?10:vertices.length>16?14:18;return <g key={i} onClick={()=>setSelected(i===selected?null:i)} className="r27-node" role="button" tabIndex="0" aria-label={"Агент "+(i+1)+" "+LABELS[state]} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setSelected(i);}}}>
@@ -65,7 +65,7 @@ export function TopologyPlayback({replay,compact=false}){
    <input aria-label="Выбор такта" type="range" min="0" max={Math.max(0,total-1)} step="1" value={cursor} onChange={e=>{setPlaying(false);setCursor(Number(e.target.value));}}/>
    <label>Скорость <select value={rate} onChange={e=>setRate(Number(e.target.value))}><option value="0.5">0,5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
   </div>
-  <p className="r27-note">{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p>
+  {compact?<details className="r27-replay-notes"><summary>Схематическая топология (не протокол доставки) · Подробнее</summary><p>{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p></details>:<p className="r27-note">{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p>}
  </section>;
 }
 export function StudyVisualization({result,metric}){
