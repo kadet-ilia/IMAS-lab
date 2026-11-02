@@ -227,7 +227,17 @@ const researchTabs = ["Автоматические решения", "Колле
 const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
 for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
-  await page.locator(".r27-heading .r27-study-title").waitFor({ timeout: 10000 });
+  try {
+    await page.locator(".r27-heading .r27-study-title").waitFor({ timeout: 30000 });
+  } catch (error) {
+    console.error("RESEARCH_TAB_DIAGNOSTIC",JSON.stringify({
+      tab:researchTabs[i],
+      currentSelect:await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue(),
+      body:(await page.locator("body").innerText()).slice(0,1100),
+      errors,warnings
+    }));
+    throw error;
+  }
   await assertStandardWorkspace(researchTabs[i]);
   await assertNavButtonsEqual(researchTabs[i]);
   const authors=(await page.locator(".r27-study-content .r27-kicker").innerText()).trim();
