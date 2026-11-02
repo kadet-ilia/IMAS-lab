@@ -89,6 +89,12 @@ await page.getByRole("heading", { name: "Справка по модельном�
 const helpScreenshot = path.join(here, "help.png");
 await page.screenshot({ path: helpScreenshot, fullPage: false });
 
+const legacyHelpSections = await page.locator(".help-toc a").count();
+const legacyControls = {
+  sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
+  bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
+  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
+};
 const researchTabs = ["Неопределённость", "Граф угроз", "Сети Петри", "Каскадные риски", "Риски решений"];
 for (const name of researchTabs) {
   await page.locator(".tabs").getByRole("button", { name, exact: true }).click();
@@ -112,12 +118,8 @@ const report = {
   bodyLength: (await page.locator("body").innerText()).trim().length,
   buttons: await page.getByRole("button").count(),
   fields: await page.locator("input, select").count(),
-  helpSections: await page.locator(".help-toc a").count(),
-  requiredControls: {
-    sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
-    bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
-    parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
-  },
+  helpSections: legacyHelpSections,
+  requiredControls: legacyControls,
   researchTabs,
   researchComputed,
   researchHelp: await page.locator(".r27-help-content").count(),
