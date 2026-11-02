@@ -220,3 +220,120 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 @media (max-width: 1280px) {
   .distribution-grid { grid-template-columns: 1fr; }
 }
+
+
+/* Trust experiment: compact network beside summary, equal-width synchronized charts. */
+.trust-overview-grid{
+  display:grid;
+  grid-template-columns:minmax(0, .46fr) minmax(0, .54fr);
+  gap:12px;
+  align-items:stretch;
+  margin-bottom:12px;
+}
+.trust-overview-grid>.r27-replay{
+  margin:0;
+  min-width:0;
+  height:100%;
+}
+.trust-overview-grid>.panel{min-width:0}
+.trust-overview-grid .r27-playback-grid{
+  grid-template-columns:minmax(0,1fr);
+  gap:8px;
+}
+.trust-overview-grid .r27-playback-svg{
+  max-height:310px;
+}
+.trust-overview-grid .r27-playback-aside{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(170px,.8fr);
+  column-gap:12px;
+  align-content:start;
+}
+.trust-overview-grid .r27-playback-aside h4{grid-column:1/-1}
+.trust-overview-grid .r27-playback-event{margin-bottom:0}
+.trust-overview-grid .r27-playback-value,
+.trust-overview-grid .r27-node-detail,
+.trust-overview-grid .r27-playback-aside>.r27-note{grid-column:1/-1}
+.trust-overview-grid .r27-playback-controls{gap:5px}
+.trust-overview-grid .r27-playback-controls button{padding:6px 7px}
+.trust-overview-grid .r27-playback-controls .r27-play-main{min-width:104px}
+.trust-overview-grid .r27-playback-controls input[type=range]{min-width:80px}
+.trust-overview-grid .r27-replay-heading{align-items:flex-start}
+.trust-overview-grid .r27-replay-heading strong{font-size:11px}
+.trust-summary-table{
+  height:auto;
+  max-height:420px;
+  overflow:auto;
+}
+.trust-summary-table table{
+  table-layout:fixed;
+  width:100%;
+  font-size:11px;
+}
+.trust-summary-table th,.trust-summary-table td{
+  white-space:normal;
+  overflow-wrap:anywhere;
+  padding:10px 8px;
+  vertical-align:middle;
+}
+.trust-summary-table th:first-child{width:32%}
+.trust-summary-table td:not(:first-child){font-variant-numeric:tabular-nums}
+.trust-synced-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.trust-synced-grid>.panel{
+  min-width:0;
+}
+.trust-synced-grid .panel-header{
+  flex-wrap:wrap;
+  align-items:center;
+  gap:9px;
+}
+.trust-synced-grid .chart-tools{
+  margin-left:0;
+}
+.trust-synced-grid .recharts-wrapper{
+  cursor:crosshair;
+}
+.trust-zoom-toolbar{
+  display:flex;
+  align-items:center;
+  gap:11px;
+  flex-wrap:wrap;
+  border:1px solid var(--border);
+  background:#fff;
+  margin-bottom:10px;
+  padding:9px 12px;
+  color:#40556a;
+  font-size:11px;
+}
+.trust-zoom-title{font-weight:700;color:#244c72;white-space:nowrap}
+.trust-zoom-toolbar label{display:flex;align-items:center;gap:5px;white-space:nowrap}
+.trust-zoom-toolbar input{
+  width:65px;
+  height:27px;
+  border:1px solid #bfcfdd;
+  border-radius:3px;
+  padding:0 6px;
+  color:#24445f;
+  background:#fff;
+  font-size:12px;
+  font-variant-numeric:tabular-nums;
+}
+.trust-zoom-reset{
+  min-height:27px;
+  border:1px solid #a9c1d6;
+  padding:4px 8px;
+  border-radius:3px;
+  color:#245479;
+  background:#f7fafc;
+  font-size:11px;
+}
+.trust-zoom-hint{color:#63788d;line-height:1.35}
+@media(max-width:1300px){
+ .trust-overview-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.12fr)}
+ .trust-overview-grid .r27-playback-aside{grid-template-columns:1fr}
+ .trust-overview-grid .r27-playback-aside h4,
+ .trust-overview-grid .r27-playback-value{grid-column:1}
+ .trust-overview-grid .r27-playback-event{margin-bottom:9px}
+}
