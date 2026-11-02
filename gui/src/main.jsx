@@ -20,7 +20,7 @@ import {
 import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
-import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip} from "./ExperimentLayout.jsx";
+import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip,ExperimentProgress as ProgressStrip} from "./ExperimentLayout.jsx";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -365,12 +365,6 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
       <button className="run-button" onClick={onRun} disabled={running}><Icon name="play" />{running ? "Выполняется…" : "Запустить эксперимент"}</button>
     </aside>
   );
-}
-
-function ProgressStrip({ progress, running, cacheHit }) {
-  if (!running && !progress) return null;
-  const percent = Math.max(0, Math.min(100, Number(progress?.percent || 0)));
-  return <div className={`progress-strip ${running ? "running" : "done"}`}><div className="progress-head"><strong>{progress?.message || (running ? "Выполняется" : "Завершено")}</strong><span>{Number(progress?.completed || 0)} / {Number(progress?.total || 0)} · {percent.toFixed(1)}%</span>{cacheHit ? <em>кэш</em> : null}<span>Осталось: {formatSeconds(progress?.eta_seconds)}</span></div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div>;
 }
 
 function formatChartValue(value, name) {
