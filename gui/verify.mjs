@@ -81,6 +81,36 @@ page.on("pageerror", (error) => errors.push(error.message));
 await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.getByText("Динамика решений и оценок").waitFor({ timeout: 30000 });
 
+const trustOverview = page.locator(".trust-overview-grid");
+await trustOverview.waitFor();
+const topologyBox = await trustOverview.locator(".r27-replay").boundingBox();
+const summaryBox = await trustOverview.locator(".panel").boundingBox();
+if (!topologyBox || !summaryBox || !(summaryBox.x > topologyBox.x + topologyBox.width - 2)) {
+  throw new Error("Trust topology and summary table are not side-by-side");
+}
+if (!(topologyBox.width < summaryBox.width)) throw new Error("Trust topology should be narrower than summary table");
+const pairedPanels = page.locator(".trust-synced-grid > .panel");
+if ((await pairedPanels.count()) !== 2) throw new Error("Two synchronized charts are required");
+const decisionBounds = await pairedPanels.nth(0).boundingBox();
+const reputationBounds = await pairedPanels.nth(1).boundingBox();
+if (!decisionBounds || !reputationBounds || Math.abs(decisionBounds.width - reputationBounds.width) > 2) {
+  throw new Error("Decision and reputation chart panels must have equal widths");
+}
+const zoomGrid = page.locator(".trust-synced-grid");
+const initialZoom = await zoomGrid.evaluate(node => ({start:+node.dataset.zoomFrom,end:+node.dataset.zoomTo,decision:+node.dataset.decisionPoints,reputation:+node.dataset.reputationPoints}));
+if (initialZoom.end - initialZoom.start < 12) throw new Error("Trust simulation has insufficient steps to verify synchronized zoom");
+await page.getByRole("spinbutton", {name:"Начальный шаг увеличения"}).fill(String(initialZoom.start + 4));
+await page.getByRole("spinbutton", {name:"Конечный шаг увеличения"}).fill(String(initialZoom.end - 4));
+const reducedZoom = await zoomGrid.evaluate(node => ({start:+node.dataset.zoomFrom,end:+node.dataset.zoomTo,decision:+node.dataset.decisionPoints,reputation:+node.dataset.reputationPoints}));
+if (reducedZoom.start !== initialZoom.start+4 || reducedZoom.end !== initialZoom.end-4 ||
+    reducedZoom.decision >= initialZoom.decision || reducedZoom.reputation >= initialZoom.reputation) {
+  throw new Error("A common X range must filter both time series");
+}
+await page.getByRole("button",{name:"Показать весь интервал"}).click();
+const resetZoom = await zoomGrid.evaluate(node => ({start:+node.dataset.zoomFrom,end:+node.dataset.zoomTo}));
+if (resetZoom.start!==initialZoom.start || resetZoom.end!==initialZoom.end) throw new Error("Reset of synchronized zoom failed");
+
+
 await page.getByText("Сетевая модель и Sybil-атака", { exact: true }).click();
 await page.getByLabel("Число Sybil-идентичностей").waitFor();
 await page.getByText("Статистика и вычисления", { exact: true }).click();
