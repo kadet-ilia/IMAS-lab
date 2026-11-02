@@ -93,8 +93,8 @@ export function StudyVisualization({result,metric}){
  </div>;
 }
 export function baselineReplay(data,config){
- if(!data?.series?.length)return null;
- const n=Math.min(data.configuration?.effective_agent_count||config.n_agents||21,100),agents=data.agents||[],states=data.states||[],reps=data.reputation||[];
+ const series=data?.series?.length?data.series:[{step:0,proposed_robust:0,truth:0}];
+ const n=Math.min(data?.configuration?.effective_agent_count||config.n_agents||21,100),agents=data?.agents||[],states=data?.states||[],reps=data?.reputation||[];
  const vertices=Array.from({length:n},(_,i)=>({id:i,label:"А"+(i+1)}));
  const edges=[],topology=config.network_topology;
  if(topology==="complete"&&n<=35){for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j)edges.push([i,j]);}
@@ -104,8 +104,8 @@ export function baselineReplay(data,config){
  agents.forEach((a,i)=>byAgent.set(Number(a.agent??a.id??i+1),a));
  states.forEach(x=>byState.set(String(x.step)+":"+String(x.agent),x.state));
  reps.forEach(x=>repMap.set(String(x.step)+":"+String(x.agent),x.reputation));
- const stride=Math.max(1,Math.floor(data.series.length/80));
- const frames=data.series.filter((x,i)=>i%stride===0||i===data.series.length-1).map(row=>{
+ const stride=Math.max(1,Math.floor(series.length/80));
+ const frames=series.filter((x,i)=>i%stride===0||i===series.length-1).map(row=>{
   const step=row.step,status=Array.from({length:n},(_,i)=>{
    const agent=byAgent.get(i+1)||agents[i]||{}, raw=byState.get(step+":"+(i+1));
    const isolated=agent.isolated_at!==null&&agent.isolated_at!==undefined&&agent.isolated_at<=step;
@@ -117,5 +117,5 @@ export function baselineReplay(data,config){
   const meanTrust=reps.filter(x=>x.step===step).map(x=>x.reputation).filter(Number.isFinite);
   return {step,status,activeEdges:[],info:"Робастная оценка: "+round(row.proposed_robust)+"; эталон: "+round(row.truth)+"; среднее доверие: "+round(meanTrust.length?meanTrust.reduce((a,b)=>a+b,0)/meanTrust.length:0),value:row.proposed_robust};
  });
- return {title:"Топология взаимодействия и изменение доверия",vertices,edges,frames,notes:"Схематическое представление заданного класса топологии. Точные переданные сообщения и их маршруты отсутствуют в выходном протоколе исходного вычислительного ядра; статусы восстановлены из журнала состояний.",valueLabel:"Робастная оценка"};
+ return {title:"Топология взаимодействия и изменение доверия",vertices,edges,frames,notes:"Схематическое представление класса топологии. Реальные пары отправитель–получатель в протоколе исходного ядра не фиксируются. Отображаемые связи — иллюстративная топология, а не подтверждённый журнал доставки.",valueLabel:"Робастная оценка"};
 }
