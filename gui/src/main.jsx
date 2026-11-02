@@ -264,7 +264,7 @@ function StateHeatmap({ states, agents, steps }) {
   );
 }
 
-function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running }) {
+function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running, activeMode, onModeChange }) {
   const set = (key) => (value) => setConfig((current) => ({ ...current, [key]: value }));
   const ratio = ((config.n_byzantine / Math.max(config.n_agents, 1)) * 100).toFixed(1);
   const effectiveTotal = config.n_agents + config.n_sybil_agents;
@@ -292,6 +292,9 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
+        <SelectField label="Режим исследования" value={activeMode} onChange={onModeChange} tooltip="Выбор режима исходного эксперимента: трасса, статистическая серия, чувствительность или результаты.">
+          <option value="trace">Один прогон</option><option value="mc">Монте-Карло</option><option value="sensitivity">Чувствительность</option><option value="data">Данные</option>
+        </SelectField>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
         <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={(value) => setConfig((current) => ({ ...current, n_byzantine: value, trim_each_side: value }))} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
         <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={500} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
@@ -722,7 +725,7 @@ function App() {
 <option value="study-cascade">Каскадные последствия</option>
 <option value="study-misinformation">Нарушение коллективного решения</option>
 </select></label>
-{["trace","mc","sensitivity","data"].includes(activeTab)?<div className="r27-baseline-subtabs">{[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=><button type="button" key={id} className={activeTab===id?"active":""} onClick={()=>setActiveTab(id)}>{name}</button>)}</div>:null}
+
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
 <button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>
@@ -730,16 +733,11 @@ function App() {
   );
 
   return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
-{["trace","mc","sensitivity","data"].includes(activeTab)?<>
-<button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
-<button onClick={stop} disabled={!running}><Icon name="stop"/>Остановить</button>
-<button onClick={reset} disabled={running}><Icon name="reset"/>Сбросить</button>
-</>:isResearch?<>
-<button onClick={()=>researchActionsRef.current?.newSeed()} disabled={!researchReady||visibleRunning}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={()=>researchActionsRef.current?.start()} disabled={!researchReady||visibleRunning}><Icon name="play"/>Запустить</button>
-<button onClick={()=>researchActionsRef.current?.stop()} disabled={!researchReady||!visibleRunning}><Icon name="stop"/>Остановить</button>
-<button onClick={()=>researchActionsRef.current?.reset()} disabled={!researchReady||visibleRunning}><Icon name="reset"/>Сбросить</button>
+{activeTab!=="help2027"?<>
+<button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(running||activeTab==="data")}><Icon name="play"/>Запустить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!running}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
@@ -750,7 +748,7 @@ function App() {
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
-              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} activeMode={activeTab} onModeChange={setActiveTab}/>}
               navigation={experimentNavigation}
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
@@ -765,7 +763,13 @@ function App() {
               {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
             </ExperimentLayout>}
     </div>
-    {(isResearch||activeTab==="help2027")?<footer className="statusbar"><span>Шаги: {isResearch&&researchReady?(researchRuntime?.steps??"—"):"—"}</span><span>Время: {isResearch&&researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"}</span><span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):"Справка"}</span><span>Сид: {isResearch?visibleSeed:"—"}</span><span className="status-log">{isResearch?"Синтетическая модель — результаты требуют независимой валидации":"Единая справка по шести экспериментам"}</span></footer>:<footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>}
+    <footer className="statusbar">
+      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Время: {isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
+      <span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
+      <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
+      <span className="status-log">{isResearch?"Синтетическая модель — результаты требуют независимой валидации":activeTab==="help2027"?"Единая справка по шести экспериментам":lastRun?.log?"Лог: "+lastRun.log:""}</span>
+    </footer>
   </div>;
 }
 
