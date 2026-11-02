@@ -81,6 +81,35 @@ page.on("pageerror", (error) => errors.push(error.message));
 await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded", timeout: 30000 });
 await page.getByText("Динамика решений и оценок").waitFor({ timeout: 30000 });
 
+const standardHeading = "IMAS-lab · Лабораторный стенд ИМАС";
+async function assertStandardWorkspace(section) {
+  const workspace = page.locator(".workspace");
+  const structure = await workspace.evaluate(el => ({
+    children:[...el.children].map(x=>({tag:x.tagName.toLowerCase(),sidebar:x.classList.contains("sidebar"),content:x.classList.contains("content")})),
+    display:getComputedStyle(el).display,
+    columns:getComputedStyle(el).gridTemplateColumns
+  }));
+  if(structure.children.length!==2 ||
+     structure.children[0].tag!=="aside" || !structure.children[0].sidebar ||
+     structure.children[1].tag!=="main" || !structure.children[1].content) {
+    throw Error(section+": workspace must contain two direct siblings <aside.sidebar> + <main.content>: "+JSON.stringify(structure));
+  }
+  const aside = await workspace.locator(":scope > aside.sidebar").boundingBox();
+  const main = await workspace.locator(":scope > main.content").boundingBox();
+  if(!aside||!main||aside.width<150||main.width<350||main.x<aside.x+aside.width-2){
+    throw Error(section+": workspace columns are not adjacent: "+JSON.stringify({aside,main}));
+  }
+  if((await page.locator("h1").count())!==1 ||
+     (await page.locator("h1").first().innerText()).trim()!==standardHeading){
+    throw Error(section+": the only h1 must be the unified laboratory heading");
+  }
+  if(!(await workspace.locator(":scope > main.content > nav.r27-experiment-navigation").count())){
+    throw Error(section+": experiment navigation must be inside the content sibling");
+  }
+}
+await assertStandardWorkspace("Расчет доверия");
+
+
 const trustOverview = page.locator(".trust-overview-grid");
 await trustOverview.waitFor();
 const topologyBox = await trustOverview.locator(".r27-replay").boundingBox();
@@ -159,7 +188,10 @@ const researchTabs = ["Автоматические решения", "Колле
 const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
 for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
-  await page.locator(".r27-heading h1").waitFor({ timeout: 10000 });
+  await page.locator(".r27-heading .r27-study-title").waitFor({ timeout: 10000 });
+  await assertStandardWorkspace(researchTabs[i]);
+  if ((await page.locator(".r27-theory-short").count())!==0) throw new Error("Inline mathematical theory must only be in unified help: "+researchTabs[i]);
+  if ((await page.locator(".r27-study-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
   if (!(await page.locator(".r27-unified-settings input[type=number]").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
   if (!(await page.locator(".r27-playback-svg").count())) throw new Error("Missing topology graph: " + researchTabs[i]);
 }
