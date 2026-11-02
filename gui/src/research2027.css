@@ -594,3 +594,60 @@
  .imas-experiment-heading {grid-template-rows:auto minmax(52px,auto) minmax(34px,auto)}
  .imas-experiment-heading > h2.r27-study-title{font-size:17px}
 }
+
+
+/* Mode tabs are part of the shared navigation shell for all six experiments.
+   Only the trust experiment provides its four selectable calculation modes. */
+.r27-experiment-navigation .r27-mode-tabs {
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex:0 1 440px;
+  min-width:0;
+  min-height:29px;
+}
+.r27-experiment-navigation .r27-mode-tab {
+  flex:0 0 auto;
+  height:29px;
+  min-height:29px;
+  box-sizing:border-box;
+  padding:4px 9px;
+  border:1px solid #bdcddd;
+  background:#fff;
+  border-radius:3px;
+  color:#375b79;
+  font-size:11px;
+  font-weight:600;
+  line-height:1.15;
+  white-space:nowrap;
+}
+.r27-experiment-navigation .r27-mode-tab.active,
+.r27-experiment-navigation .r27-mode-tab[aria-pressed="true"] {
+  background:#155c92;
+  color:#fff;
+  border-color:#155c92;
+}
+.r27-experiment-navigation .r27-mode-tab:focus-visible {
+  outline:2px solid #5796cb;
+  outline-offset:2px;
+}
+.r27-experiment-navigation .r27-mode-placeholder {
+  display:inline-flex;
+  align-items:center;
+  color:#687d90;
+  font-size:11px;
+  min-height:29px;
+  white-space:nowrap;
+}
+@media (max-width:1380px) {
+  .r27-experiment-navigation .r27-mode-tabs {
+    flex-basis:auto;
+    flex-wrap:wrap;
+  }
+}
+@media (max-width:900px) {
+  .r27-experiment-navigation .r27-mode-tabs {
+    order:3;
+    flex:1 1 100%;
+  }
+}
