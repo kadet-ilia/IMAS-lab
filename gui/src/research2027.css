@@ -114,3 +114,55 @@
 @media(max-width:900px){.r27-playback-grid{grid-template-columns:1fr}.r27-playback-aside{display:grid;grid-template-columns:1fr 1fr;gap:8px}.r27-playback-aside h4{grid-column:1/-1}.r27-analytics{grid-template-columns:1fr}.r27-experiment-navigation .r27-nav-right{margin-left:0}}
 @media(max-width:570px){.r27-root{padding:13px 8px}.r27-experiment-navigation{padding:10px 7px}.r27-experiment-navigation label{width:100%;flex-wrap:wrap}.r27-experiment-navigation select{width:100%;min-width:0}.r27-playback-controls .r27-play-main{min-width:95px}.r27-replay{padding:12px 10px}.r27-playback-aside{display:block}}
 @media(prefers-reduced-motion:reduce){.r27-pulse-edge{animation:none}}
+
+
+
+/* 3.3.0-rc2 — identical spatial organization to original trust experiment */
+.workspace.research-2027-workspace>.content.r27-research-content{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.r27-research-content>.r27-experiment-navigation{flex:0 0 auto;z-index:8;min-height:51px}
+.r27-study-shell{display:grid;grid-template-columns:297px minmax(0,1fr);height:100%;min-height:0;flex:1}
+.r27-study-sidebar{width:297px;min-width:0;height:100%;border-right:1px solid var(--border)}
+.r27-study-sidebar .sidebar-scroll{padding:16px 20px 8px 24px}
+.r27-study-sidebar .field,.r27-study-sidebar .sidebar-section{font-family:Inter,"Segoe UI",Arial,sans-serif}
+.r27-study-sidebar .r27-settings-intro{font-size:11px;line-height:1.5;color:var(--muted);margin:0 0 15px}
+.r27-study-sidebar .r27-first-settings{margin:0}
+.r27-study-sidebar .r27-setting-field .parameter-tooltip{font-size:13px;line-height:1;margin-bottom:0;color:#718190}
+.r27-study-sidebar .r27-setting-field input:disabled{background:#f3f6f9;color:#7a8793}
+.r27-sidebar-actions{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:0}
+.r27-sidebar-actions .run-button{width:auto;margin:12px 15px 16px}
+.r27-settings-stop,.r27-settings-reset{border:1px solid #cdd6df;background:#fff;color:#2e526f;padding:8px 10px;font-size:12px;border-radius:3px;width:100%}
+.r27-settings-stop{margin:0 15px 12px;width:calc(100% - 30px)}
+.r27-study-content{overflow-y:auto;min-width:0;min-height:0;scrollbar-width:thin;padding:0 12px 14px}
+.r27-study-content .r27-root{max-width:none;padding:17px 10px 32px}
+.r27-study-content .r27-heading{padding-bottom:13px;margin-bottom:13px}
+.r27-study-content .r27-heading h1{font-size:19px;line-height:1.35}
+.r27-study-content .r27-results{border:0;box-shadow:none;border-radius:0;background:transparent;padding:0;display:block}
+.r27-study-content .r27-replay,.r27-study-content .r27-chart,.r27-study-content .r27-petri-report,.r27-study-content .r27-table-scroll{border-radius:2px}
+.r27-study-content .r27-theory-short{background:#fff;border:1px solid var(--border);padding:16px;margin-top:15px}
+.r27-experiment-navigation button.r27-export-control{padding:4px 7px;height:27px;display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#48617a;white-space:nowrap}
+.r27-experiment-navigation button.r27-export-control svg{height:11px;width:11px}
+.r27-manual-layout{min-height:0;flex:1;overflow:auto;display:grid;grid-template-columns:310px minmax(0,1fr);gap:14px;padding:14px;background:#f5f7f9;align-items:start}
+.r27-help-tree{position:sticky;top:0;max-height:calc(100vh - 170px);min-width:0;padding:14px 12px;overflow:auto}
+.r27-help-tree nav{display:flex;flex-direction:column;gap:6px}
+.r27-help-tree .r27-help-branch{margin:0;border:1px solid #e1e7ef;border-radius:4px;overflow:hidden;background:#fff}
+.r27-help-tree .r27-help-branch>summary{cursor:pointer;font-weight:700;color:#234462;font-size:12px;background:#f2f6fa;padding:11px 9px;line-height:1.45;list-style:inside}
+.r27-help-tree .r27-help-branch>summary small{float:right;color:#71859a;font-size:10px;margin-left:6px}
+.r27-help-tree .r27-help-subbranch{padding:0 5px 4px}
+.r27-help-tree .r27-help-subbranch>summary{cursor:pointer;color:#4b637a;font-size:11px;font-weight:700;padding:7px 5px}
+.r27-help-tree a{border-bottom:0;padding:6px 7px 6px 17px;color:#4e6376;font-size:11px;border-radius:3px;line-height:1.4}
+.r27-help-tree a:hover,.r27-help-tree a.r27-help-current{background:#e7f0f8;color:#13588d}
+.r27-help-search{font-weight:600;display:block;font-size:12px;color:#40576b}
+.r27-help-search input{display:block;width:100%;padding:8px 9px;margin-top:6px;font-size:12px;border:1px solid #bac9d7;border-radius:3px;background:#fff}
+.r27-help-count{font-size:10px;color:#718294;margin:8px 0 12px}
+.r27-manual-body{display:flex;flex-direction:column;gap:11px;min-width:0}
+.r27-manual-body>.help-article{width:100%;max-width:none;padding:22px 30px 31px}
+.r27-manual-body .r27-doc-section{scroll-margin-top:13px}
+.r27-manual-chapter{background:#fff;border:1px solid var(--border);padding:15px 22px;scroll-margin-top:13px}
+.r27-manual-chapter h2{font-size:19px;color:#123a63;margin:0 0 6px}
+.r27-manual-chapter p{font-size:12px;color:#536b81;line-height:1.65;margin:4px 0}
+.r27-manual-equation{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;align-items:start;margin:10px 0 13px;border-left:3px solid #5c91b9;background:#f3f7fb;padding:10px 14px;font:15px/1.7 "Cambria Math",Cambria,"Times New Roman",serif;color:#173d5b;white-space:pre-wrap;overflow-wrap:anywhere}
+.r27-eq-num{color:#7b92a7;font-size:12px}
+.r27-document-caution{padding:10px 12px;background:#fffaf0;border-left:3px solid #bf9c55}
+.r27-overview-article>h1{color:#183b60}
+@media(max-width:1120px){.r27-manual-layout{grid-template-columns:260px minmax(0,1fr)}.r27-study-shell{grid-template-columns:260px minmax(0,1fr)}.r27-study-sidebar{width:260px}.r27-study-sidebar .sidebar-scroll{padding-left:13px;padding-right:13px}}
+@media(max-width:760px){.r27-manual-layout{grid-template-columns:1fr;overflow-y:auto}.r27-help-tree{position:static;max-height:360px}.r27-study-shell{grid-template-columns:240px minmax(0,1fr)}.r27-study-sidebar{width:240px}.r27-manual-body>.help-article{padding:16px 19px}}
