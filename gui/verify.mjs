@@ -117,7 +117,7 @@ for (let i=0; i<researchTabs.length; i++) {
   if (!(await page.locator(".r27-playback-svg").count())) throw new Error("Missing topology graph: " + researchTabs[i]);
 }
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
-await page.locator(".r27-field input").nth(1).fill("10");
+await page.locator(".r27-unified-settings input[type=number]").nth(1).fill("10");
 await page.getByRole("button", { name: "Запустить эксперимент", exact: false }).click();
 await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
 await page.getByRole("button", {name:"Воспроизвести"}).click();
