@@ -412,6 +412,52 @@ function DecisionAreas({ hasBands, mode }) {
   return <>{["sigma", "both"].includes(mode) ? <><Area dataKey="proposed_robust_band2" name="±2σ по прогонам" stroke="none" fill="#dcecff" fillOpacity={0.62} isAnimationActive={false} /><Area dataKey="proposed_robust_band1" name="±1σ по прогонам" stroke="none" fill="#bdd8ff" fillOpacity={0.72} isAnimationActive={false} /></> : null}{["quantile", "both"].includes(mode) ? <><Area dataKey="proposed_robust_band90" name="P5–P95" stroke="none" fill="#eadffc" fillOpacity={0.47} isAnimationActive={false} /><Area dataKey="proposed_robust_band50" name="P25–P75" stroke="none" fill="#d4c0f5" fillOpacity={0.62} isAnimationActive={false} /></> : null}</>;
 }
 
+function TimeRangeSelector({children,start,end,onZoom,onDrag}){
+  const gesture=useRef(null);
+  const locate=(event)=>{
+    const grid=event.currentTarget.querySelector(".recharts-cartesian-grid");
+    const rect=grid?.getBoundingClientRect();
+    if(!rect || rect.width < 10 || event.clientY < rect.top || event.clientY > rect.bottom) return null;
+    const fraction=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
+    return Math.round(start+fraction*(end-start));
+  };
+  const begin=event=>{
+    if(event.button!==0 || end<=start)return;
+    const step=locate(event);
+    if(step===null)return;
+    gesture.current={from:step,to:step};
+    onDrag([step,step]);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const move=event=>{
+    if(!gesture.current)return;
+    const grid=event.currentTarget.querySelector(".recharts-cartesian-grid");
+    const rect=grid?.getBoundingClientRect();
+    if(!rect || rect.width<10)return;
+    const fraction=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
+    const step=Math.round(start+fraction*(end-start));
+    gesture.current.to=step;
+    onDrag([gesture.current.from,step]);
+  };
+  const finish=event=>{
+    const current=gesture.current;
+    if(!current)return;
+    move(event);
+    const a=Math.min(current.from,current.to),b=Math.max(current.from,current.to);
+    gesture.current=null;
+    onDrag(null);
+    if(b>a)onZoom(a,b);
+    if(event.currentTarget.hasPointerCapture?.(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const cancel=()=>{
+    gesture.current=null;
+    onDrag(null);
+  };
+  return <div className="trust-zoom-surface" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel}>
+    {children}
+  </div>;
+}
+
 function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) {
   const [bandMode, setBandMode] = useState("sigma");
   const [showTolerance, setShowTolerance] = useState(false);
@@ -445,21 +491,6 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
     const a = clampStep(from), b = clampStep(to);
     if (a <= b) setZoomRange([a, b]);
   };
-  const onZoomStart = event => {
-    const step = Number(event?.activeLabel);
-    if (Number.isFinite(step)) setDragRange([step, step]);
-  };
-  const onZoomMove = event => {
-    const step = Number(event?.activeLabel);
-    if (Number.isFinite(step)) setDragRange(previous => previous ? [previous[0], step] : null);
-  };
-  const onZoomEnd = event => {
-    if (!dragRange) return;
-    const end = Number(event?.activeLabel);
-    const [a, b] = [dragRange[0], Number.isFinite(end) ? end : dragRange[1]].sort((x,y)=>x-y);
-    if (b > a) changeZoom(a, b);
-    setDragRange(null);
-  };
   const zoomSelection = dragRange && dragRange[0] !== dragRange[1] ? 
     <ReferenceArea x1={Math.min(...dragRange)} x2={Math.max(...dragRange)} strokeOpacity={0.2} fill="#5195cf" fillOpacity={0.22} /> : null;
 
@@ -489,10 +520,10 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
     </div>
     <div className="main-grid trust-synced-grid" data-zoom-from={startStep} data-zoom-to={endStep} data-decision-points={visibleDecision.length} data-reputation-points={visibleReputation.length}>
       <Panel title="Динамика решений и оценок" subtitle={hasBands ? `Линии выбранного прогона; статистические области рассчитаны по ${runCount} независимым прогонам` : "Для межпрогонных областей выполните серию Монте-Карло."} headerAside={<BandControls hasBands={hasBands} runCount={runCount} mode={bandMode} setMode={setBandMode} showTolerance={showTolerance} setShowTolerance={setShowTolerance} onRunBands={onRunBands} running={running} />}>
-        <ResponsiveContainer width="100%" height={320}><ComposedChart data={visibleDecision} onMouseDown={onZoomStart} onMouseMove={onZoomMove} onMouseUp={onZoomEnd} onMouseLeave={()=>setDragRange(null)} onDoubleClick={()=>setZoomRange(null)} margin={{ top: 12, right: 18, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} label={{ value: "Шаг", position: "insideBottom", offset: -4, fontSize: 10 }} /><YAxis domain={[config.safe_action_min - 0.5, config.safe_action_max + 0.5]} tick={{ fontSize: 10 }} label={{ value: "Значение", angle: -90, position: "insideLeft", fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 11, borderColor: "#d8e0e8" }} formatter={formatChartValue} /><Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />{showTolerance ? <Area dataKey="tolerance_band" name="Допустимое отклонение ±δ" stroke="none" fill="#dff4ea" fillOpacity={0.52} isAnimationActive={false} /> : null}<DecisionAreas hasBands={hasBands} mode={bandMode} /><ReferenceLine x={config.attack_start_step} stroke={COLORS.danger} strokeDasharray="4 4" label={{ value: "Начало атаки", fill: COLORS.danger, fontSize: 9, position: "insideTopRight" }} /><Line dataKey="truth" name="Желаемое действие (x*)" stroke="#7d8792" strokeDasharray="5 4" dot={false} strokeWidth={1.4} isAnimationActive={false} /><Line dataKey="arithmetic_mean" name={METHODS.arithmetic_mean} stroke={COLORS.arithmetic_mean} strokeDasharray="5 3" dot={false} strokeWidth={1.6} isAnimationActive={false} /><Line dataKey="trust_weighted_mean" name={METHODS.trust_weighted_mean} stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={1.8} isAnimationActive={false} />{hasBands ? <Line dataKey="proposed_robust_mean" name="Среднее робастное по прогонам" stroke="#6d8caf" strokeDasharray="4 3" dot={false} strokeWidth={1.5} isAnimationActive={false} /> : null}<Line dataKey="proposed_robust" name="Робастное — выбранный прогон" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2.2} isAnimationActive={false} />{zoomSelection}</ComposedChart></ResponsiveContainer>
+        <TimeRangeSelector start={startStep} end={endStep} onZoom={changeZoom} onDrag={setDragRange}><ResponsiveContainer width="100%" height={320}><ComposedChart data={visibleDecision} margin={{ top: 12, right: 18, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} label={{ value: "Шаг", position: "insideBottom", offset: -4, fontSize: 10 }} /><YAxis domain={[config.safe_action_min - 0.5, config.safe_action_max + 0.5]} tick={{ fontSize: 10 }} label={{ value: "Значение", angle: -90, position: "insideLeft", fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 11, borderColor: "#d8e0e8" }} formatter={formatChartValue} /><Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />{showTolerance ? <Area dataKey="tolerance_band" name="Допустимое отклонение ±δ" stroke="none" fill="#dff4ea" fillOpacity={0.52} isAnimationActive={false} /> : null}<DecisionAreas hasBands={hasBands} mode={bandMode} /><ReferenceLine x={config.attack_start_step} stroke={COLORS.danger} strokeDasharray="4 4" label={{ value: "Начало атаки", fill: COLORS.danger, fontSize: 9, position: "insideTopRight" }} /><Line dataKey="truth" name="Желаемое действие (x*)" stroke="#7d8792" strokeDasharray="5 4" dot={false} strokeWidth={1.4} isAnimationActive={false} /><Line dataKey="arithmetic_mean" name={METHODS.arithmetic_mean} stroke={COLORS.arithmetic_mean} strokeDasharray="5 3" dot={false} strokeWidth={1.6} isAnimationActive={false} /><Line dataKey="trust_weighted_mean" name={METHODS.trust_weighted_mean} stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={1.8} isAnimationActive={false} />{hasBands ? <Line dataKey="proposed_robust_mean" name="Среднее робастное по прогонам" stroke="#6d8caf" strokeDasharray="4 3" dot={false} strokeWidth={1.5} isAnimationActive={false} /> : null}<Line dataKey="proposed_robust" name="Робастное — выбранный прогон" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2.2} isAnimationActive={false} />{zoomSelection}</ComposedChart></ResponsiveContainer></TimeRangeSelector>
       </Panel>
       <Panel title="Доверие (репутация) агентов" subtitle="Индивидуальная динамика и средние значения по группам">
-        <ResponsiveContainer width="100%" height={320}><LineChart data={visibleReputation} onMouseDown={onZoomStart} onMouseMove={onZoomMove} onMouseUp={onZoomEnd} onMouseLeave={()=>setDragRange(null)} onDoubleClick={()=>setZoomRange(null)} margin={{ top: 12, right: 16, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 10 }} formatter={(value, name) => [Number(value).toFixed(3), name]} /><ReferenceLine y={config.isolation_threshold} stroke={COLORS.trust_weighted_mean} strokeDasharray="5 4" label={{ value: "Порог изоляции", fill: COLORS.trust_weighted_mean, fontSize: 9 }} />{rep.agents.map((agent) => <Line key={agent} dataKey={`a${agent}`} name={`Агент ${agent}`} stroke={rep.types.get(agent) === "sybil" ? COLORS.violet : rep.types.get(agent) === "byzantine" ? COLORS.danger : COLORS.trust_weighted_mean} strokeOpacity={0.24} dot={false} strokeWidth={0.8} legendType="none" isAnimationActive={false} />)}<Line dataKey="honestMean" name="Корректные" stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={2.1} isAnimationActive={false} /><Line dataKey="byzantineMean" name="Византийские" stroke={COLORS.danger} dot={false} strokeWidth={2.1} isAnimationActive={false} />{config.n_sybil_agents > 0 ? <Line dataKey="sybilMean" name="Sybil" stroke={COLORS.violet} dot={false} strokeWidth={2.1} isAnimationActive={false} /> : null}<Legend wrapperStyle={{ fontSize: 10 }} />{zoomSelection}</LineChart></ResponsiveContainer>
+        <TimeRangeSelector start={startStep} end={endStep} onZoom={changeZoom} onDrag={setDragRange}><ResponsiveContainer width="100%" height={320}><LineChart data={visibleReputation} margin={{ top: 12, right: 16, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 10 }} formatter={(value, name) => [Number(value).toFixed(3), name]} /><ReferenceLine y={config.isolation_threshold} stroke={COLORS.trust_weighted_mean} strokeDasharray="5 4" label={{ value: "Порог изоляции", fill: COLORS.trust_weighted_mean, fontSize: 9 }} />{rep.agents.map((agent) => <Line key={agent} dataKey={`a${agent}`} name={`Агент ${agent}`} stroke={rep.types.get(agent) === "sybil" ? COLORS.violet : rep.types.get(agent) === "byzantine" ? COLORS.danger : COLORS.trust_weighted_mean} strokeOpacity={0.24} dot={false} strokeWidth={0.8} legendType="none" isAnimationActive={false} />)}<Line dataKey="honestMean" name="Корректные" stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={2.1} isAnimationActive={false} /><Line dataKey="byzantineMean" name="Византийские" stroke={COLORS.danger} dot={false} strokeWidth={2.1} isAnimationActive={false} />{config.n_sybil_agents > 0 ? <Line dataKey="sybilMean" name="Sybil" stroke={COLORS.violet} dot={false} strokeWidth={2.1} isAnimationActive={false} /> : null}<Legend wrapperStyle={{ fontSize: 10 }} />{zoomSelection}</LineChart></ResponsiveContainer></TimeRangeSelector>
       </Panel>
     </div>
     {networkVisible ? <Panel title="Сетевые ограничения и доступность данных" subtitle="Размер компоненты связности, число доступных предложений и доля доставки сообщений"><ResponsiveContainer width="100%" height={260}><LineChart data={data.network_series} margin={{ top: 12, right: 40, left: -5, bottom: 10 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis yAxisId="count" domain={[0, totalAgents]} tick={{ fontSize: 9 }} /><YAxis yAxisId="ratio" orientation="right" domain={[0, 1]} tick={{ fontSize: 9 }} /><Tooltip contentStyle={{ fontSize: 10 }} /><Legend wrapperStyle={{ fontSize: 9 }} /><Line yAxisId="count" dataKey="largest_component" name="Крупнейшая компонента" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2} isAnimationActive={false} /><Line yAxisId="count" dataKey="available_agents" name="Доступные предложения" stroke={COLORS.arithmetic_mean} dot={false} isAnimationActive={false} /><Line yAxisId="ratio" dataKey="delivery_ratio" name="Доля доставки" stroke={COLORS.trust_weighted_mean} dot={false} isAnimationActive={false} /><ReferenceLine yAxisId="count" x={config.partition_start_step} stroke={COLORS.warning} strokeDasharray="4 4" /></LineChart></ResponsiveContainer></Panel> : null}
