@@ -763,7 +763,7 @@ function App() {
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
               {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
-            </ExperimentLayout>
+            </ExperimentLayout>}
     </div>
     {(isResearch||activeTab==="help2027")?<footer className="statusbar"><span>Шаги: {isResearch&&researchReady?(researchRuntime?.steps??"—"):"—"}</span><span>Время: {isResearch&&researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"}</span><span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):"Справка"}</span><span>Сид: {isResearch?visibleSeed:"—"}</span><span className="status-log">{isResearch?"Синтетическая модель — результаты требуют независимой валидации":"Единая справка по шести экспериментам"}</span></footer>:<footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>}
   </div>;
