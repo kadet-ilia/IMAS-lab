@@ -654,6 +654,8 @@ function App() {
   const [cacheHit, setCacheHit] = useState(false);
   const jobRef = useRef(null);
   const runningRef = useRef(false);
+  const researchActionsRef = useRef(null);
+  const [researchRuntime,setResearchRuntime] = useState(null);
 
   const request = async (action, options = {}) => {
     if (runningRef.current) return;
@@ -735,7 +737,11 @@ function App() {
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
   };
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-  const lastTimestamp = lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—";
+  const isResearch=activeTab.startsWith("study-");
+  const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
+  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):running;
+  const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—");
   const experimentNavigation = (
 <nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
@@ -754,19 +760,24 @@ function App() {
 </nav>
   );
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
 {["trace","mc","sensitivity","data"].includes(activeTab)?<>
 <button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
 <button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
 <button onClick={stop} disabled={!running}><Icon name="stop"/>Остановить</button>
 <button onClick={reset} disabled={running}><Icon name="reset"/>Сбросить</button>
+</>:isResearch?<>
+<button onClick={()=>researchActionsRef.current?.newSeed()} disabled={!researchReady||visibleRunning}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={()=>researchActionsRef.current?.start()} disabled={!researchReady||visibleRunning}><Icon name="play"/>Запустить</button>
+<button onClick={()=>researchActionsRef.current?.stop()} disabled={!researchReady||!visibleRunning}><Icon name="stop"/>Остановить</button>
+<button onClick={()=>researchActionsRef.current?.reset()} disabled={!researchReady||visibleRunning}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
 </div></header>
     <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
       {activeTab.startsWith("study-")
-        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation}/>
+        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
         : <>
             {activeTab==="help2027"?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}
             <main className={"content"+(activeTab==="help2027"?" r27-research-content":"")} data-study={activeTab==="help2027"?"help": "trust"}>
