@@ -132,7 +132,7 @@ const PARAMETER_TOOLTIPS = {
   partition_end_step: "Шаг завершения разделения сети. Длинное разделение дольше ограничивает обмен наблюдениями.",
   partition_fraction: "Доля узлов в отделенном сегменте. Определяет масштаб нарушения связности и доставки сообщений.",
   bootstrap_samples: "Число bootstrap-перевыборок для интервалов сравнения методов. Больше выборок стабильнее, но медленнее.",
-  parallel_workers: "Число параллельных процессов. Значение 0 выбирает автоматически; больше процессов ускоряют серии при наличии CPU-ресурсов.",
+  parallel_workers: "Число параллельных браузерных Web Workers (не более четырёх). 0 — автоматический выбор в зависимости от аппаратных ядер.",
   n_sensitivity_runs: "Число прогонов для каждой точки однофакторного анализа. Больше прогонов уменьшают случайный разброс оценки чувствительности.",
   factorial_runs_per_point: "Число прогонов на точку многофакторного плана. Повышает надежность оценки главных эффектов и взаимодействий.",
   factorial_max_points: "Максимум точек многофакторного плана. Больше точек покрывают больше комбинаций факторов, но резко увеличивают время расчета.",
@@ -368,7 +368,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
           <summary>Статистика и вычисления</summary>
           <div className="advanced-body">
             <NumberField label="Bootstrap-выборок" value={config.bootstrap_samples} min={100} max={10000} step={100} onChange={set("bootstrap_samples")} tooltip={PARAMETER_TOOLTIPS.bootstrap_samples} />
-            <NumberField label="Параллельных процессов (0 — авто)" value={config.parallel_workers} min={0} max={32} onChange={set("parallel_workers")} tooltip={PARAMETER_TOOLTIPS.parallel_workers} />
+            <NumberField label="Браузерных потоков (0 — авто)" value={config.parallel_workers} min={0} max={32} onChange={set("parallel_workers")} tooltip={PARAMETER_TOOLTIPS.parallel_workers} />
             <NumberField label="Прогонов на точку чувствительности" value={config.n_sensitivity_runs} min={1} max={100} onChange={set("n_sensitivity_runs")} tooltip={PARAMETER_TOOLTIPS.n_sensitivity_runs} />
             <NumberField label="Прогонов на точку факторного плана" value={config.factorial_runs_per_point} min={1} max={50} onChange={set("factorial_runs_per_point")} tooltip={PARAMETER_TOOLTIPS.factorial_runs_per_point} />
             <NumberField label="Максимум точек факторного плана" value={config.factorial_max_points} min={4} max={64} onChange={set("factorial_max_points")} tooltip={PARAMETER_TOOLTIPS.factorial_max_points} />
@@ -733,7 +733,7 @@ function App() {
 </nav>
   );
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
 {["trace","mc","sensitivity","data"].includes(activeTab)?<>
 <button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
 <button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
