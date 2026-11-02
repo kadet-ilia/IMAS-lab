@@ -1,4 +1,4 @@
-name: Verify IMAS 2027
+name: Verify IMAS_LaB_test (browser-only)
 on:
   pull_request:
     paths:
@@ -24,17 +24,16 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - run: pip install -r requirements.txt
       - run: npm ci
         working-directory: gui
       - run: npm run build
         working-directory: gui
-      - run: node --test src/research2027.test.mjs
+      - run: npm run test
         working-directory: gui
       - name: Browser smoke test
         working-directory: gui
         run: |
-          node server.mjs > /tmp/imas-server.log 2>&1 &
+          npm run preview > /tmp/imas-preview.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173 >/dev/null && break || sleep 1; done
           npm run verify
   existing-python:
