@@ -151,7 +151,7 @@ if((await replay.locator(".r27-replay-notes summary").count())!==1)throw Error("
 if (!topologyBox || !summaryBox || !(summaryBox.x > topologyBox.x + topologyBox.width - 2)) {
   throw new Error("Trust topology and summary table are not side-by-side");
 }
-if (!(topologyBox.width < summaryBox.width)) throw new Error("Trust topology should be narrower than summary table");
+if (!(topologyBox.width > summaryBox.width * 1.1)) throw new Error("The topology must have more width than the summary table: "+JSON.stringify({topologyBox,summaryBox}));
 const pairedPanels = page.locator(".trust-synced-grid > .panel");
 if ((await pairedPanels.count()) !== 2) throw new Error("Two synchronized charts are required");
 const decisionBounds = await pairedPanels.nth(0).boundingBox();
