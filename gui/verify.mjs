@@ -225,26 +225,59 @@ const researchTabs = ["Автоматические решения", "Колле
 const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
 for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
-  await page.locator(".r27-heading .r27-study-title").waitFor({ timeout: 10000 });
+  await page.locator("main.r27-experiment-content > h2.r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
   await assertNavButtonsEqual(researchTabs[i]);
-  const authors=(await page.locator(".r27-study-content .r27-kicker").innerText()).trim();
+  const authors=(await page.locator("main.r27-experiment-content > .r27-kicker").innerText()).trim();
   if(authors!==((i===2||i===4)?authorB:authorA))throw Error("Wrong researcher attribution on "+researchTabs[i]+": "+authors);
   if ((await page.locator(".r27-theory-short").count())!==0) throw new Error("Inline mathematical theory must only be in unified help: "+researchTabs[i]);
-  if ((await page.locator(".r27-study-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
+  if ((await page.locator("main.r27-experiment-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
   if (!(await page.locator(".r27-unified-settings input[type=number]").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
   if (!(await page.locator(".r27-playback-svg").count())) throw new Error("Missing topology graph: " + researchTabs[i]);
+
+  const researchMain = page.locator("main.r27-experiment-content");
+  const surface = await researchMain.evaluate(el=>({
+    overflowY:getComputedStyle(el).overflowY,
+    nested:el.querySelectorAll(".r27-root,.r27-study-content,.r27-results").length,
+    panelCount:el.querySelectorAll("section.panel").length,
+    directHead:el.querySelector(":scope > h2.r27-study-title")?.textContent?.trim(),
+    author:el.querySelector(":scope > .r27-kicker")?.textContent?.trim()
+  }));
+  if(surface.overflowY!=="auto" || surface.nested!==0 || surface.panelCount<1){
+    throw Error(researchTabs[i]+": research layout must share the trust content scroller and independent panels: "+JSON.stringify(surface));
+  }
+  const researchOverview=researchMain.locator(":scope > .trust-overview-grid");
+  if((await researchOverview.locator(":scope > .r27-replay-compact").count())!==1||
+     (await researchOverview.locator(":scope > section.panel.r27-summary-panel").count())!==1){
+    throw Error(researchTabs[i]+": missing the unified topology/table layout");
+  }
+  const topbar=page.locator(".topbar");
+  for(const label of ["Новый сид","Запустить","Остановить","Сбросить"]){
+    if((await topbar.getByRole("button",{name:label,exact:true}).count())!==1){
+      throw Error(researchTabs[i]+": absent shared toolbar action "+label);
+    }
+  }
+  if((await topbar.getByText("Автономный локальный эксперимент").count())!==0){
+    throw Error(researchTabs[i]+": legacy study-specific topbar must be removed");
+  }
+
 }
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
+const seedInput = page.getByRole("spinbutton", {name:"Начальное зерно генератора"});
+const firstSeed = await seedInput.inputValue();
+await page.locator(".topbar").getByRole("button",{name:"Новый сид",exact:true}).click();
+if((await seedInput.inputValue())===firstSeed)throw Error("Common toolbar seed action has no effect on research study");
+await page.locator(".topbar").getByRole("button",{name:"Сбросить",exact:true}).click();
 await page.locator(".r27-unified-settings input[type=number]").nth(1).fill("10");
-await page.getByRole("button", { name: "Запустить эксперимент", exact: false }).click();
+await page.locator(".topbar").getByRole("button", { name: "Запустить", exact: true }).click();
 await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
 await page.getByRole("button", {name:"Воспроизвести"}).click();
 await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
 await page.getByRole("button", {name:"Пауза"}).click();
 await page.getByRole("slider", {name:"Выбор такта"}).press("ArrowRight");
 if(!(await page.locator(".r27-state-matrix").count()))throw Error("Missing state heatmap");
-const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
+const researchComputed = await page.locator(".r27-summary-panel .r27-table tbody tr").count() >= 9;
+if((await page.locator(".r27-analytics > section.panel.r27-panel").count())<2)throw Error("Research study diagrams must use the shared panel component");
 const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
 const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
