@@ -93,9 +93,9 @@ await page.screenshot({ path: dashboardScreenshot, fullPage: false });
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
 await page.locator(".r27-help-branch").count().then(count=>{if(count!==7)throw Error("Expected seven documentation tree groups");});
-await page.getByRole("textbox", {name:"Поиск по содержанию справки"}).fill("Дисконтированная Beta-модель доверия");
+await page.getByRole("searchbox", {name:"Поиск по содержанию справки"}).fill("Дисконтированная Beta-модель доверия");
 if(!(await page.getByRole("link", {name:"Дисконтированная Beta-модель доверия"}).count()))throw Error("Baseline mathematical help not indexed");
-await page.getByRole("textbox", {name:"Поиск по содержанию справки"}).fill("");
+await page.getByRole("searchbox", {name:"Поиск по содержанию справки"}).fill("");
 await page.locator(".r27-help-branch").filter({hasText:"Автоматические решения"}).locator("summary").first().click();
 await page.getByRole("heading", {name:"Математическая модель локального наблюдения"}).waitFor();
 
