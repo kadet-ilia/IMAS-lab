@@ -1,0 +1,33 @@
+name: Verify IMAS 2027
+on:
+  pull_request:
+    paths:
+      - 'gui/**'
+      - '.github/workflows/verify-2027.yml'
+  workflow_dispatch:
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - run: npm ci
+        working-directory: gui
+      - run: npm run build
+        working-directory: gui
+      - run: node --test src/research2027.test.mjs
+        working-directory: gui
+  existing-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest -v test_experiment
