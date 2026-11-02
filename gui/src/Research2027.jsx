@@ -143,7 +143,7 @@ export function ResearchStudy({studyId,navigation}){
   <ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");}} running={running}/>
   <main className="content r27-experiment-content" data-study={studyId}>
    {navigation}
-   <div className="r27-study-content"><div className="r27-root"><header className="r27-heading"><div className="r27-kicker">Эксперименты 2027 · {def.origin}</div><h2 className="r27-study-title">{def.title}</h2><p>{theory.goal}</p></header>
+   <div className="r27-study-content"><div className="r27-root"><header className="r27-heading"><div className="r27-kicker">{["petri","misinformation"].includes(studyId)?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А."}</div><h2 className="r27-study-title">{def.title}</h2><p>{theory.goal}</p></header>
   <section className="r27-results"><h2>Результаты вычислительного эксперимента</h2>{running?<p role="status">Выполняются независимые вычислительные прогоны…</p>:null}{error?<p className="r27-error" role="alert">{error}</p>:null}
    <ResearchKpis studyId={studyId} result={result}/>
    <TopologyPlayback replay={result?.replay||previewReplay}/>
