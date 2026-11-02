@@ -61,7 +61,7 @@ function ResearchField({name,value,onChange,disabled=false}){
 export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset,running}){
  const def=STUDY_DEFS.find(s=>s.id===studyId);
  const groups=GROUPS[studyId]||[];
- const fixed=(studyId==="cascade"||studyId==="misinformation"||studyId==="petri");
+ const fixed=(studyId==="cascade"||studyId==="misinformation");
  const entries=(fields)=><>{fields.map((key)=><ResearchField key={key} name={key} value={config[key]} disabled={(fixed&&key==="agents")||(studyId==="petri"&&key==="runs")} onChange={onChange}/>)}</>;
  return <aside className="sidebar r27-unified-settings">
   <div className="sidebar-scroll">
