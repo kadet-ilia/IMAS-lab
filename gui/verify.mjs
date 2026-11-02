@@ -121,11 +121,59 @@ async function assertStandardWorkspace(section) {
 }
 await assertStandardWorkspace("Расчет доверия");
 
+
+// Compare the actual structural shell and computed design tokens, not only class names.
+async function pageChromeSnapshot(){
+ return await page.locator(".workspace").evaluate(workspace=>{
+  const sidebar=workspace.querySelector(":scope > aside.sidebar");
+  const content=workspace.querySelector(":scope > main.content");
+  const nav=content?.querySelector(":scope > nav.r27-experiment-navigation");
+  const heading=content?.querySelector(":scope > header.imas-experiment-heading");
+  const progress=content?.querySelector(":scope > .progress-strip");
+  const overview=content?.querySelector(":scope > .trust-overview-grid");
+  const topology=overview?.querySelector(":scope > section.r27-replay");
+  const summary=overview?.querySelector(":scope > section.panel");
+  const kpis=content?.querySelector(":scope > .kpi-grid");
+  const controls=sidebar?.querySelector(":scope > button.run-button");
+  if(!sidebar||!content||!nav||!heading||!progress||!topology||!summary||!kpis||!controls){
+   throw Error("Missing unified experiment shell element: "+JSON.stringify({sidebar:!!sidebar,content:!!content,nav:!!nav,heading:!!heading,progress:!!progress,topology:!!topology,summary:!!summary,kpis:!!kpis,controls:!!controls}));
+  }
+  const css=(node,names)=>Object.fromEntries(names.map(x=>[x,getComputedStyle(node)[x]]));
+  const box=node=>{const r=node.getBoundingClientRect();return {width:r.width,height:r.height,x:r.x,y:r.y}};
+  const childNames=node=>Array.from(node.children).map(x=>x.tagName.toLowerCase()+"."+(x.className&&typeof x.className==="string"?x.className.split(/\s+/).sort().join("."):""));
+  return {
+   workspace:css(workspace,["display","gridTemplateColumns"]),
+   sidebarClass:sidebar.className.split(/\s+/).sort().join(" "),
+   contentClass:content.className.split(/\s+/).sort().join(" "),
+   sidebar:css(sidebar,["display","gridTemplateRows","backgroundColor","borderRightWidth"]),
+   content:css(content,["display","overflowY","paddingLeft","paddingRight","backgroundColor"]),
+   nav:css(nav,["display","paddingTop","paddingBottom","backgroundColor","borderBottomWidth","position"]),
+   heading:css(heading,["display","gridTemplateRows","paddingLeft","paddingTop","marginBottom"]),
+   headingChildren:Array.from(heading.children).map(x=>x.tagName.toLowerCase()+"."+x.className),
+   headingTitle:css(heading.querySelector("h2"),["fontSize","fontWeight","lineHeight","color"]),
+   progress:css(progress,["minHeight","paddingTop","paddingBottom"]),
+   overview:css(overview,["display","gridTemplateColumns","gap"]),
+   topology:css(topology,["paddingTop","paddingLeft","borderRadius"]),
+   summary:css(summary,["borderRadius","backgroundColor","borderTopWidth"]),
+   summaryParts:childNames(summary),
+   kpiClass:kpis.className.includes("kpi-grid"),
+   kpiCount:kpis.querySelectorAll(":scope > .kpi").length,
+   kpiParts:childNames(kpis.querySelector(":scope > .kpi")),
+   sidebarParts:childNames(sidebar).slice(0,2),
+   mainParts:childNames(content).slice(0,3),
+   geometry:{sidebar:box(sidebar),content:box(content),nav:box(nav),heading:box(heading),topology:box(topology),summary:box(summary),kpis:box(kpis)}
+  };
+ });
+}
+const baselineChrome=await pageChromeSnapshot();
+if(baselineChrome.kpiCount!==4)throw Error("Trust must have four KPI cards");
+
+
 const authorA = "Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
 const authorB = "Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.";
-if((await page.locator('main[data-study="trust"] > .r27-kicker').innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
+if((await page.locator('main[data-study="trust"] > .imas-experiment-heading > .r27-kicker').innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
 const trustTitle = "Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения";
-if((await page.locator('main[data-study="trust"] > h2.r27-study-title').innerText()).trim()!==trustTitle) throw Error("Trust experiment title is absent or differs from the required wording");
+if((await page.locator('main[data-study="trust"] > .imas-experiment-heading > h2.r27-study-title').innerText()).trim()!==trustTitle) throw Error("Trust experiment title is absent or differs from the required wording");
 
 async function assertNavButtonsEqual(section){
  const help=await page.locator(".r27-experiment-navigation .r27-nav-right").boundingBox();
@@ -225,10 +273,30 @@ const researchTabs = ["Автоматические решения", "Колле
 const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
 for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
-  await page.locator("main.r27-experiment-content > h2.r27-study-title").waitFor({ timeout: 10000 });
+  await page.locator("main.r27-experiment-content > .imas-experiment-heading > h2.r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
+
+  const currentChrome=await pageChromeSnapshot();
+  const comparable=structure=>{
+   const {geometry,...rest}=structure;
+   // Dimensions depend on content text; compare fixed column widths and shared chrome.
+   return {...rest,overview:{display:structure.overview.display,gap:structure.overview.gap}};
+  };
+  const base=comparable(baselineChrome),actual=comparable(currentChrome);
+  if(JSON.stringify(base)!==JSON.stringify(actual)){
+   const differences=Object.keys(base).filter(k=>JSON.stringify(base[k])!==JSON.stringify(actual[k])).map(k=>({component:k,trust:base[k],research:actual[k]}));
+   throw Error("Different markup/design tokens for "+researchTabs[i]+": "+JSON.stringify(differences));
+  }
+  for(const key of ["sidebar","content","nav","topology","summary","kpis"]){
+   const a=baselineChrome.geometry[key],b=currentChrome.geometry[key];
+   if(Math.abs(a.width-b.width)>3){
+    throw Error("Different "+key+" horizontal dimension for "+researchTabs[i]+": "+JSON.stringify({trust:a,research:b}));
+   }
+  }
+  if(currentChrome.kpiCount!==4)throw Error("Every experiment must show the same four-column KPI grid");
+
   await assertNavButtonsEqual(researchTabs[i]);
-  const authors=(await page.locator("main.r27-experiment-content > .r27-kicker").innerText()).trim();
+  const authors=(await page.locator("main.r27-experiment-content > .imas-experiment-heading > .r27-kicker").innerText()).trim();
   if(authors!==((i===2||i===4)?authorB:authorA))throw Error("Wrong researcher attribution on "+researchTabs[i]+": "+authors);
   if ((await page.locator(".r27-theory-short").count())!==0) throw new Error("Inline mathematical theory must only be in unified help: "+researchTabs[i]);
   if ((await page.locator("main.r27-experiment-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
@@ -240,8 +308,8 @@ for (let i=0; i<researchTabs.length; i++) {
     overflowY:getComputedStyle(el).overflowY,
     nested:el.querySelectorAll(".r27-root,.r27-study-content,.r27-results").length,
     panelCount:el.querySelectorAll("section.panel").length,
-    directHead:el.querySelector(":scope > h2.r27-study-title")?.textContent?.trim(),
-    author:el.querySelector(":scope > .r27-kicker")?.textContent?.trim()
+    directHead:el.querySelector(":scope > header.imas-experiment-heading > h2.r27-study-title")?.textContent?.trim(),
+    author:el.querySelector(":scope > header.imas-experiment-heading > .r27-kicker")?.textContent?.trim()
   }));
   if(surface.overflowY!=="auto" || surface.nested!==0 || surface.panelCount<1){
     throw Error(researchTabs[i]+": research layout must share the trust content scroller and independent panels: "+JSON.stringify(surface));
