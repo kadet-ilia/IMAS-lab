@@ -20,6 +20,7 @@ import {
 import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
+import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip} from "./ExperimentLayout.jsx";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -190,24 +191,6 @@ function Icon({ name }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 
-function ParameterTooltip({ text }) {
-  if (!text) return null;
-  return (
-    <span
-      className="parameter-tooltip"
-      tabIndex={0}
-      aria-label={text}
-      onClick={(event) => {
-        event.preventDefault();
-        event.currentTarget.focus();
-      }}
-    >
-      <Icon name="help" />
-      <span role="tooltip">{text}</span>
-    </span>
-  );
-}
-
 function FieldLabel({ label, tooltip }) {
   return <span className="field-label"><span>{label}</span><ParameterTooltip text={tooltip} /></span>;
 }
@@ -228,14 +211,6 @@ function SelectField({ label, value, onChange, children, tooltip }) {
 
 function BoolField({ label, checked, onChange, hint, tooltip }) {
   return <label className="bool-field"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span className="bool-label"><span>{label}</span><ParameterTooltip text={tooltip} />{hint ? <small>{hint}</small> : null}</span></label>;
-}
-
-function Kpi({ label, value, note, tone = "blue" }) {
-  return <div className="kpi"><div className="kpi-label">{label}</div><div className={`kpi-value ${tone}`}>{value}</div><div className="kpi-note">{note}</div></div>;
-}
-
-function Panel({ title, subtitle, children, className = "", headerAside = null }) {
-  return <section className={`panel ${className}`}><header className="panel-header"><div><h2>{title}</h2>{subtitle ? <p>{subtitle}</p> : null}</div>{headerAside}</header><div className="panel-body">{children}</div></section>;
 }
 
 function average(values) {
@@ -314,7 +289,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     setConfig((current) => ({ ...current, static_bias: level.static_bias, subtle_bias: level.subtle_bias, collusion_bias: level.collusion_bias }));
   };
   return (
-    <aside className="sidebar">
+    <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
@@ -776,17 +751,25 @@ function App() {
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
 </div></header>
     <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
-      {activeTab.startsWith("study-")
+      {isResearch
         ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
-        : <>
-            {activeTab==="help2027"?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}
-            <main className={"content"+(activeTab==="help2027"?" r27-research-content":"")} data-study={activeTab==="help2027"?"help": "trust"}>
-              {experimentNavigation}
-              {["trace","mc","sensitivity","data"].includes(activeTab)?<div className="r27-kicker">Авторы · ктн Ушаков И.А. · Трофимова Н.А.</div>:null}
-              {["trace","mc","sensitivity","data"].includes(activeTab)?<h2 className="r27-study-title">Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения</h2>:null}
-              {["trace","mc","sensitivity","data"].includes(activeTab)?<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>:null}{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help2027" ? <ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/> : null}
-            </main>
-          </>}
+        : activeTab==="help2027"
+          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
+          : <ExperimentLayout
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              navigation={experimentNavigation}
+              studyId="trust"
+              authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
+              title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
+              description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
+              progress={<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+              error={error?<div className="error-banner">{error}</div>:null}
+            >
+              {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
+              {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
+            </ExperimentLayout>
     </div>
     {(isResearch||activeTab==="help2027")?<footer className="statusbar"><span>Шаги: {isResearch&&researchReady?(researchRuntime?.steps??"—"):"—"}</span><span>Время: {isResearch&&researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"}</span><span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):"Справка"}</span><span>Сид: {isResearch?visibleSeed:"—"}</span><span className="status-log">{isResearch?"Синтетическая модель — результаты требуют независимой валидации":"Единая справка по шести экспериментам"}</span></footer>:<footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>}
   </div>;
