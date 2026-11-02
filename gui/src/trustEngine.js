@@ -353,7 +353,8 @@ export function assembleResult(plan,completed){
  return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>b.absolute_effect-a.absolute_effect).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
 }
 export function runTask(plan,task){
- const value=simulateRun(task.c,plan.scenario,task.run,task.index,plan.action==="trace");
+ const scenarioIndex=plan.action==="sensitivity"&&plan.mode==="factorial"?task.index:0;
+ const value=simulateRun(task.c,plan.scenario,task.run,scenarioIndex,plan.action==="trace");
  if(plan.action==="trace")return{detail:value.result,rows:value.rows,trajectory:value.trajectory};
  const rows=value.rows.map(row=>{
   if(plan.action==="sensitivity"&&plan.mode==="one_factor")return{...row,n_byzantine:task.index};
