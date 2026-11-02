@@ -91,8 +91,14 @@ const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
 
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
-await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка исходной модели 3.2", exact: true }).click();
-await page.getByRole("heading", { name: "Справка по модельному эксперименту ИМАС" }).waitFor();
+await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
+await page.locator(".r27-help-branch").count().then(count=>{if(count!==7)throw Error("Expected seven documentation tree groups");});
+await page.getByRole("textbox", {name:"Поиск по содержанию справки"}).fill("Дисконтированная Beta-модель доверия");
+if(!(await page.getByRole("link", {name:"Дисконтированная Beta-модель доверия"}).count()))throw Error("Baseline mathematical help not indexed");
+await page.getByRole("textbox", {name:"Поиск по содержанию справки"}).fill("");
+await page.locator(".r27-help-branch").filter({hasText:"Автоматические решения"}).locator("summary").first().click();
+await page.getByRole("heading", {name:"Математическая модель локального наблюдения"}).waitFor();
+
 const helpScreenshot = path.join(here, "help.png");
 await page.screenshot({ path: helpScreenshot, fullPage: false });
 
@@ -107,12 +113,12 @@ const researchValues = ["study-uncertainty","study-probgraph","study-petri","stu
 for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
   await page.locator(".r27-heading h1").waitFor({ timeout: 10000 });
-  if (!(await page.locator(".r27-field input").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
+  if (!(await page.locator(".r27-unified-settings input[type=number]").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
   if (!(await page.locator(".r27-playback-svg").count())) throw new Error("Missing topology graph: " + researchTabs[i]);
 }
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 await page.locator(".r27-field input").nth(1).fill("10");
-await page.getByRole("button", { name: "Запустить расчёт", exact: true }).click();
+await page.getByRole("button", { name: "Запустить эксперимент", exact: false }).click();
 await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
 await page.getByRole("button", {name:"Воспроизвести"}).click();
 await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
@@ -123,7 +129,9 @@ const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
 const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
-await page.getByRole("heading", { name: "Справка по пяти вычислительным экспериментам 2027 года" }).waitFor();
+await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
+if((await page.locator(".r27-module-article").count())!==5)throw Error("Missing mathematical manual chapters");
+if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
 
 const report = {
   title: await page.title(),
@@ -137,7 +145,8 @@ const report = {
   researchTabs,
   researchComputed,
   topology: await page.locator(".r27-playback-svg").count(),
-  researchHelp: await page.locator(".r27-help-content").count(),
+  researchHelp: await page.locator(".r27-manual-layout").count(),
+  mathematicalModules: await page.locator(".r27-module-article").count(),
   errors,
   warnings,
   screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot, research: researchScreenshot },
