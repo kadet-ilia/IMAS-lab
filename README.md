@@ -281,6 +281,42 @@ python -m unittest -v test_experiment
 
 `gui/node_modules/` восстанавливается `npm ci`, `gui/dist/` генерируется `npm run build`. Скриншоты проверки, журналы и временные файлы в Git не включаются. Исходники Python, сохранённые в корне для научной проверки, не используются на опубликованном сайте.
 
+## Публикация в Cloudflare Workers по адресу workers.dev
+
+Тестовый сайт может иметь адрес `https://imas-lab-test.kadet-ilia.workers.dev/`. Окончание **`workers.dev`** обозначает сервис Cloudflare Workers, а не Cloudflare Pages (`pages.dev`). Для браузерного IMAS_LaB_test это допустимый бесплатный вариант, но опубликован должен быть **Vite-каталог `dist`**, а не исходный `index.html` и не Python/Node.js сервер.
+
+Конфигурация `gui/wrangler.toml` задаёт Worker типа **assets-only**: `[assets] directory = "./dist"`, `not_found_handling = "single-page-application"`. Никакой серверный `main` не используется. Обслуживание React, JavaScript-воркеров и CSS выполняет встроенная система статических ресурсов Cloudflare Workers.
+
+Для Git-интеграции Cloudflare Workers Builds в **Settings → Builds** установите:
+
+| Поле Cloudflare Workers | Значение |
+|---|---|
+| Git repository | `kadet-ilia/IMAS-lab` |
+| Production branch | `IMAS_LaB_test` |
+| Root directory | `gui` |
+| Build command | `npm run build` |
+| Deploy command | `npx --yes wrangler@4 deploy` |
+
+Предварительно Cloudflare должен установить npm-зависимости из `gui/package.json`. При стандартном Workers Builds используется npm по обнаруженному манифесту. Если в журнале вместо этого появляется `pip install -r requirements.txt`, неправильно указан корневой каталог сборки.
+
+В отличие от **Pages**, **Workers** имеет *отдельную команду публикации* (`Deploy command`); одной команды `npm run build` недостаточно для обновления активной версии Worker.
+
+Можно повторить публикацию вручную с рабочего ПК при авторизованном Wrangler (однократный вход через браузер):
+
+```bash
+cd gui
+npm ci
+npm run build
+npx --yes wrangler@4 login
+npx --yes wrangler@4 deploy
+```
+
+При успешной публикации проверьте `/index.html` и подключаемые файлы `/assets/...`: JavaScript и CSS должны иметь успешные HTTP-ответы, а не пустое тело, HTML-страницу вместо JS или JSON с ошибкой.
+
+**Диагностика ошибки `Failed to execute 'json' on 'Response': Unexpected end of JSON input`.** Код интерфейса `gui/src` не использует вызовы `Response.json()` или внешние API для расчётов. Поэтому сначала определите, где возникает ошибка: на самом `workers.dev` или в панели Cloudflare. Откройте инструменты разработчика браузера → Network → обновите страницу → найдите запрос, который ожидает JSON, и проверьте его URL, статус, тело ответа и инициатор вызова. Ошибка сама по себе не доказывает неисправность математического ядра. Для корректности публикации необходимо использовать данную конфигурацию статических ресурсов и убедиться в успехе шага Deploy, а не только Build.
+
+Сведения Cloudflare: [Static Assets](https://developers.cloudflare.com/workers/static-assets/), [SPA routing](https://developers.cloudflare.com/workers/static-assets/routing/single-page-application/), [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/).
+
 ## Бесплатное размещение проекта IMAS_LaB_test
 
 Рекомендуемая платформа — **Cloudflare Pages Free** с интеграцией приватного GitHub-репозитория. После выбора ветки `IMAS_LaB_test` задать:
@@ -299,6 +335,13 @@ python -m unittest -v test_experiment
 **Ограничения бесплатного браузерного подхода:** нагрузка по CPU и памяти ложится на устройство пользователя; результаты не синхронизируются между устройствами; браузер может прекратить тяжёлую задачу при исчерпании памяти или закрытии вкладки. На открытом сайте допускается публикация исключительно синтетических, не содержащих ограниченной информации экспериментальных данных.
 
 ## История изменений по версиям
+
+### 0.1.1 — развёртывание через Cloudflare Workers (02.11.2026)
+
+- Добавлена конфигурация `gui/wrangler.toml` для статических ресурсов React/Vite по адресу `workers.dev`.
+- Установлено правило SPA-маршрутизации и добавлены тесты сборки Web Workers.
+- Описаны необходимые раздельные команды сборки и развёртывания в Workers Builds, диагностика пустых JSON-ответов.
+
 
 ### 0.1.0 — IMAS_LaB_test (02.11.2026)
 
