@@ -20,6 +20,7 @@ import {
 import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
+import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -131,7 +132,7 @@ const PARAMETER_TOOLTIPS = {
   partition_end_step: "Шаг завершения разделения сети. Длинное разделение дольше ограничивает обмен наблюдениями.",
   partition_fraction: "Доля узлов в отделенном сегменте. Определяет масштаб нарушения связности и доставки сообщений.",
   bootstrap_samples: "Число bootstrap-перевыборок для интервалов сравнения методов. Больше выборок стабильнее, но медленнее.",
-  parallel_workers: "Число параллельных процессов. Значение 0 выбирает автоматически; больше процессов ускоряют серии при наличии CPU-ресурсов.",
+  parallel_workers: "Число параллельных браузерных Web Workers (не более четырёх). 0 — автоматический выбор в зависимости от аппаратных ядер.",
   n_sensitivity_runs: "Число прогонов для каждой точки однофакторного анализа. Больше прогонов уменьшают случайный разброс оценки чувствительности.",
   factorial_runs_per_point: "Число прогонов на точку многофакторного плана. Повышает надежность оценки главных эффектов и взаимодействий.",
   factorial_max_points: "Максимум точек многофакторного плана. Больше точек покрывают больше комбинаций факторов, но резко увеличивают время расчета.",
@@ -367,7 +368,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
           <summary>Статистика и вычисления</summary>
           <div className="advanced-body">
             <NumberField label="Bootstrap-выборок" value={config.bootstrap_samples} min={100} max={10000} step={100} onChange={set("bootstrap_samples")} tooltip={PARAMETER_TOOLTIPS.bootstrap_samples} />
-            <NumberField label="Параллельных процессов (0 — авто)" value={config.parallel_workers} min={0} max={32} onChange={set("parallel_workers")} tooltip={PARAMETER_TOOLTIPS.parallel_workers} />
+            <NumberField label="Браузерных потоков (0 — авто)" value={config.parallel_workers} min={0} max={32} onChange={set("parallel_workers")} tooltip={PARAMETER_TOOLTIPS.parallel_workers} />
             <NumberField label="Прогонов на точку чувствительности" value={config.n_sensitivity_runs} min={1} max={100} onChange={set("n_sensitivity_runs")} tooltip={PARAMETER_TOOLTIPS.n_sensitivity_runs} />
             <NumberField label="Прогонов на точку факторного плана" value={config.factorial_runs_per_point} min={1} max={50} onChange={set("factorial_runs_per_point")} tooltip={PARAMETER_TOOLTIPS.factorial_runs_per_point} />
             <NumberField label="Максимум точек факторного плана" value={config.factorial_max_points} min={4} max={64} onChange={set("factorial_max_points")} tooltip={PARAMETER_TOOLTIPS.factorial_max_points} />
@@ -663,50 +664,28 @@ function App() {
     setRunning(true);
     setError("");
     setCacheHit(false);
-    setProgress({ stage: "queued", completed: 0, total: 1, percent: 0, message: "Подготовка задания" });
-    const started = performance.now();
+    setProgress({stage:"queued",completed:0,total:1,percent:0,message:"Подготовка браузерного вычислительного потока"});
+    const started=performance.now();
     try {
-      const maxF = Math.floor((config.n_agents - 1) / 2);
-      const candidates = [0, Math.round(maxF * 0.2), Math.round(maxF * 0.4), Math.round(maxF * 0.6), Math.round(maxF * 0.8), maxF];
-      const payload = { action, scenario, config, sensitivity_mode: mode, f_values: [...new Set(candidates)] };
-      const response = await fetch("/api/jobs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const created = await response.json();
-      if (!response.ok) throw new Error(created.error || "Не удалось создать задание");
-      jobRef.current = created.id;
-      let terminal = null;
-      while (!terminal) {
-        const statusResponse = await fetch(`/api/jobs/${created.id}`);
-        const status = await statusResponse.json();
-        if (!statusResponse.ok) throw new Error(status.error || "Не удалось получить состояние задания");
-        setProgress(status.progress || null);
-        setCacheHit(Boolean(status.cache_hit));
-        if (["completed", "stopped", "failed"].includes(status.state)) terminal = status;
-        else await sleep(350);
-      }
-      if (terminal.state === "failed") throw new Error(terminal.error || "Ошибка моделирования");
-      const body = terminal.result;
-      if (!body) throw new Error("Вычислительный процесс не вернул результат");
-      const wrapped = { ...body, client_signature: requestSignature };
-      if (action === "trace") setTrace(wrapped);
-      if (action === "monte_carlo") setMonteCarlo(wrapped);
-      if (action === "sensitivity") setSensitivityByMode((current) => ({ ...current, [mode]: wrapped }));
-      setLastRun({ action, mode, seconds: (performance.now() - started) / 1000, at: new Date(), log: body.log_file, partial: Boolean(body.partial), cacheHit: terminal.cache_hit });
-      if (terminal.state === "stopped" || body.partial) setError("Расчет остановлен. Частичные результаты и контрольная точка сохранены.");
-    } catch (reason) {
-      setError(reason.message || String(reason));
-    } finally {
-      jobRef.current = null;
-      runningRef.current = false;
-      setRunning(false);
-    }
+      const maxF=Math.floor((config.n_agents-1)/2);
+      const candidates=[0,Math.round(maxF*.2),Math.round(maxF*.4),Math.round(maxF*.6),Math.round(maxF*.8),maxF];
+      const payload={action,scenario,config,sensitivity_mode:mode,f_values:[...new Set(candidates)]};
+      const terminal=await runBrowserExperiment(payload,progress=>setProgress(progress));
+      const body=terminal.result;
+      if(!body)throw Error("Вычислительный поток не вернул результата");
+      const wrapped={...body,client_signature:requestSignature};
+      if(action==="trace")setTrace(wrapped);
+      if(action==="monte_carlo")setMonteCarlo(wrapped);
+      if(action==="sensitivity")setSensitivityByMode(current=>({...current,[mode]:wrapped}));
+      setCacheHit(Boolean(terminal.cache_hit));
+      setLastRun({action,mode,seconds:(performance.now()-started)/1000,at:new Date(),log:"IndexedDB (локально)",partial:Boolean(body.partial),cacheHit:terminal.cache_hit});
+      setProgress({stage:action,completed:1,total:1,percent:100,message:terminal.cache_hit?"Результаты загружены из локального кэша":"Вычисления завершены"});
+      if(terminal.state==="stopped"||body.partial)setError("Расчет остановлен. Выполненные прогоны сохранены локально; повторный запуск продолжит серию.");
+    }catch(reason){setError(reason.message||String(reason));}
+    finally{jobRef.current=null;runningRef.current=false;setRunning(false);}
   };
-
-  useEffect(() => { request("trace"); }, []);
-
-  const stop = async () => {
-    if (!jobRef.current) return;
-    try { await fetch(`/api/jobs/${jobRef.current}`, { method: "DELETE" }); } catch { /* status polling will surface an error */ }
-  };
+  useEffect(()=>{request("trace");},[]);
+  const stop=()=>stopBrowserExperiment();
   const reset = () => {
     stop();
     setConfig(DEFAULT_CONFIG);
@@ -754,7 +733,7 @@ function App() {
 </nav>
   );
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
 {["trace","mc","sensitivity","data"].includes(activeTab)?<>
 <button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
 <button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>

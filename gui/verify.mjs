@@ -72,6 +72,8 @@ const browser = await playwright.launch({ executablePath, args: launchArgs, head
 const page = await browser.newPage({ viewport: { width: 1491, height: 1023 }, deviceScaleFactor: 1 });
 const errors = [];
 const warnings = [];
+const apiCalls=[];
+page.on("request",request=>{if(new URL(request.url()).pathname.startsWith("/api/"))apiCalls.push(request.url());});
 page.on("console", (message) => {
   if (message.type() === "error") errors.push(message.text());
   if (message.type() === "warning") warnings.push(message.text());
@@ -93,7 +95,7 @@ try {
   throw error;
 }
 
-const standardHeading = "IMAS-lab · Лабораторный стенд ИМАС";
+const standardHeading = "IMAS_LaB_test · Лабораторный стенд ИМАС";
 async function assertStandardWorkspace(section) {
   const workspace = page.locator(".workspace");
   const structure = await workspace.evaluate(el => ({
@@ -197,12 +199,12 @@ await page.getByText("Сетевая модель и Sybil-атака", { exact:
 await page.getByLabel("Число Sybil-идентичностей").waitFor();
 await page.getByText("Статистика и вычисления", { exact: true }).click();
 await page.getByLabel("Bootstrap-выборок").waitFor();
-await page.getByLabel("Параллельных процессов (0 — авто)").waitFor();
+await page.getByLabel("Браузерных потоков (0 — авто)").waitFor();
 
 const legacyControls = {
   sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
   bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
-  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
+  parallelWorkers: await page.getByLabel("Браузерных потоков (0 — авто)").count(),
 };
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
@@ -253,6 +255,26 @@ await page.getByRole("heading", { name: "Единая справка по экс
 if((await page.locator(".r27-module-article").count())!==5)throw Error("Missing mathematical manual chapters");
 if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
 
+// Validate all browser-only baseline modes, not just the initial trace.
+await page.getByRole("combobox", {name:"Выбор эксперимента"}).selectOption("trace");
+const trustSettings=page.locator(".workspace > aside.sidebar");
+await trustSettings.getByLabel("N — число легитимных агентов").fill("11");
+await trustSettings.getByLabel("Число шагов (T)").fill("20");
+await trustSettings.getByRole("spinbutton",{name:"Число прогонов",exact:true}).fill("3");
+await trustSettings.getByText("Статистика и вычисления",{exact:true}).click();
+await trustSettings.getByLabel("Браузерных потоков (0 — авто)").fill("2");
+await trustSettings.getByLabel("Прогонов на точку чувствительности").fill("2");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.locator(".trust-synced-grid[data-zoom-to='20']").waitFor({timeout:60000});
+await page.locator(".r27-baseline-subtabs").getByRole("button",{name:"Монте-Карло"}).click();
+await page.getByRole("button",{name:"Выполнить серию"}).click();
+await page.locator(".kpi-grid.three").waitFor({timeout:60000});
+if((await page.locator(".kpi-grid.three .kpi").count())<3)throw Error("Monte-Carlo summary metrics missing");
+await page.locator(".r27-baseline-subtabs").getByRole("button",{name:"Чувствительность"}).click();
+await page.getByRole("button",{name:"Выполнить",exact:true}).click();
+await page.getByText("Устойчивость к доле скомпрометированных агентов").waitFor({timeout:60000});
+const baselineBrowserModesVerified=true;
+
 const report = {
   title: await page.title(),
   url: page.url(),
@@ -264,11 +286,13 @@ const report = {
   requiredControls: legacyControls,
   researchTabs,
   researchComputed,
+  baselineBrowserModesVerified,
   topology: topologyVisibleOnResearch,
   researchHelp: await page.locator(".r27-manual-layout").count(),
   mathematicalModules: await page.locator(".r27-module-article").count(),
   errors,
   warnings,
+  apiCalls,
   screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot, research: researchScreenshot },
 };
 
@@ -278,12 +302,14 @@ await browser.close();
 
 const controlsPresent = Object.values(report.requiredControls).every((count) => count > 0);
 if (
-  report.title !== "Модельный эксперимент ИМАС" ||
+  report.title !== "IMAS_LaB_test — Лабораторный стенд ИМАС" ||
   report.bodyLength < 2000 ||
   report.helpSections < 18 ||
   !controlsPresent ||
   !report.researchComputed ||
+  !report.baselineBrowserModesVerified ||
   report.topology===0 ||
   report.researchHelp === 0 ||
-  errors.length
+  errors.length ||
+  apiCalls.length
 ) process.exit(1);

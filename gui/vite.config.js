@@ -1,19 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-
 export default defineConfig({
-  plugins: [react()],
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          charts: ["recharts"],
-        },
-      },
-    },
-  },
-  server: {
-    port: 5173,
-    proxy: { "/api": "http://127.0.0.1:4173" },
-  },
+  plugins:[react()],
+  base:"/",
+  build:{outDir:"dist",rollupOptions:{output:{manualChunks:{charts:["recharts"]}}}},
+  server:{host:"127.0.0.1",port:5173}
 });
