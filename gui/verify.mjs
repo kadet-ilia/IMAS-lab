@@ -79,7 +79,19 @@ page.on("console", (message) => {
 page.on("pageerror", (error) => errors.push(error.message));
 
 await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded", timeout: 30000 });
-await page.getByText("Динамика решений и оценок").waitFor({ timeout: 30000 });
+try {
+  await page.getByText("Динамика решений и оценок").waitFor({ timeout: 12000 });
+} catch (error) {
+  const diagnostic = await page.evaluate(() => ({
+    title: document.title,
+    url: location.href,
+    body: document.body?.innerText?.slice(0, 1200),
+    scriptSrcs: Array.from(document.scripts, node => node.src),
+    root: document.getElementById("root")?.outerHTML?.slice(0, 1500)
+  }));
+  console.error("IMAS_BROWSER_BOOT_DIAGNOSTIC", JSON.stringify({diagnostic, errors, warnings}));
+  throw error;
+}
 
 const standardHeading = "IMAS-lab · Лабораторный стенд ИМАС";
 async function assertStandardWorkspace(section) {
