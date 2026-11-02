@@ -148,7 +148,7 @@ async function pageChromeSnapshot(){
    sidebar:css(sidebar,["display","gridTemplateRows","backgroundColor","borderRightWidth"]),
    content:css(content,["display","overflowY","paddingLeft","paddingRight","backgroundColor"]),
    nav:css(nav,["display","paddingTop","paddingBottom","backgroundColor","borderBottomWidth","position"]),
-   heading:css(heading,["display","gridTemplateRows","paddingLeft","paddingTop","marginBottom"]),
+   heading:css(heading,["display","paddingLeft","paddingTop","marginBottom"]),
    headingChildren:Array.from(heading.children).map(x=>x.tagName.toLowerCase()+"."+x.className),
    headingTitle:css(heading.querySelector("h2"),["fontSize","fontWeight","lineHeight","color"]),
    progress:css(progress,["minHeight","paddingTop","paddingBottom"]),
