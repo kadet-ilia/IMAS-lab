@@ -264,7 +264,7 @@ function StateHeatmap({ states, agents, steps }) {
   );
 }
 
-function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running, activeMode, onModeChange }) {
+function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running }) {
   const set = (key) => (value) => setConfig((current) => ({ ...current, [key]: value }));
   const ratio = ((config.n_byzantine / Math.max(config.n_agents, 1)) * 100).toFixed(1);
   const effectiveTotal = config.n_agents + config.n_sybil_agents;
@@ -292,9 +292,6 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
-        <SelectField label="Режим исследования" value={activeMode} onChange={onModeChange} tooltip="Выбор режима исходного эксперимента: трасса, статистическая серия, чувствительность или результаты.">
-          <option value="trace">Один прогон</option><option value="mc">Монте-Карло</option><option value="sensitivity">Чувствительность</option><option value="data">Данные</option>
-        </SelectField>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
         <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={(value) => setConfig((current) => ({ ...current, n_byzantine: value, trim_each_side: value }))} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
         <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={500} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
@@ -725,6 +722,12 @@ function App() {
 <option value="study-cascade">Каскадные последствия</option>
 <option value="study-misinformation">Нарушение коллективного решения</option>
 </select></label>
+<div className="r27-mode-tabs" role="group" aria-label="Режим эксперимента">
+ {["trace","mc","sensitivity","data"].includes(activeTab)
+   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=>
+      <button type="button" key={id} className={"r27-mode-tab"+(activeTab===id?" active":"")} aria-pressed={activeTab===id} onClick={()=>setActiveTab(id)}>{name}</button>)
+   : <span className="r27-mode-placeholder">Основной режим</span>}
+</div>
 
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
@@ -748,7 +751,7 @@ function App() {
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
-              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} activeMode={activeTab} onModeChange={setActiveTab}/>}
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
               navigation={experimentNavigation}
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
