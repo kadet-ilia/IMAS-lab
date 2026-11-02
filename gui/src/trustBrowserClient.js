@@ -1,78 +1,96 @@
 import {makePlan,assembleResult} from "./trustEngine.js";
 
-const memory=new Map();
+/**
+ * IMAS_LaB_test: parallel browser workers, IndexedDB checkpoints, no backend.
+ * Purely local results belong to the browser's origin and user profile.
+ */
+const memory=new Map(),STORE="imas-lab-test-v2";
 let active=null;
-const STORE="imas-lab-test-v1";
 function openStore(){
  if(typeof indexedDB==="undefined")return Promise.resolve(null);
  return new Promise(resolve=>{
-  let settled=false;const req=indexedDB.open(STORE,1);
+  const req=indexedDB.open(STORE,1);
   req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains("entries"))db.createObjectStore("entries");};
-  req.onsuccess=()=>{settled=true;resolve(req.result);};
-  req.onerror=()=>{if(!settled)resolve(null);};
-  req.onblocked=()=>{if(!settled)resolve(null);};
+  req.onsuccess=()=>resolve(req.result);
+  req.onerror=()=>resolve(null);
+  req.onblocked=()=>resolve(null);
  });
 }
 async function storage(key,value){
- if(arguments.length===1&&memory.has(key))return memory.get(key);
+ const read=arguments.length===1;
+ if(read&&memory.has(key))return memory.get(key);
  const db=await openStore();
- if(arguments.length===2)memory.set(key,value);
- if(!db)return arguments.length===1?memory.get(key):undefined;
+ if(!read)memory.set(key,value);
+ if(!db)return read?memory.get(key):undefined;
  return new Promise(resolve=>{
-  let tx;try{tx=db.transaction("entries",arguments.length===1?"readonly":"readwrite");}
-  catch{db.close();resolve(arguments.length===1?memory.get(key):undefined);return;}
-  const req=arguments.length===1?tx.objectStore("entries").get(key):tx.objectStore("entries").put(value,key);
-  req.onsuccess=()=>{db.close();resolve(arguments.length===1?req.result:undefined);};
-  req.onerror=()=>{db.close();resolve(arguments.length===1?memory.get(key):undefined);};
+  let tx;
+  try{tx=db.transaction("entries",read?"readonly":"readwrite");}
+  catch{db.close();resolve(read?memory.get(key):undefined);return;}
+  const req=read?tx.objectStore("entries").get(key):tx.objectStore("entries").put(value,key);
+  req.onsuccess=()=>{db.close();resolve(read?req.result:undefined);};
+  req.onerror=()=>{db.close();resolve(read?memory.get(key):undefined);};
  });
 }
-const canonical=(payload)=>JSON.stringify({action:payload.action||"trace",scenario:payload.scenario||"collusion",config:payload.config,sensitivity_mode:payload.sensitivity_mode||"one_factor",f_values:payload.f_values||null,factor_ranges:payload.factor_ranges||null,run_index:payload.run_index||0});
-export function isBrowserOnly(){return true;}
+const canonical=p=>JSON.stringify({action:p.action||"trace",scenario:p.scenario||"collusion",config:p.config,sensitivity_mode:p.sensitivity_mode||"one_factor",f_values:p.f_values||null,factor_ranges:p.factor_ranges||null,run_index:p.run_index||0});
+export const isBrowserOnly=()=>true;
 export async function runBrowserExperiment(payload,onProgress=()=>{}){
  if(active)throw Error("Другое вычисление ещё выполняется");
  const key=canonical(payload),cached=await storage("complete:"+key);
  if(cached)return{result:cached,cache_hit:true,state:"completed"};
- const plan=makePlan(payload),partial=await storage("checkpoint:"+key),previous=Array.isArray(partial?.completed)?partial.completed:[];
- const worker=new Worker(new URL("./trustWorker.js",import.meta.url),{type:"module"});
- let resolvePromise,rejectPromise;
- const resultPromise=new Promise((resolve,reject)=>{resolvePromise=resolve;rejectPromise=reject;});
- const job={worker,key,plan,completed:previous,id:String(Date.now())+"-"+Math.random(),done:false,resolve:resolvePromise,reject:rejectPromise};
+ const plan=makePlan(payload),previous=await storage("checkpoint:"+key);
+ const results=Array(plan.total).fill(null);
+ for(const item of previous?.completed||[])if(item&&item.index>=0&&item.index<plan.total)results[item.index]=item.result;
+ const pending=results.map((r,i)=>r===null?i:null).filter(x=>x!==null);
+ if(!pending.length){const result=assembleResult(plan,results);await storage("complete:"+key,result);return{result,cache_hit:true,state:"completed"};}
+ const cores=Number(globalThis.navigator?.hardwareConcurrency)||2;
+ const requested=Number(payload.config?.parallel_workers)||0;
+ const count=Math.max(1,Math.min(pending.length,4,requested>0?requested:Math.max(1,cores-1)));
+ const shards=Array.from({length:count},()=>[]);
+ pending.forEach((task,i)=>shards[i%count].push(task));
+ let resolveJob,rejectJob;
+ const promise=new Promise((resolve,reject)=>{resolveJob=resolve;rejectJob=reject;});
+ const job={key,plan,results,count:results.filter(x=>x!==null).length,workers:[],finished:0,done:false,resolve:resolveJob,reject:rejectJob};
  active=job;
- worker.onmessage=async ({data})=>{
-  if(job.done||data.id!==job.id)return;
-  if(data.type==="progress"){
-   if(data.checkpoint){
-    job.completed=data.checkpoint;
-    await storage("checkpoint:"+key,{completed:data.checkpoint});
-   }
-   onProgress({stage:data.stage,completed:data.completed,total:data.total,percent:Math.round(100*data.completed/Math.max(1,data.total)),message:data.message});
-  }
-  if(data.type==="completed"){
-   job.done=true;active=null;worker.terminate();
-   await storage("complete:"+key,data.result);
-   await storage("checkpoint:"+key,null);
-   job.resolve({result:data.result,cache_hit:false,state:"completed"});
-  }
-  if(data.type==="failed"){
-   job.done=true;active=null;worker.terminate();job.reject(Error(data.error||"Ошибка JavaScript-модели"));
-  }
+ const progress=()=>onProgress({stage:plan.action,completed:job.count,total:plan.total,percent:Math.round(job.count*100/plan.total),message:"Параллельные вычисления в "+count+" браузерных потоках"});
+ progress();
+ const save=async()=>storage("checkpoint:"+key,{completed:results.map((result,index)=>result===null?null:{index,result}).filter(Boolean)});
+ const finish=async()=>{
+  if(job.done)return;job.done=true;active=null;job.workers.forEach(w=>w.terminate());
+  try{const result=assembleResult(plan,results);await storage("complete:"+key,result);await storage("checkpoint:"+key,null);job.resolve({result,cache_hit:false,state:"completed"});}
+  catch(error){job.reject(error);}
  };
- worker.onerror=e=>{if(job.done)return;job.done=true;active=null;worker.terminate();job.reject(Error(e.message||"Вычислительный поток завершён с ошибкой"));};
- worker.postMessage({type:"run",id:job.id,payload,previous});
- return resultPromise;
+ const fail=(error)=>{if(job.done)return;job.done=true;active=null;job.workers.forEach(w=>w.terminate());job.reject(Error(String(error)));};
+ for(let j=0;j<count;j++){
+  const worker=new Worker(new URL("./trustWorker.js",import.meta.url),{type:"module"});
+  job.workers.push(worker);
+  worker.onmessage=({data})=>{
+   if(job.done)return;
+   if(data.type==="failed"){fail(data.error||"Ошибка вычислительного потока");return;}
+   if(data.type==="task"){
+    if(results[data.index]===null){results[data.index]=data.result;job.count++;progress();
+      if(job.count===plan.total||job.count%Math.max(1,Math.floor(plan.total/30))===0)void save();}
+   }
+   if(data.type==="finished"){job.finished++;if(job.finished===count)void finish();}
+  };
+  worker.onerror=e=>fail(e.message||"Поток завершился с ошибкой");
+  worker.postMessage({type:"run",id:j,payload,indices:shards[j]});
+ }
+ return promise;
 }
-export function stopBrowserExperiment(){
+export async function stopBrowserExperiment(){
  const job=active;if(!job||job.done)return false;
- job.done=true;active=null;job.worker.terminate();
- if(!job.completed.length){job.reject(Error("Вычисления остановлены до получения результатов."));return true;}
+ job.done=true;active=null;job.workers.forEach(w=>w.terminate());
+ await storage("checkpoint:"+job.key,{completed:job.results.map((result,index)=>result===null?null:{index,result}).filter(Boolean)});
+ if(!job.count){job.reject(Error("Расчет остановлен до получения результатов"));return true;}
  try{
-  const result=assembleResult(job.plan,job.completed);
-  result.partial=true;
-  job.resolve({result,cache_hit:false,state:"stopped"});
- }catch(e){job.reject(e);}
+  const completed=job.results.filter(Boolean),result=assembleResult(job.plan,completed);
+  // For a partial Monte-Carlo run ordering can be sparse; completed run data
+  // are aggregated, while IDs are retained in the checkpoint for exact resume.
+  result.partial=true;job.resolve({result,state:"stopped",cache_hit:false});
+ }catch(error){job.reject(error);}
  return true;
 }
-export async function removeBrowserCache(){
- const db=await openStore();memory.clear();if(!db)return;
+export async function clearBrowserResults(){
+ memory.clear();const db=await openStore();if(!db)return;
  await new Promise(resolve=>{const tx=db.transaction("entries","readwrite");tx.objectStore("entries").clear();tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();resolve();};});
 }
