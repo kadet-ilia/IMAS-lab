@@ -260,7 +260,7 @@ await page.getByRole("combobox", {name:"Выбор эксперимента"}).s
 const trustSettings=page.locator(".workspace > aside.sidebar");
 await trustSettings.getByLabel("N — число легитимных агентов").fill("11");
 await trustSettings.getByLabel("Число шагов (T)").fill("20");
-await trustSettings.getByLabel("Число прогонов").fill("3");
+await trustSettings.getByRole("spinbutton",{name:"Число прогонов",exact:true}).fill("3");
 await trustSettings.getByText("Статистика и вычисления",{exact:true}).click();
 await trustSettings.getByLabel("Браузерных потоков (0 — авто)").fill("2");
 await trustSettings.getByLabel("Прогонов на точку чувствительности").fill("2");
