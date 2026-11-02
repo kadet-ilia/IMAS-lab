@@ -122,6 +122,86 @@ export function validateStudy(id,raw){
  if(id==="misinformation"&&c.agents!==7)throw new Error("Для модели информационных зависимостей предусмотрено ровно 7 агентов");
  return c;
 }
-export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};return {id,config:c,model:"synthetic-experimental",...handlers[id](c),elapsedMs:Date.now()-start};}
+export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);return {id,config:c,model:"synthetic-experimental",...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
 export function statisticalIndicators(values){return quantileInfo(values);}
+
+
+/* A deterministic, explicitly labelled path for graph playback.
+   Statistical tables retain their independent Monte-Carlo interpretation. */
+export function buildResearchReplay(id,c,result={}){
+ const r=rng(c.seed), n=c.agents, vertices=Array.from({length:n},(_,i)=>({id:i,label:"А"+(i+1)}));
+ const frames=[], snap=(step,status,activeEdges=[],info="",value=null)=>frames.push({
+   step,status:[...status],activeEdges:activeEdges.map(e=>[...e]),info,value
+ });
+ const choose=(x)=>x===undefined?0:x;
+ if(id==="uncertainty"){
+   const edges=Array.from({length:n-1},(_,i)=>[i,n-1]); const truth=1;
+   for(let t=0;t<9;t++){
+     const status=Array(n).fill("normal"), observed=[],active=[];
+     for(let i=0;i<n-1;i++){
+       if(r.random()<c.loss){status[i]="missing";continue;}
+       const corrupt=r.random()<c.corruption,stale=r.random()<(t%3===2?.35:.03);
+       const x=(stale?-truth:truth)+r.normal()*c.signalNoise+(corrupt?-truth*1.6:0);
+       if(corrupt||stale)status[i]="misled";else status[i]="normal";
+       observed.push(x);active.push([i,n-1]);
+     }
+     const estimate=avg(observed),decision=observed.length<Math.ceil(n*.3)||Math.abs(estimate)<c.threshold?"оператор":estimate>0?"угроза":"норма";
+     status[n-1]=decision==="оператор"?"isolated":"coordinator";
+     snap(t,status,active,"Принято сообщений: "+observed.length+"/"+(n-1)+"; решение: "+decision,estimate);
+   }
+   return {title:"Маршрут сообщений и автоматическая выработка решения",vertices,edges,frames,notes:"Иллюстративная отдельная трасса для фиксированного зерна; статистические показатели вычисляются по независимым прогонам.",valueLabel:"Оценка состояния"};
+ }
+ if(id==="probgraph"){
+   const edges=graph(n,c.edgeProbability,r);const seeds=[sample(r,n)];const infected=new Set(seeds),available=new Set(seeds);
+   const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"compromised":"normal");
+   snap(0,status(),[],"Исходная компрометация: А"+(seeds[0]+1),infected.size/n);
+   for(let t=1;t<=c.steps;t++){
+     const active=[],newly=new Set();
+     for(const [a,b] of edges)if(available.has(a)&&!infected.has(b)&&r.random()<clamp(c.spread*.8,0,1)){newly.add(b);active.push([a,b]);}
+     for(const v of newly){infected.add(v);available.add(v);}
+     snap(t,status(),active,"Новые поражённые агенты: "+newly.size+"; всего: "+infected.size+"/"+n,infected.size/n);
+   }
+   return {title:"Графо-вероятностное распространение нарушения",vertices,edges,frames,notes:"Первая реализация сценария «Компрометация источника» без дополнительной защиты; рёбра случайного графа фиксированы зерном.",valueLabel:"Доля поражённых"};
+ }
+ if(id==="petri"){
+   const edges=result.edges||fixedEdges7.filter(([a,b])=>a<n&&b<n), compromised=new Set([0]),isolated=new Set(),witness=result.witness||[];
+   const status=()=>Array.from({length:n},(_,i)=>isolated.has(i)?"isolated":compromised.has(i)?"compromised":"normal");
+   snap(0,status(),[],"Начальная маркировка: токен компрометации агента А1",1);
+   for(let t=1;t<=c.steps;t++){
+     const line=witness[t]||"t="+t+": ожидание", transmitted=line.match(/передача A(\d+) → A(\d+)/),blocked=line.match(/изоляция A(\d+)/),active=[];
+     if(transmitted){compromised.add(Number(transmitted[2])-1);active.push([Number(transmitted[1])-1,Number(transmitted[2])-1]);}
+     if(blocked)isolated.add(Number(blocked[1])-1);
+     snap(t,status(),active,line,compromised.size);
+     if(witness.length&&t>=witness.length-1)break;
+   }
+   return {title:"Последовательность маркировок и переходов сети Петри",vertices,edges,frames,notes:result.witness?.length?"Воспроизводится найденная трасса-контрпример, содержащая достижение опасной маркировки.":"Контрпример не найден; показана траектория ожидания. Отсутствие контрпримера не доказывает безопасность при неполном поиске.",valueLabel:"Число компрометированных"};
+ }
+ if(id==="cascade"){
+   const edges=fixedEdges8,infected=new Set([0]),available=new Set([0]),impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
+   const cost=()=>[...infected].reduce((a,i)=>a+impacts[i],0);
+   const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"affected":"normal");
+   snap(0,status(),[],"Исходная компрометация: А1; прямой ущерб",cost());
+   for(let t=1;t<=8;t++){
+     const active=[],newly=new Set();
+     for(const [a,b] of edges)if(available.has(a)&&!infected.has(b)&&r.random()<c.spread){newly.add(b);active.push([a,b]);}
+     for(const i of newly){infected.add(i);available.add(i);}
+     snap(t,status(),active,"Каскадные переходы: "+newly.size+"; поражено "+infected.size+"/8",cost());
+   }
+   return {title:"Каскад функциональных нарушений",vertices,edges,frames,notes:"Первая реализация начальной компрометации А1 без сдерживания; условные коэффициенты ущерба совпадают с вычислительной моделью.",valueLabel:"Совокупный ущерб"};
+ }
+ if(id==="misinformation"){
+   const edges=fixedEdges7,compromised=new Set([0,1]),exposed=new Set(compromised);
+   const states=()=>Array.from({length:n},(_,i)=>compromised.has(i)?"compromised":exposed.has(i)?"misled":"normal");
+   const evaluate=()=>{const points=Array.from({length:n},(_,i)=>1+r.normal()*c.noise+(compromised.has(i)?-c.attackBias:exposed.has(i)?-c.attackBias*.7:0));return avg(points);};
+   snap(0,states(),[],"Начально скомпрометированы А1 и А2; эталонное состояние +1",evaluate());
+   for(let t=1;t<=3;t++){
+     const newly=new Set(),active=[];
+     for(const [a,b] of edges)if(exposed.has(a)&&!exposed.has(b)&&r.random()<c.spread){newly.add(b);active.push([a,b]);}
+     for(const i of newly)exposed.add(i);
+     snap(t,states(),active,"Недостоверная информация достигла "+exposed.size+"/7 агентов; новых: "+newly.size,evaluate());
+   }
+   return {title:"Передача недостоверной информации и смещение коллективной оценки",vertices,edges,frames,notes:"Отдельная иллюстративная трасса при двух скомпрометированных агентах (из исследуемого диапазона 0–3).",valueLabel:"Средняя оценка"};
+ }
+ throw new Error("Неизвестная модель воспроизведения");
+}
