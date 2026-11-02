@@ -65,7 +65,7 @@ export function TopologyPlayback({replay,compact=false}){
    <input aria-label="Выбор такта" type="range" min="0" max={Math.max(0,total-1)} step="1" value={cursor} onChange={e=>{setPlaying(false);setCursor(Number(e.target.value));}}/>
    <label>Скорость <select value={rate} onChange={e=>setRate(Number(e.target.value))}><option value="0.5">0,5×</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
   </div>
-  {compact?<details className="r27-replay-notes"><summary>Схематическая топология (не протокол доставки) · Подробнее</summary><p>{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p></details>:<p className="r27-note">{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p>}
+  {compact?<details className="r27-replay-notes"><summary>{replay.notes?.includes("Схематическое")?"Схематическая топология · Подробнее":"Описание и ограничения трассы"}</summary><p>{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p></details>:<p className="r27-note">{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p>}
  </section>;
 }
 export function StudyVisualization({result,metric}){
@@ -80,16 +80,16 @@ export function StudyVisualization({result,metric}){
  const petri=result?.id==="petri";
  const byTime=petri?(result.statesByTime||[]).map((value,step)=>({step,value})):timeline;
  return <div className="r27-analytics">
-  <div className="r27-panel"><h3>{petri?"Исследованные маркировки по тактам":"Динамика показателя в демонстрационной трассе"}</h3><p>{petri?"Число посещённых состояний, сгруппированных по времени.":"Динамика одной фиксированной реализации, а не среднее Монте-Карло."}</p>
+  <section className="panel r27-panel"><header className="panel-header"><div><h2>{petri?"Исследованные маркировки по тактам":"Динамика показателя в демонстрационной трассе"}</h2><p>{petri?"Число посещённых состояний, сгруппированных по времени.":"Динамика одной фиксированной реализации, а не среднее Монте-Карло."}</p></div></header><div className="panel-body">
    <ResponsiveContainer width="100%" height={255}><LineChart data={byTime}><CartesianGrid strokeDasharray="3 3" stroke="#e0e8f0"/><XAxis dataKey="step" tick={{fontSize:11}}/><YAxis tick={{fontSize:11}} domain={["auto","auto"]}/><Tooltip formatter={v=>round(v)}/><Line name={petri?"Исследовано маркировок":replay?.valueLabel||"Значение"} dataKey="value" stroke="#2068a3" strokeWidth={2.5} dot={{r:3}} isAnimationActive={false}/></LineChart></ResponsiveContainer>
-  </div>
-  <div className="r27-panel"><h3>Матрица состояний агентов</h3><p>Строки — агенты; столбцы — такты. Окраска соответствует состоянию модели.</p>
+  </div></section>
+  <section className="panel r27-panel"><header className="panel-header"><div><h2>Матрица состояний агентов</h2><p>Строки — агенты; столбцы — такты. Окраска соответствует состоянию модели.</p></div></header><div className="panel-body">
    <div className="r27-state-scroll"><div className="r27-state-matrix" style={{gridTemplateColumns:"44px repeat("+frames.length+",minmax(15px,1fr))"}}>
     <span/><>{frames.map((frame,i)=><span className="r27-matrix-tick" key={"t"+i}>{frame.step}</span>)}</>
     {(replay?.vertices||[]).flatMap((v,i)=>[<b key={"a"+i}>А{i+1}</b>,...frames.map((frame,j)=><span key={i+"_"+j} title={"А"+(i+1)+"; t="+frame.step+"; "+(LABELS[frame.status[i]]||frame.status[i])} style={{background:PALETTE[frame.status[i]]||PALETTE.normal}}/>)])}
    </div></div>
-  </div>
-  {cells?<div className="r27-panel r27-matrix-panel"><h3>Сравнительная матрица по сценариям и методам</h3><p>Показатель выбран в меню основной диаграммы; насыщенность пропорциональна значению в текущем наборе.</p><div className="r27-table-scroll"><table className="r27-table"><thead><tr><th>Сценарий</th>{methods.map(m=><th key={m}>{m}</th>)}</tr></thead><tbody>{scenarios.map((s,i)=><tr key={s}><th>{s}</th>{methods.map((m,j)=>{const v=measured[i][j],z=typeof v==="number"?(v-lo)/span:0;return <td key={m} style={{background:typeof v==="number"?"rgba(24,104,173,"+(0.07+0.43*z)+")":undefined}}>{round(v)}</td>;})}</tr>)}</tbody></table></div></div>:null}
+  </div></section>
+  {cells?<section className="panel r27-panel r27-matrix-panel"><header className="panel-header"><div><h2>Сравнительная матрица по сценариям и методам</h2><p>Показатель выбран в меню основной диаграммы; насыщенность пропорциональна значению в текущем наборе.</p></div></header><div className="panel-body"><div className="r27-table-scroll"><table className="r27-table"><thead><tr><th>Сценарий</th>{methods.map(m=><th key={m}>{m}</th>)}</tr></thead><tbody>{scenarios.map((s,i)=><tr key={s}><th>{s}</th>{methods.map((m,j)=>{const v=measured[i][j],z=typeof v==="number"?(v-lo)/span:0;return <td key={m} style={{background:typeof v==="number"?"rgba(24,104,173,"+(0.07+0.43*z)+")":undefined}}>{round(v)}</td>;})}</tr>)}</tbody></table></div></div></section>:null}
  </div>;
 }
 export function baselineReplay(data,config){
