@@ -1,6 +1,7 @@
 import React, {useEffect,useMemo,useRef,useState} from "react";
 import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
-import {STUDY_DEFS,toCsv,validateStudy} from "./research2027.js";
+import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
+import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
 import "./research2027.css";
 
 const FIELD={
@@ -104,7 +105,8 @@ export function ResearchStudy({studyId}){
  const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),worker=useRef(null);
  useEffect(()=>{setConfig({...def.defaults});setResult(null);setError("");setMetric("");},[def.id]);
  useEffect(()=>()=>{worker.current?.terminate();worker.current=null;},[]);
- const update=(k,v)=>setConfig(old=>({...old,[k]:v}));
+ const previewReplay=useMemo(()=>{try{return buildResearchReplay(studyId,validateStudy(studyId,config),result||{});}catch{return null;}},[studyId,config,result]);
+ const update=(k,v)=>{worker.current?.terminate();worker.current=null;setRunning(false);setResult(null);setMetric("");setConfig(old=>({...old,[k]:v}));};
  const start=()=>{try{const validated=validateStudy(studyId,config);worker.current?.terminate();setError("");setRunning(true);
   const w=new Worker(new URL("./research2027.worker.js",import.meta.url),{type:"module"});worker.current=w;
   w.onmessage=({data})=>{setRunning(false);if(data.ok){setResult(data.result);setMetric(data.result.chartKey||"");}else setError(data.error||"Ошибка моделирования");w.terminate();if(worker.current===w)worker.current=null;};
@@ -120,12 +122,14 @@ export function ResearchStudy({studyId}){
    <p className="r27-note">Все параметры синтетические. Параметры передаются в отдельный вычислительный поток браузера, исходные данные не отправляются внешним сервисам.</p>
   </aside>
   <section className="r27-results"><h2>Результаты вычислительного эксперимента</h2>{running?<p role="status">Выполняются независимые вычислительные прогоны…</p>:null}{error?<p className="r27-error" role="alert">{error}</p>:null}
+   <TopologyPlayback replay={result?.replay||previewReplay}/>
    {!result?<div className="r27-empty">Задайте параметры и запустите эксперимент. Для каждого исследования предусмотрены независимые результаты и своя математическая постановка.</div>:<>
     <p>{result.summary}</p><div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
-    {studyId==="petri"?<><div className="r27-petri"><PetriGraph result={result}/><div><h3>Результат верификации</h3><p>{result.witness?.length?"Найден контрпример достижения опасной маркировки.":"Контрпример не найден на заданном горизонте и при указанном ограничении перебора."}</p><ol>{(result.witness||[]).map((s,i)=><li key={i}>{s}</li>)}</ol><p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p></div></div></>:<>
+    {studyId==="petri"?<><div className="r27-petri-report"><div><h3>Результат верификации</h3><p>{result.witness?.length?"Найден контрпример достижения опасной маркировки.":"Контрпример не найден на заданном горизонте и при указанном ограничении перебора."}</p><ol>{(result.witness||[]).map((s,i)=><li key={i}>{s}</li>)}</ol><p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p></div></div></>:<>
     <label className="r27-metric">Показатель визуализации <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label><ScientificGraph result={result} metric={metric}/></>}
+    <StudyVisualization result={result} metric={metric}/>
     <div className="r27-result-tools"><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button></div>
-    <h3>Численные результаты</h3><ResultTable rows={result.rows}/><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p>
+    <h3>Сводная таблица результатов</h3><ResultTable rows={result.rows}/><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p>
    </>}
    <div className="r27-theory-short"><h3>Математическая постановка</h3><p>{theory.model}</p>{theory.formulas.map((f,i)=><div className="r27-formula" key={i}>{f}</div>)}<p>Подробное описание процесса, терминов и алгоритма находится во вкладке «Справка 2027».</p></div>
   </section></div></div>;
