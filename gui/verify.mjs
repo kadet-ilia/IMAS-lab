@@ -95,7 +95,7 @@ try {
   throw error;
 }
 
-const standardHeading = "IMAS-lab · Лабораторный стенд ИМАС";
+const standardHeading = "IMAS_LaB_test · Лабораторный стенд ИМАС";
 async function assertStandardWorkspace(section) {
   const workspace = page.locator(".workspace");
   const structure = await workspace.evaluate(el => ({
@@ -199,12 +199,12 @@ await page.getByText("Сетевая модель и Sybil-атака", { exact:
 await page.getByLabel("Число Sybil-идентичностей").waitFor();
 await page.getByText("Статистика и вычисления", { exact: true }).click();
 await page.getByLabel("Bootstrap-выборок").waitFor();
-await page.getByLabel("Параллельных процессов (0 — авто)").waitFor();
+await page.getByLabel("Браузерных потоков (0 — авто)").waitFor();
 
 const legacyControls = {
   sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
   bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
-  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
+  parallelWorkers: await page.getByLabel("Браузерных потоков (0 — авто)").count(),
 };
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
