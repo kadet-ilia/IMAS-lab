@@ -1,13 +1,14 @@
 {
-  "name": "imas-experiment-dashboard",
+  "name": "imas-lab-test",
   "private": true,
-  "version": "3.3.0-rc1",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "start": "vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "build": "vite build",
-    "frontend": "vite --host 127.0.0.1",
-    "server": "node server.mjs",
-    "start": "node server.mjs",
+    "test": "node --test src/*.test.mjs",
     "verify": "node verify.mjs"
   },
   "dependencies": {
