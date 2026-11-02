@@ -247,3 +247,13 @@
   white-space:nowrap;
 }
 .r27-experiment-navigation button.r27-export-control svg{height:11px;width:11px;flex:none}
+
+/* Title of the original trust experiment, consistent with the five study headings. */
+.content[data-study="trust"] > .r27-study-title{
+  margin:0 12px 12px;
+  font-size:19px;
+  font-weight:700;
+  line-height:1.35;
+  color:#133a60;
+  max-width:1200px;
+}
