@@ -123,7 +123,7 @@ await assertStandardWorkspace("Расчет доверия");
 
 const authorA = "Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
 const authorB = "Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.";
-if((await page.locator("main .r27-trust-authors").innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
+if((await page.locator('main[data-study="trust"] > .r27-kicker').innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
 async function assertNavButtonsEqual(section){
  const help=await page.locator(".r27-experiment-navigation .r27-nav-right").boundingBox();
  const svg=await page.locator(".r27-experiment-navigation .r27-export-control").boundingBox();
