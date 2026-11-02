@@ -655,7 +655,7 @@ function App() {
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
   const exportVisibleCharts = () => {
-    const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg")];
+    const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
   };
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
