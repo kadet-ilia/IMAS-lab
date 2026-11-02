@@ -52,7 +52,7 @@ export function UnifiedHelp({baselineArticle,baselineSections=[],researchTheory}
    <nav aria-label="Дерево разделов справки">{tree.map(module=><HelpBranch key={module.name} {...module} selected={selected} setSelected={setSelected} search={search}/>)}</nav>
   </aside>
   <div className="r27-manual-body">
-   <article className="help-article r27-overview-article"><h1>Единая справка по экспериментальному комплексу IMAS-lab</h1><p>Теоретические положения, математические модели, вычислительные алгоритмы, графы взаимодействий и научные ограничения шести экспериментов.</p>{INTRO.map(item=><DocSection key={item.id} {...item}/>)}</article>
+   <article className="help-article r27-overview-article"><h2 className="r27-manual-title">Единая справка по экспериментальному комплексу IMAS-lab</h2><p>Теоретические положения, математические модели, вычислительные алгоритмы, графы взаимодействий и научные ограничения шести экспериментов.</p>{INTRO.map(item=><DocSection key={item.id} {...item}/>)}</article>
    <header className="r27-manual-chapter" id="manual-trust"><h2>1. Расчет доверия</h2><p>Динамическое доверие, репутация, робастная агрегация и оценка защищённости.</p></header>
    {baselineArticle}
    {STUDY_DEFS.map((def,i)=>{const module=MODULE_MANUAL[def.id],theory=researchTheory[def.id];return <React.Fragment key={def.id}>
