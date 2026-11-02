@@ -147,7 +147,7 @@ export function buildResearchReplay(id,c,result={}){
        observed.push(x);active.push([i,n-1]);
      }
      const estimate=avg(observed),decision=observed.length<Math.ceil(n*.3)||Math.abs(estimate)<c.threshold?"оператор":estimate>0?"угроза":"норма";
-     status[n-1]=decision==="оператор"?"isolated":"coordinator";
+     status[n-1]="coordinator";
      snap(t,status,active,"Принято сообщений: "+observed.length+"/"+(n-1)+"; решение: "+decision,estimate);
    }
    return {title:"Маршрут сообщений и автоматическая выработка решения",vertices,edges,frames,notes:"Иллюстративная отдельная трасса для фиксированного зерна; статистические показатели вычисляются по независимым прогонам.",valueLabel:"Оценка состояния"};
