@@ -87,6 +87,11 @@ await page.getByText("Статистика и вычисления", { exact: tr
 await page.getByLabel("Bootstrap-выборок").waitFor();
 await page.getByLabel("Параллельных процессов (0 — авто)").waitFor();
 
+const legacyControls = {
+  sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
+  bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
+  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
+};
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
 
@@ -103,11 +108,7 @@ const helpScreenshot = path.join(here, "help.png");
 await page.screenshot({ path: helpScreenshot, fullPage: false });
 
 const legacyHelpSections = await page.locator(".help-toc a").count();
-const legacyControls = {
-  sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
-  bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
-  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
-};
+
 const researchTabs = ["Автоматические решения", "Коллективное решение", "Опасные состояния", "Каскадные последствия", "Нарушение коллективного решения"];
 const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
 for (let i=0; i<researchTabs.length; i++) {
@@ -126,6 +127,7 @@ await page.getByRole("button", {name:"Пауза"}).click();
 await page.getByRole("slider", {name:"Выбор такта"}).press("ArrowRight");
 if(!(await page.locator(".r27-state-matrix").count()))throw Error("Missing state heatmap");
 const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
+const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
 const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
@@ -144,7 +146,7 @@ const report = {
   requiredControls: legacyControls,
   researchTabs,
   researchComputed,
-  topology: await page.locator(".r27-playback-svg").count(),
+  topology: topologyVisibleOnResearch,
   researchHelp: await page.locator(".r27-manual-layout").count(),
   mathematicalModules: await page.locator(".r27-module-article").count(),
   errors,
@@ -163,6 +165,7 @@ if (
   report.helpSections < 18 ||
   !controlsPresent ||
   !report.researchComputed ||
+  report.topology===0 ||
   report.researchHelp === 0 ||
   errors.length
 ) process.exit(1);
