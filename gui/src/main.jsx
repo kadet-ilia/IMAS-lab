@@ -414,7 +414,8 @@ function DecisionAreas({ hasBands, mode }) {
 function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) {
   const [bandMode, setBandMode] = useState("sigma");
   const [showTolerance, setShowTolerance] = useState(false);
-  if (!data) return <><TopologyPlayback replay={baselineReplay(null,config)} compact/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
+  const trustReplay=useMemo(()=>baselineReplay(data,config),[data,config]);
+  if (!data) return <><TopologyPlayback replay={trustReplay} compact/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
   const robust = data.metrics.find((item) => item.method === "proposed_robust");
   const last = data.series.at(-1);
   const totalBad = data.configuration.effective_byzantine_count ?? config.n_byzantine;
@@ -435,7 +436,7 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   ];
   const networkVisible = config.network_enabled || config.n_sybil_agents > 0 || data.summary.delivery_ratio < 0.999;
   return <>
-    <TopologyPlayback replay={baselineReplay(data,config)} compact />
+    <TopologyPlayback replay={trustReplay} compact />
     {data.partial ? <div className="partial-banner">Отображены частичные результаты: выполнено {data.summary.completed_steps} из {config.n_steps} шагов.</div> : null}
     <div className="kpi-grid"><Kpi label={`Текущее решение (шаг ${last.step})`} value={last.proposed_robust.toFixed(3)} note="Трассировка выбранного прогона" /><Kpi label="Ошибка робастного решения (RMSE)" value={robust.rmse.toFixed(3)} note="За выбранный прогон" /><Kpi label="Изолированные нарушители/агенты" value={`${data.agents.filter((item) => item.byzantine && item.isolated_at !== null).length} / ${isolated}`} note={`Всего нарушителей: ${totalBad}`} tone="teal" /><Kpi label="Доставка сообщений" value={`${(data.summary.delivery_ratio * 100).toFixed(1)}%`} note={`Доверие корректных: ${honestTrust.toFixed(3)}`} tone="teal" /></div>
     <div className="main-grid">
