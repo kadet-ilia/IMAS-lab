@@ -616,7 +616,7 @@ const HELP_SECTIONS = [
 ];
 
 function TrustHelpArticle() {
-  return <article className="help-article"><h1>Справка по модельному эксперименту ИМАС</h1>
+  return <article className="help-article"><h2 className="help-article-title">Справка по модельному эксперименту ИМАС</h2>
     <section id="purpose"><h2>Назначение и постановка задачи</h2><p>Комплекс моделирует коллективную выработку скалярного решения в интеллектуальной мультиагентной системе при наличии корректных, византийских и ложных Sybil-идентичностей. Цель эксперимента состоит в оценке точности, воспроизводимости и киберустойчивости трех методов агрегирования при изменении параметров доверия, изоляции, атаки и сети.</p><div className="process-strip"><span>Предложения агентов</span><i>→</i><span>Сетевая доставка</span><i>→</i><span>Доверие и репутация</span><i>→</i><span>Робастное решение</span><i>→</i><span>Изоляция</span></div></section>
     <section id="agents"><h2>Агенты и модель нарушителя</h2><p>Корректный агент формирует предложение как сумму желаемого действия и нормального шума. Византийские агенты создают постоянное, малозаметное, периодическое или согласованное смещение. Sybil-идентичности являются дополнительными виртуальными агентами, управляемыми нарушителем и передающими согласованные значения.</p><Formula number="1">x<sub>i</sub>(t)=x<sup>*</sup>(t)+ε<sub>i</sub>(t), ε<sub>i</sub>∼N(0,σ²).</Formula><Formula number="2">x<sub>i</sub><sup>adv</sup>(t)=x<sup>*</sup>(t)+d·b<sub>s</sub>+η<sub>i</sub>(t).</Formula></section>
     <section id="trust"><h2>Дисконтированная Beta-модель доверия</h2><p>Для каждой пары «наблюдатель–оцениваемый агент» накапливаются положительные и отрицательные свидетельства. Отсутствующее из-за сетевого ограничения наблюдение обозначается NaN и не изменяет апостериорные параметры.</p><Formula number="3">α<sub>ij</sub>(t)=α₀+Σ<sub>k=0</sub><sup>W−1</sup>φ<sup>k</sup>e<sub>ij</sub>(t−k).</Formula><Formula number="4">β<sub>ij</sub>(t)=β₀+Σ<sub>k=0</sub><sup>W−1</sup>φ<sup>k</sup>[1−e<sub>ij</sub>(t−k)].</Formula><Formula number="5">w<sub>ij</sub>(t)=α<sub>ij</sub>(t)/(α<sub>ij</sub>(t)+β<sub>ij</sub>(t)).</Formula></section>
@@ -736,18 +736,8 @@ function App() {
   };
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   const lastTimestamp = lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—";
-
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>{activeTab.startsWith("study-")||activeTab==="help2027"?"IMAS-lab · Вычислительные эксперименты":"IMAS-lab · Расчет доверия"}</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
-{["trace","mc","sensitivity","data"].includes(activeTab)?<>
-<button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
-<button onClick={stop} disabled={!running}><Icon name="stop"/>Остановить</button>
-<button onClick={reset} disabled={running}><Icon name="reset"/>Сбросить</button>
-</>:null}
-<button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
-<button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
-</div></header>
-    <div className={"workspace"+((activeTab.startsWith("study-")||activeTab==="help2027")?" research-2027-workspace":"")}>{(activeTab.startsWith("study-")||activeTab==="help2027")?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}<main className={"content"+((activeTab.startsWith("study-")||activeTab==="help2027")?" r27-research-content":"")}><nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
+  const experimentNavigation = (
+<nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
 <select id="imas-experiment-select" aria-label="Выбор эксперимента" value={activeTab.startsWith("study-")?activeTab:"trace"} onChange={e=>setActiveTab(e.target.value)}>
 <option value="trace">Расчет доверия</option>
@@ -761,7 +751,30 @@ function App() {
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
 <button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>
-</nav>{["trace","mc","sensitivity","data"].includes(activeTab)?<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>:null}{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help2027" ? <ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/> : null}{activeTab.startsWith("study-") ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} /> : null}</main></div>
+</nav>
+  );
+
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
+{["trace","mc","sensitivity","data"].includes(activeTab)?<>
+<button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
+<button onClick={stop} disabled={!running}><Icon name="stop"/>Остановить</button>
+<button onClick={reset} disabled={running}><Icon name="reset"/>Сбросить</button>
+</>:null}
+<button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
+<button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
+</div></header>
+    <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
+      {activeTab.startsWith("study-")
+        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation}/>
+        : <>
+            {activeTab==="help2027"?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}
+            <main className={"content"+(activeTab==="help2027"?" r27-research-content":"")} data-study={activeTab==="help2027"?"help": "trust"}>
+              {experimentNavigation}
+              {["trace","mc","sensitivity","data"].includes(activeTab)?<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>:null}{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help2027" ? <ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/> : null}
+            </main>
+          </>}
+    </div>
     {(activeTab.startsWith("study-")||activeTab==="help2027")?<footer className="statusbar"><span>IMAS-lab · локальные вычисления</span><span>{activeTab==="help2027"?"Единая справка по шести экспериментам":"Пошаговое воспроизведение — в рабочей области"}</span><span>Модельные показатели не являются эксплуатационной оценкой</span></footer>:<footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>}
   </div>;
 }
