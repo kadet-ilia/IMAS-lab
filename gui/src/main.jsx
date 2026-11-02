@@ -11,12 +11,16 @@ import {
   Line,
   LineChart,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import "./styles.css";
+import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
+import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
+import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip,ExperimentProgress as ProgressStrip} from "./ExperimentLayout.jsx";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -187,24 +191,6 @@ function Icon({ name }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 
-function ParameterTooltip({ text }) {
-  if (!text) return null;
-  return (
-    <span
-      className="parameter-tooltip"
-      tabIndex={0}
-      aria-label={text}
-      onClick={(event) => {
-        event.preventDefault();
-        event.currentTarget.focus();
-      }}
-    >
-      <Icon name="help" />
-      <span role="tooltip">{text}</span>
-    </span>
-  );
-}
-
 function FieldLabel({ label, tooltip }) {
   return <span className="field-label"><span>{label}</span><ParameterTooltip text={tooltip} /></span>;
 }
@@ -225,14 +211,6 @@ function SelectField({ label, value, onChange, children, tooltip }) {
 
 function BoolField({ label, checked, onChange, hint, tooltip }) {
   return <label className="bool-field"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span className="bool-label"><span>{label}</span><ParameterTooltip text={tooltip} />{hint ? <small>{hint}</small> : null}</span></label>;
-}
-
-function Kpi({ label, value, note, tone = "blue" }) {
-  return <div className="kpi"><div className="kpi-label">{label}</div><div className={`kpi-value ${tone}`}>{value}</div><div className="kpi-note">{note}</div></div>;
-}
-
-function Panel({ title, subtitle, children, className = "", headerAside = null }) {
-  return <section className={`panel ${className}`}><header className="panel-header"><div><h2>{title}</h2>{subtitle ? <p>{subtitle}</p> : null}</div>{headerAside}</header><div className="panel-body">{children}</div></section>;
 }
 
 function average(values) {
@@ -311,7 +289,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     setConfig((current) => ({ ...current, static_bias: level.static_bias, subtle_bias: level.subtle_bias, collusion_bias: level.collusion_bias }));
   };
   return (
-    <aside className="sidebar">
+    <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
@@ -389,12 +367,6 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
   );
 }
 
-function ProgressStrip({ progress, running, cacheHit }) {
-  if (!running && !progress) return null;
-  const percent = Math.max(0, Math.min(100, Number(progress?.percent || 0)));
-  return <div className={`progress-strip ${running ? "running" : "done"}`}><div className="progress-head"><strong>{progress?.message || (running ? "Выполняется" : "Завершено")}</strong><span>{Number(progress?.completed || 0)} / {Number(progress?.total || 0)} · {percent.toFixed(1)}%</span>{cacheHit ? <em>кэш</em> : null}<span>Осталось: {formatSeconds(progress?.eta_seconds)}</span></div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div>;
-}
-
 function formatChartValue(value, name) {
   if (Array.isArray(value)) return [`${Number(value[0]).toFixed(3)} … ${Number(value[1]).toFixed(3)}`, name];
   return [Number(value).toFixed(3), name];
@@ -409,10 +381,60 @@ function DecisionAreas({ hasBands, mode }) {
   return <>{["sigma", "both"].includes(mode) ? <><Area dataKey="proposed_robust_band2" name="±2σ по прогонам" stroke="none" fill="#dcecff" fillOpacity={0.62} isAnimationActive={false} /><Area dataKey="proposed_robust_band1" name="±1σ по прогонам" stroke="none" fill="#bdd8ff" fillOpacity={0.72} isAnimationActive={false} /></> : null}{["quantile", "both"].includes(mode) ? <><Area dataKey="proposed_robust_band90" name="P5–P95" stroke="none" fill="#eadffc" fillOpacity={0.47} isAnimationActive={false} /><Area dataKey="proposed_robust_band50" name="P25–P75" stroke="none" fill="#d4c0f5" fillOpacity={0.62} isAnimationActive={false} /></> : null}</>;
 }
 
+function TimeRangeSelector({children,start,end,onZoom,onDrag}){
+  const gesture=useRef(null);
+  const locate=(event)=>{
+    const grid=event.currentTarget.querySelector(".recharts-cartesian-grid");
+    const rect=grid?.getBoundingClientRect();
+    if(!rect || rect.width < 10 || event.clientY < rect.top || event.clientY > rect.bottom) return null;
+    const fraction=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
+    return Math.round(start+fraction*(end-start));
+  };
+  const begin=event=>{
+    if(event.button!==0 || end<=start)return;
+    const step=locate(event);
+    if(step===null)return;
+    gesture.current={from:step,to:step};
+    onDrag([step,step]);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const move=event=>{
+    if(!gesture.current)return;
+    const grid=event.currentTarget.querySelector(".recharts-cartesian-grid");
+    const rect=grid?.getBoundingClientRect();
+    if(!rect || rect.width<10)return;
+    const fraction=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
+    const step=Math.round(start+fraction*(end-start));
+    gesture.current.to=step;
+    onDrag([gesture.current.from,step]);
+  };
+  const finish=event=>{
+    const current=gesture.current;
+    if(!current)return;
+    move(event);
+    const a=Math.min(current.from,current.to),b=Math.max(current.from,current.to);
+    gesture.current=null;
+    onDrag(null);
+    if(b>a)onZoom(a,b);
+    if(event.currentTarget.hasPointerCapture?.(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const cancel=()=>{
+    gesture.current=null;
+    onDrag(null);
+  };
+  return <div className="trust-zoom-surface" onPointerDown={begin} onPointerMove={move} onPointerUp={finish} onPointerCancel={cancel}>
+    {children}
+  </div>;
+}
+
 function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) {
   const [bandMode, setBandMode] = useState("sigma");
   const [showTolerance, setShowTolerance] = useState(false);
-  if (!data) return <div className="empty">Запустите эксперимент для построения трассировки.</div>;
+  const [zoomRange, setZoomRange] = useState(null);
+  const [dragRange, setDragRange] = useState(null);
+  const trustReplay=useMemo(()=>baselineReplay(data,config),[data,config]);
+  useEffect(()=>{setZoomRange(null);setDragRange(null);},[data]);
+  if (!data) return <><TopologyPlayback replay={trustReplay} compact/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
   const robust = data.metrics.find((item) => item.method === "proposed_robust");
   const last = data.series.at(-1);
   const totalBad = data.configuration.effective_byzantine_count ?? config.n_byzantine;
@@ -425,6 +447,22 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   const runCount = hasBands ? trajectoryStatistics[0]?.run_count ?? config.n_runs : 0;
   const decisionChart = data.series.map((row) => ({ ...row, tolerance_band: [row.truth - config.correctness_tolerance, row.truth + config.correctness_tolerance], ...(statisticsByStep.get(row.step) || {}) }));
   const rep = buildReputationChart(data.reputation, totalAgents);
+  const allSteps = data.series.map(row => Number(row.step)).filter(Number.isFinite);
+  const firstStep = Math.min(...allSteps);
+  const lastStep = Math.max(...allSteps);
+  const clampStep = value => Math.max(firstStep, Math.min(lastStep, Math.round(Number(value))));
+  const startStep = zoomRange ? Math.max(firstStep, Math.min(lastStep, zoomRange[0])) : firstStep;
+  const endStep = zoomRange ? Math.max(startStep, Math.min(lastStep, zoomRange[1])) : lastStep;
+  const visibleDecision = decisionChart.filter(row => row.step >= startStep && row.step <= endStep);
+  const visibleReputation = rep.chart.filter(row => row.step >= startStep && row.step <= endStep);
+  const changeZoom = (from, to) => {
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return;
+    const a = clampStep(from), b = clampStep(to);
+    if (a <= b) setZoomRange([a, b]);
+  };
+  const zoomSelection = dragRange && dragRange[0] !== dragRange[1] ? 
+    <ReferenceArea x1={Math.min(...dragRange)} x2={Math.max(...dragRange)} strokeOpacity={0.2} fill="#5195cf" fillOpacity={0.22} /> : null;
+
   const metricChart = [
     { metric: "RMSE (↓)", ...Object.fromEntries(data.metrics.map((item) => [item.method, item.rmse])) },
     { metric: "MAE (↓)", ...Object.fromEntries(data.metrics.map((item) => [item.method, item.mae])) },
@@ -433,14 +471,28 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   ];
   const networkVisible = config.network_enabled || config.n_sybil_agents > 0 || data.summary.delivery_ratio < 0.999;
   return <>
+    <div className="trust-overview-grid">
+      <TopologyPlayback replay={trustReplay} compact />
+      <Panel title="Сводная таблица результатов расчёта доверия" subtitle="Результаты одного прогона для всех методов агрегирования">
+        <div className="table-wrap trust-summary-table"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>|Смещение|</th><th>Покрытие 95%</th></tr></thead>
+        <tbody>{data.metrics.map(item=><tr key={item.method}><td>{METHODS[item.method]||item.method}</td><td>{item.rmse.toFixed(4)}</td><td>{item.mae.toFixed(4)}</td><td>{Math.abs(item.bias).toFixed(4)}</td><td>{(item.coverage95*100).toFixed(2)}%</td></tr>)}</tbody></table></div>
+      </Panel>
+    </div>
     {data.partial ? <div className="partial-banner">Отображены частичные результаты: выполнено {data.summary.completed_steps} из {config.n_steps} шагов.</div> : null}
     <div className="kpi-grid"><Kpi label={`Текущее решение (шаг ${last.step})`} value={last.proposed_robust.toFixed(3)} note="Трассировка выбранного прогона" /><Kpi label="Ошибка робастного решения (RMSE)" value={robust.rmse.toFixed(3)} note="За выбранный прогон" /><Kpi label="Изолированные нарушители/агенты" value={`${data.agents.filter((item) => item.byzantine && item.isolated_at !== null).length} / ${isolated}`} note={`Всего нарушителей: ${totalBad}`} tone="teal" /><Kpi label="Доставка сообщений" value={`${(data.summary.delivery_ratio * 100).toFixed(1)}%`} note={`Доверие корректных: ${honestTrust.toFixed(3)}`} tone="teal" /></div>
-    <div className="main-grid">
+    <div className="trust-zoom-toolbar" role="group" aria-label="Общий масштаб временных графиков">
+      <span className="trust-zoom-title">Общий масштаб по оси X</span>
+      <label>С шага <input type="number" aria-label="Начальный шаг увеличения" min={firstStep} max={endStep} value={startStep} onChange={e=>changeZoom(Number(e.target.value),endStep)} /></label>
+      <label>По шаг <input type="number" aria-label="Конечный шаг увеличения" min={startStep} max={lastStep} value={endStep} onChange={e=>changeZoom(startStep,Number(e.target.value))} /></label>
+      <button type="button" className="trust-zoom-reset" onClick={()=>{setZoomRange(null);setDragRange(null);}} disabled={!zoomRange}>Показать весь интервал</button>
+      <span className="trust-zoom-hint">Выделите мышью участок на любом графике — масштаб изменится на обоих</span>
+    </div>
+    <div className="main-grid trust-synced-grid" data-zoom-from={startStep} data-zoom-to={endStep} data-decision-points={visibleDecision.length} data-reputation-points={visibleReputation.length}>
       <Panel title="Динамика решений и оценок" subtitle={hasBands ? `Линии выбранного прогона; статистические области рассчитаны по ${runCount} независимым прогонам` : "Для межпрогонных областей выполните серию Монте-Карло."} headerAside={<BandControls hasBands={hasBands} runCount={runCount} mode={bandMode} setMode={setBandMode} showTolerance={showTolerance} setShowTolerance={setShowTolerance} onRunBands={onRunBands} running={running} />}>
-        <ResponsiveContainer width="100%" height={320}><ComposedChart data={decisionChart} margin={{ top: 12, right: 18, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} label={{ value: "Шаг", position: "insideBottom", offset: -4, fontSize: 10 }} /><YAxis domain={[config.safe_action_min - 0.5, config.safe_action_max + 0.5]} tick={{ fontSize: 10 }} label={{ value: "Значение", angle: -90, position: "insideLeft", fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 11, borderColor: "#d8e0e8" }} formatter={formatChartValue} /><Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />{showTolerance ? <Area dataKey="tolerance_band" name="Допустимое отклонение ±δ" stroke="none" fill="#dff4ea" fillOpacity={0.52} isAnimationActive={false} /> : null}<DecisionAreas hasBands={hasBands} mode={bandMode} /><ReferenceLine x={config.attack_start_step} stroke={COLORS.danger} strokeDasharray="4 4" label={{ value: "Начало атаки", fill: COLORS.danger, fontSize: 9, position: "insideTopRight" }} /><Line dataKey="truth" name="Желаемое действие (x*)" stroke="#7d8792" strokeDasharray="5 4" dot={false} strokeWidth={1.4} isAnimationActive={false} /><Line dataKey="arithmetic_mean" name={METHODS.arithmetic_mean} stroke={COLORS.arithmetic_mean} strokeDasharray="5 3" dot={false} strokeWidth={1.6} isAnimationActive={false} /><Line dataKey="trust_weighted_mean" name={METHODS.trust_weighted_mean} stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={1.8} isAnimationActive={false} />{hasBands ? <Line dataKey="proposed_robust_mean" name="Среднее робастное по прогонам" stroke="#6d8caf" strokeDasharray="4 3" dot={false} strokeWidth={1.5} isAnimationActive={false} /> : null}<Line dataKey="proposed_robust" name="Робастное — выбранный прогон" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2.2} isAnimationActive={false} /></ComposedChart></ResponsiveContainer>
+        <TimeRangeSelector start={startStep} end={endStep} onZoom={changeZoom} onDrag={setDragRange}><ResponsiveContainer width="100%" height={320}><ComposedChart data={visibleDecision} margin={{ top: 12, right: 18, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} label={{ value: "Шаг", position: "insideBottom", offset: -4, fontSize: 10 }} /><YAxis domain={[config.safe_action_min - 0.5, config.safe_action_max + 0.5]} tick={{ fontSize: 10 }} label={{ value: "Значение", angle: -90, position: "insideLeft", fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 11, borderColor: "#d8e0e8" }} formatter={formatChartValue} /><Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />{showTolerance ? <Area dataKey="tolerance_band" name="Допустимое отклонение ±δ" stroke="none" fill="#dff4ea" fillOpacity={0.52} isAnimationActive={false} /> : null}<DecisionAreas hasBands={hasBands} mode={bandMode} /><ReferenceLine x={config.attack_start_step} stroke={COLORS.danger} strokeDasharray="4 4" label={{ value: "Начало атаки", fill: COLORS.danger, fontSize: 9, position: "insideTopRight" }} /><Line dataKey="truth" name="Желаемое действие (x*)" stroke="#7d8792" strokeDasharray="5 4" dot={false} strokeWidth={1.4} isAnimationActive={false} /><Line dataKey="arithmetic_mean" name={METHODS.arithmetic_mean} stroke={COLORS.arithmetic_mean} strokeDasharray="5 3" dot={false} strokeWidth={1.6} isAnimationActive={false} /><Line dataKey="trust_weighted_mean" name={METHODS.trust_weighted_mean} stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={1.8} isAnimationActive={false} />{hasBands ? <Line dataKey="proposed_robust_mean" name="Среднее робастное по прогонам" stroke="#6d8caf" strokeDasharray="4 3" dot={false} strokeWidth={1.5} isAnimationActive={false} /> : null}<Line dataKey="proposed_robust" name="Робастное — выбранный прогон" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2.2} isAnimationActive={false} />{zoomSelection}</ComposedChart></ResponsiveContainer></TimeRangeSelector>
       </Panel>
       <Panel title="Доверие (репутация) агентов" subtitle="Индивидуальная динамика и средние значения по группам">
-        <ResponsiveContainer width="100%" height={320}><LineChart data={rep.chart} margin={{ top: 12, right: 16, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 10 }} formatter={(value, name) => [Number(value).toFixed(3), name]} /><ReferenceLine y={config.isolation_threshold} stroke={COLORS.trust_weighted_mean} strokeDasharray="5 4" label={{ value: "Порог изоляции", fill: COLORS.trust_weighted_mean, fontSize: 9 }} />{rep.agents.map((agent) => <Line key={agent} dataKey={`a${agent}`} name={`Агент ${agent}`} stroke={rep.types.get(agent) === "sybil" ? COLORS.violet : rep.types.get(agent) === "byzantine" ? COLORS.danger : COLORS.trust_weighted_mean} strokeOpacity={0.24} dot={false} strokeWidth={0.8} legendType="none" isAnimationActive={false} />)}<Line dataKey="honestMean" name="Корректные" stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={2.1} isAnimationActive={false} /><Line dataKey="byzantineMean" name="Византийские" stroke={COLORS.danger} dot={false} strokeWidth={2.1} isAnimationActive={false} />{config.n_sybil_agents > 0 ? <Line dataKey="sybilMean" name="Sybil" stroke={COLORS.violet} dot={false} strokeWidth={2.1} isAnimationActive={false} /> : null}<Legend wrapperStyle={{ fontSize: 10 }} /></LineChart></ResponsiveContainer>
+        <TimeRangeSelector start={startStep} end={endStep} onZoom={changeZoom} onDrag={setDragRange}><ResponsiveContainer width="100%" height={320}><LineChart data={visibleReputation} margin={{ top: 12, right: 16, left: -10, bottom: 8 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip contentStyle={{ fontSize: 10 }} formatter={(value, name) => [Number(value).toFixed(3), name]} /><ReferenceLine y={config.isolation_threshold} stroke={COLORS.trust_weighted_mean} strokeDasharray="5 4" label={{ value: "Порог изоляции", fill: COLORS.trust_weighted_mean, fontSize: 9 }} />{rep.agents.map((agent) => <Line key={agent} dataKey={`a${agent}`} name={`Агент ${agent}`} stroke={rep.types.get(agent) === "sybil" ? COLORS.violet : rep.types.get(agent) === "byzantine" ? COLORS.danger : COLORS.trust_weighted_mean} strokeOpacity={0.24} dot={false} strokeWidth={0.8} legendType="none" isAnimationActive={false} />)}<Line dataKey="honestMean" name="Корректные" stroke={COLORS.trust_weighted_mean} dot={false} strokeWidth={2.1} isAnimationActive={false} /><Line dataKey="byzantineMean" name="Византийские" stroke={COLORS.danger} dot={false} strokeWidth={2.1} isAnimationActive={false} />{config.n_sybil_agents > 0 ? <Line dataKey="sybilMean" name="Sybil" stroke={COLORS.violet} dot={false} strokeWidth={2.1} isAnimationActive={false} /> : null}<Legend wrapperStyle={{ fontSize: 10 }} />{zoomSelection}</LineChart></ResponsiveContainer></TimeRangeSelector>
       </Panel>
     </div>
     {networkVisible ? <Panel title="Сетевые ограничения и доступность данных" subtitle="Размер компоненты связности, число доступных предложений и доля доставки сообщений"><ResponsiveContainer width="100%" height={260}><LineChart data={data.network_series} margin={{ top: 12, right: 40, left: -5, bottom: 10 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="step" tick={{ fontSize: 10 }} /><YAxis yAxisId="count" domain={[0, totalAgents]} tick={{ fontSize: 9 }} /><YAxis yAxisId="ratio" orientation="right" domain={[0, 1]} tick={{ fontSize: 9 }} /><Tooltip contentStyle={{ fontSize: 10 }} /><Legend wrapperStyle={{ fontSize: 9 }} /><Line yAxisId="count" dataKey="largest_component" name="Крупнейшая компонента" stroke={COLORS.proposed_robust} dot={false} strokeWidth={2} isAnimationActive={false} /><Line yAxisId="count" dataKey="available_agents" name="Доступные предложения" stroke={COLORS.arithmetic_mean} dot={false} isAnimationActive={false} /><Line yAxisId="ratio" dataKey="delivery_ratio" name="Доля доставки" stroke={COLORS.trust_weighted_mean} dot={false} isAnimationActive={false} /><ReferenceLine yAxisId="count" x={config.partition_start_step} stroke={COLORS.warning} strokeDasharray="4 4" /></LineChart></ResponsiveContainer></Panel> : null}
@@ -532,8 +584,8 @@ const HELP_SECTIONS = [
   ["purpose", "Назначение и постановка задачи"], ["agents", "Агенты и модель нарушителя"], ["trust", "Модель доверия"], ["reputation", "Глобальная репутация"], ["isolation", "Изоляция и восстановление"], ["aggregation", "Робастное агрегирование"], ["network", "Сетевая модель"], ["sybil", "Sybil-атака"], ["statistics", "Межпрогонная статистика"], ["bootstrap", "Bootstrap-сравнение"], ["distributions", "Распределения"], ["sensitivity", "Анализ чувствительности"], ["parallel", "Параллельный расчет и кэш"], ["process", "Порядок эксперимента"], ["software", "Программный комплекс"], ["interpretation", "Интерпретация"], ["glossary", "Термины"], ["limits", "Ограничения"],
 ];
 
-function HelpTab() {
-  return <div className="help-layout"><aside className="help-toc"><h2>Содержание</h2>{HELP_SECTIONS.map(([id, title]) => <a href={`#${id}`} key={id}>{title}</a>)}</aside><article className="help-article"><h1>Справка по модельному эксперименту ИМАС</h1>
+function TrustHelpArticle() {
+  return <article className="help-article"><h2 className="help-article-title">Справка по модельному эксперименту ИМАС</h2>
     <section id="purpose"><h2>Назначение и постановка задачи</h2><p>Комплекс моделирует коллективную выработку скалярного решения в интеллектуальной мультиагентной системе при наличии корректных, византийских и ложных Sybil-идентичностей. Цель эксперимента состоит в оценке точности, воспроизводимости и киберустойчивости трех методов агрегирования при изменении параметров доверия, изоляции, атаки и сети.</p><div className="process-strip"><span>Предложения агентов</span><i>→</i><span>Сетевая доставка</span><i>→</i><span>Доверие и репутация</span><i>→</i><span>Робастное решение</span><i>→</i><span>Изоляция</span></div></section>
     <section id="agents"><h2>Агенты и модель нарушителя</h2><p>Корректный агент формирует предложение как сумму желаемого действия и нормального шума. Византийские агенты создают постоянное, малозаметное, периодическое или согласованное смещение. Sybil-идентичности являются дополнительными виртуальными агентами, управляемыми нарушителем и передающими согласованные значения.</p><Formula number="1">x<sub>i</sub>(t)=x<sup>*</sup>(t)+ε<sub>i</sub>(t), ε<sub>i</sub>∼N(0,σ²).</Formula><Formula number="2">x<sub>i</sub><sup>adv</sup>(t)=x<sup>*</sup>(t)+d·b<sub>s</sub>+η<sub>i</sub>(t).</Formula></section>
     <section id="trust"><h2>Дисконтированная Beta-модель доверия</h2><p>Для каждой пары «наблюдатель–оцениваемый агент» накапливаются положительные и отрицательные свидетельства. Отсутствующее из-за сетевого ограничения наблюдение обозначается NaN и не изменяет апостериорные параметры.</p><Formula number="3">α<sub>ij</sub>(t)=α₀+Σ<sub>k=0</sub><sup>W−1</sup>φ<sup>k</sup>e<sub>ij</sub>(t−k).</Formula><Formula number="4">β<sub>ij</sub>(t)=β₀+Σ<sub>k=0</sub><sup>W−1</sup>φ<sup>k</sup>[1−e<sub>ij</sub>(t−k)].</Formula><Formula number="5">w<sub>ij</sub>(t)=α<sub>ij</sub>(t)/(α<sub>ij</sub>(t)+β<sub>ij</sub>(t)).</Formula></section>
@@ -552,7 +604,7 @@ function HelpTab() {
     <section id="interpretation"><h2>Интерпретация результатов</h2><ul><li>Узкие σ- и квантильные области означают воспроизводимость решения.</li><li>Различие между средним и медианой указывает на асимметрию распределения.</li><li>Bootstrap-интервал, полностью расположенный выше нуля, подтверждает преимущество робастного метода по выбранной метрике.</li><li>Снижение крупнейшей компоненты и доли доставки показывает влияние разделения, потерь и пропускной способности.</li><li>Сильный главный эффект определяет параметр, наиболее существенно изменяющий отклик в исследованном диапазоне.</li></ul></section>
     <section id="glossary"><h2>Термины и обозначения</h2><dl className="glossary"><dt>ИМАС</dt><dd>Интеллектуальная мультиагентная система.</dd><dt>Византийский агент</dt><dd>Участник, способный передавать произвольные или согласованно ложные данные.</dd><dt>Sybil-атака</dt><dd>Создание одним нарушителем множества ложных идентичностей.</dd><dt>Квантильная область</dt><dd>Интервал между заданными квантилями эмпирического распределения.</dd><dt>Парный bootstrap</dt><dd>Повторная выборка общих индексов прогонов для сравниваемых методов.</dd><dt>Контрольная точка</dt><dd>Сохраненное промежуточное состояние серии, позволяющее возобновить расчет.</dd><dt>Факторный эффект</dt><dd>Изменение среднего отклика между верхним и нижним уровнями фактора.</dd><dt>Компонента связности</dt><dd>Максимальное множество узлов, между которыми существуют сетевые пути.</dd></dl></section>
     <section id="limits"><h2>Ограничения применимости</h2><p>Сетевая модель является дискретной и агрегированной: не моделируются конкретные протоколы маршрутизации, очереди пакетов каждого канала и криптографические затраты. Скалярное решение не заменяет предметную многомерную модель объекта. Bootstrap и факторные эффекты характеризуют только заданные диапазоны и сценарии. Практические выводы требуют калибровки на цифровом двойнике или стенде конкретного объекта.</p></section>
-  </article></div>;
+  </article>;
 }
 
 function App() {
@@ -571,6 +623,8 @@ function App() {
   const [cacheHit, setCacheHit] = useState(false);
   const jobRef = useRef(null);
   const runningRef = useRef(false);
+  const researchActionsRef = useRef(null);
+  const [researchRuntime,setResearchRuntime] = useState(null);
 
   const request = async (action, options = {}) => {
     if (runningRef.current) return;
@@ -648,15 +702,77 @@ function App() {
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
   const exportVisibleCharts = () => {
-    const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg")];
+    const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
   };
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-  const lastTimestamp = lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—";
+  const isResearch=activeTab.startsWith("study-");
+  const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
+  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):running;
+  const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—");
+  const experimentNavigation = (
+<nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
+<label htmlFor="imas-experiment-select">Эксперимент
+<select id="imas-experiment-select" aria-label="Выбор эксперимента" value={activeTab.startsWith("study-")?activeTab:"trace"} onChange={e=>setActiveTab(e.target.value)}>
+<option value="trace">Расчет доверия</option>
+<option value="study-uncertainty">Автоматические решения</option>
+<option value="study-probgraph">Коллективное решение</option>
+<option value="study-petri">Опасные состояния</option>
+<option value="study-cascade">Каскадные последствия</option>
+<option value="study-misinformation">Нарушение коллективного решения</option>
+</select></label>
+<div className="r27-mode-tabs" role="group" aria-label="Режим эксперимента">
+ {["trace","mc","sensitivity","data"].includes(activeTab)
+   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=>
+      <button type="button" key={id} className={"r27-mode-tab"+(activeTab===id?" active":"")} aria-pressed={activeTab===id} onClick={()=>setActiveTab(id)}>{name}</button>)
+   : <span className="r27-mode-placeholder">Основной режим</span>}
+</div>
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>Модельный эксперимент ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div><div className="toolbar"><button onClick={newSeed} disabled={running}><Icon name="seed" />Новый сид</button><button className="primary-small" onClick={runForTab} disabled={running || ["help", "data"].includes(activeTab)}><Icon name="play" />Запустить</button><button onClick={stop} disabled={!running}><Icon name="stop" />Остановить</button><button onClick={reset} disabled={running}><Icon name="reset" />Сбросить</button><button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen" /></button><button className="icon-button" title="Справка" onClick={() => setActiveTab("help")}><Icon name="help" /></button></div></header>
-    <div className="workspace"><Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} /><main className="content"><nav className="tabs" aria-label="Разделы эксперимента">{[["trace", "Один прогон"], ["mc", "Монте-Карло"], ["sensitivity", "Чувствительность"], ["data", "Данные"], ["help", "Справка"]].map(([value, label]) => <button className={activeTab === value ? "active" : ""} onClick={() => setActiveTab(value)} key={value}>{label}</button>)}<span className="tabs-spacer" /><button className="export-button" onClick={exportVisibleCharts} disabled={["data", "help"].includes(activeTab)}><Icon name="export" />Экспорт SVG</button></nav><ProgressStrip progress={progress} running={running} cacheHit={cacheHit} />{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help" ? <HelpTab /> : null}</main></div>
-    <footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>
+<button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
+
+<button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>
+</nav>
+  );
+
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS-lab · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
+{activeTab!=="help2027"?<>
+<button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(running||activeTab==="data")}><Icon name="play"/>Запустить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!running}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="reset"/>Сбросить</button>
+</>:null}
+<button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
+<button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
+</div></header>
+    <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
+      {isResearch
+        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
+        : activeTab==="help2027"
+          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
+          : <ExperimentLayout
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              navigation={experimentNavigation}
+              studyId="trust"
+              authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
+              title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
+              description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
+              progress={<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+              error={error?<div className="error-banner">{error}</div>:null}
+            >
+              {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
+              {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
+            </ExperimentLayout>}
+    </div>
+    <footer className="statusbar">
+      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Время: {isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
+      <span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
+      <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
+      <span className="status-log">{isResearch?"Синтетическая модель — результаты требуют независимой валидации":activeTab==="help2027"?"Единая справка по шести экспериментам":lastRun?.log?"Лог: "+lastRun.log:""}</span>
+    </footer>
   </div>;
 }
 
