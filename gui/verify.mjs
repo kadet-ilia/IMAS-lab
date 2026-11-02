@@ -270,7 +270,7 @@ if((await seedInput.inputValue())===firstSeed)throw Error("Common toolbar seed a
 await page.locator(".topbar").getByRole("button",{name:"Сбросить",exact:true}).click();
 await page.locator(".r27-unified-settings input[type=number]").nth(1).fill("10");
 await page.locator(".topbar").getByRole("button", { name: "Запустить", exact: true }).click();
-await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
+await page.locator(".r27-summary-panel .r27-table tbody tr").first().waitFor({timeout:30000});
 await page.getByRole("button", {name:"Воспроизвести"}).click();
 await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
 await page.getByRole("button", {name:"Пауза"}).click();
