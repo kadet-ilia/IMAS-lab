@@ -3,6 +3,7 @@ import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxi
 import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
 import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
 import {ResearchSettings} from "./ResearchSettings.jsx";
+import {ExperimentLayout,ExperimentPanel,ExperimentKpi} from "./ExperimentLayout.jsx";
 import {UnifiedHelp} from "./UnifiedHelp.jsx";
 import "./research2027.css";
 
@@ -109,19 +110,18 @@ const KEY_STATS={
  misinformation:[["wrongProbability","Ошибочных решений"],["abstentionProbability","Отказов"],["meanExposedFraction","Информационный охват"]]
 };
 function ResearchKpis({studyId,result}){
- if(!result)return null;
- const rows=result.rows||[],keys=KEY_STATS[studyId]||[];
+ const rows=result?.rows||[], keys=KEY_STATS[studyId]||[];
+ const config=result?.config||{};
  const items=studyId==="petri"
- ? [["Достижимость",rows[0]?.value||"—"],["Исследовано маркировок",rows[1]?.value||"—"],["Горизонт, тактов",result.config.steps],["Порог поражения",result.config.criticalCount]]
- : [["Число агентов",result.config.agents],["Прогонов/сценарий",result.config.runs],...keys.slice(0,2).map(([key,label])=>{
-    const values=rows.map(r=>r[key]).filter(Number.isFinite);
+  ? [["Достижимость",rows[0]?.value??"—"],["Исследовано маркировок",rows[1]?.value??"—"],["Горизонт, тактов",result?config.steps:"—"],["Порог поражения",result?config.criticalCount:"—"]]
+  : [["Число агентов",result?config.agents:"—"],["Прогонов/сценарий",result?config.runs:"—"],...keys.slice(0,2).map(([key,label])=>{
+    const values=rows.map(row=>row[key]).filter(Number.isFinite);
     const average=values.length?values.reduce((a,b)=>a+b,0)/values.length:NaN;
     return [label,Number.isFinite(average)?(pctFields.has(key)?(100*average).toFixed(1)+"%":average.toFixed(3)):"—"];
-   })];
- return <div className="kpi-grid r27-research-kpis">{items.map(([label,value],i)=><div className="kpi" key={label}>
-   <div className="kpi-label">{label}</div><div className={"kpi-value "+(i===3?"teal":"")}>{value}</div>
-   <div className="kpi-note">{i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"}</div>
-  </div>)}</div>;
+  })];
+ return <div className="kpi-grid r27-research-kpis">{items.map(([label,value],i)=>
+  <ExperimentKpi key={label} label={label} value={value} note={result?(i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"):"После запуска эксперимента"} tone={i===3?"teal":"blue"}/>
+ )}</div>;
 }
 export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation,onRuntimeChange},actionsRef){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
@@ -144,23 +144,21 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
  const opts=result?.rows?.length?Object.keys(result.rows[0]).filter(x=>x in metricNames):[];
  const theory=THEORY[studyId];
  const author=studyId==="petri"||studyId==="misinformation"?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
- return <>
-  <ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={resetStudy} running={running}/>
-  <main className="content r27-experiment-content" data-study={studyId}>
-   {navigation}
-   <div className="r27-kicker">{author}</div>
-   <h2 className="r27-study-title">{def.title}</h2>
-   <p className="r27-study-purpose">{theory.goal}</p>
-   {running?<div className="progress-strip r27-study-progress" role="status"><div className="progress-head"><strong>Выполняются независимые вычислительные прогоны…</strong><span>Модель: {def.short}</span></div><div className="progress-track"><i className="r27-progress-indeterminate"/></div></div>:null}
-   {error?<div className="error-banner" role="alert">{error}</div>:null}
-   <div className="trust-overview-grid r27-study-overview">
+ return <ExperimentLayout
+  sidebar={<ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={resetStudy} running={running}/>}
+  navigation={navigation}
+  studyId={studyId}
+  authors={author}
+  title={def.title}
+  description={theory.goal}
+  progress={running?<div className="progress-strip r27-study-progress" role="status"><div className="progress-head"><strong>Выполняются независимые вычислительные прогоны…</strong><span>Модель: {def.short}</span></div><div className="progress-track"><i className="r27-progress-indeterminate"/></div></div>:null}
+  error={error?<div className="error-banner" role="alert">{error}</div>:null}
+ >
+   <div className="trust-overview-grid">
      <TopologyPlayback replay={result?.replay||previewReplay} compact/>
-     <section className="panel r27-summary-panel">
-       <header className="panel-header"><div><h2>Сводная таблица результатов</h2><p>Показатели расчётов по сценариям и методам</p></div></header>
-       <div className="panel-body">
-         {result?<ResultTable rows={result.rows}/>:<div className="r27-summary-empty">Таблица формируется после запуска вычислительного эксперимента.</div>}
-       </div>
-     </section>
+     <ExperimentPanel title="Сводная таблица результатов" subtitle="Показатели расчётов по сценариям и методам" className="r27-summary-panel">
+      {result?<ResultTable rows={result.rows}/>:<div className="r27-summary-empty">Таблица формируется после запуска вычислительного эксперимента.</div>}
+     </ExperimentPanel>
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
    {result?<>
@@ -194,8 +192,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
        <div className="panel-body"><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p></div>
      </section>
    </>:<div className="empty r27-study-empty">Задайте параметры в боковом меню и запустите эксперимент. Математическая модель и ограничения изложены в единой справке.</div>}
-  </main>
- </>;
+ </ExperimentLayout>;
 });
 export function ResearchHelp({baselineArticle,baselineSections}){
  return <UnifiedHelp baselineArticle={baselineArticle} baselineSections={baselineSections} researchTheory={THEORY}/>;
