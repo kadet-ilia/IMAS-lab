@@ -68,7 +68,7 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
    <h2>Параметры эксперимента</h2>
    <p className="r27-settings-intro">{def?.short||""}. Параметры используются при воспроизводимом модельном расчёте.</p>
    {groups.map(([title,fields],index)=><div key={title} className={index===0?"r27-first-settings":"sidebar-section"}>
-    {index!==0?<h3>{title}</h3>:null}{entries(fields)}
+    <h3>{title}</h3>{entries(fields)}
    </div>)}
    <details className="advanced"><summary>Статистика и вычисления</summary><div className="advanced-body">
      <ResearchField name="seed" value={config.seed} onChange={onChange}/>
