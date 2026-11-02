@@ -72,6 +72,8 @@ const browser = await playwright.launch({ executablePath, args: launchArgs, head
 const page = await browser.newPage({ viewport: { width: 1491, height: 1023 }, deviceScaleFactor: 1 });
 const errors = [];
 const warnings = [];
+const apiCalls=[];
+page.on("request",request=>{if(new URL(request.url()).pathname.startsWith("/api/"))apiCalls.push(request.url());});
 page.on("console", (message) => {
   if (message.type() === "error") errors.push(message.text());
   if (message.type() === "warning") warnings.push(message.text());
@@ -269,6 +271,7 @@ const report = {
   mathematicalModules: await page.locator(".r27-module-article").count(),
   errors,
   warnings,
+  apiCalls,
   screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot, research: researchScreenshot },
 };
 
@@ -278,12 +281,13 @@ await browser.close();
 
 const controlsPresent = Object.values(report.requiredControls).every((count) => count > 0);
 if (
-  report.title !== "Модельный эксперимент ИМАС" ||
+  report.title !== "IMAS_LaB_test — Лабораторный стенд ИМАС" ||
   report.bodyLength < 2000 ||
   report.helpSections < 18 ||
   !controlsPresent ||
   !report.researchComputed ||
   report.topology===0 ||
   report.researchHelp === 0 ||
-  errors.length
+  errors.length ||
+  apiCalls.length
 ) process.exit(1);
