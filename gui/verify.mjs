@@ -113,12 +113,18 @@ if (resetZoom.start!==initialZoom.start || resetZoom.end!==initialZoom.end) thro
 const firstPlot = page.locator(".trust-synced-grid .recharts-wrapper").first();
 const plot = await firstPlot.boundingBox();
 if(!plot)throw Error("Missing decision chart for drag zoom");
+await firstPlot.evaluate(el=>{
+ const surface=el.closest(".trust-zoom-surface"), grid=el.querySelector(".recharts-cartesian-grid")?.getBoundingClientRect();
+ globalThis.__dragDebug={rect:grid?{x:grid.x,y:grid.y,width:grid.width,height:grid.height}:null,events:[]};
+ for(const type of ["pointerdown","pointermove","pointerup","pointercancel"])surface.addEventListener(type,event=>globalThis.__dragDebug.events.push({type,x:event.clientX,y:event.clientY,target:event.target.tagName}),true);
+});
 const dragY = plot.y + Math.min(120, plot.height * .36);
 await page.mouse.move(plot.x+plot.width*.34,dragY);
 await page.mouse.down();
 await page.mouse.move(plot.x+plot.width*.71,dragY,{steps:12});
 await page.mouse.up();
 const draggedZoom = await zoomGrid.evaluate(node => ({start:+node.dataset.zoomFrom,end:+node.dataset.zoomTo}));
+console.log("DRAG-DEBUG",JSON.stringify(await page.evaluate(()=>globalThis.__dragDebug)));
 if(draggedZoom.start <= initialZoom.start || draggedZoom.end >= initialZoom.end){
  throw Error("Mouse-selected X interval did not synchronize zoom: "+JSON.stringify(draggedZoom));
 }
