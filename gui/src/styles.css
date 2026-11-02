@@ -337,3 +337,6 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
  .trust-overview-grid .r27-playback-value{grid-column:1}
  .trust-overview-grid .r27-playback-event{margin-bottom:9px}
 }
+
+.trust-zoom-surface{width:100%;min-width:0;cursor:crosshair;touch-action:pan-y}
+.trust-zoom-surface .recharts-wrapper{cursor:crosshair}
