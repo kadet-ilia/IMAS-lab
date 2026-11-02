@@ -263,7 +263,7 @@ for (let i=0; i<researchTabs.length; i++) {
 
 }
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
-const seedInput = page.getByRole("spinbutton", {name:"Начальное зерно генератора"});
+const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
 const firstSeed = await seedInput.inputValue();
 await page.locator(".topbar").getByRole("button",{name:"Новый сид",exact:true}).click();
 if((await seedInput.inputValue())===firstSeed)throw Error("Common toolbar seed action has no effect on research study");
