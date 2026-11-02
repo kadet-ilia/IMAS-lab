@@ -257,3 +257,241 @@
   color:#133a60;
   max-width:1200px;
 }
+
+
+/* Unified application visual system — shared by trust and five research studies.
+   Research pages reuse the actual .content scroll, .panel header/body,
+   .sidebar, .field, .kpi-grid and .trust-overview-grid instead of a nested app. */
+:root{
+  --imas-panel-border:var(--border);
+  --imas-panel-bg:var(--surface);
+  --imas-text:#1b2733;
+  --imas-subtle:#6c7884;
+  --imas-highlight:var(--blue);
+}
+.workspace > .r27-experiment-content.content{
+  display:block;
+  overflow-y:auto;
+  padding:0 15px 15px;
+  scrollbar-width:thin;
+}
+.r27-experiment-content > .r27-experiment-navigation{
+  position:sticky;
+  top:0;
+  z-index:8;
+  margin:0 -15px 10px;
+}
+.r27-experiment-content > .r27-kicker{
+  margin:8px 12px 5px;
+  text-transform:none;
+  letter-spacing:0;
+  font-weight:700;
+  font-size:11px;
+  line-height:1.35;
+  color:#426584;
+}
+.r27-experiment-content > .r27-study-title{
+  margin:0 12px 12px;
+  font-size:19px;
+  font-weight:700;
+  line-height:1.35;
+  color:#133a60;
+  max-width:1200px;
+}
+.r27-study-purpose{
+  margin:0 12px 14px;
+  font-size:12px;
+  line-height:1.5;
+  color:var(--muted);
+  max-width:1100px;
+}
+.r27-study-progress{margin:0 0 12px}
+.r27-progress-indeterminate{
+  width:35%;
+  animation:r27-progress-wait 1.8s ease-in-out infinite alternate;
+}
+@keyframes r27-progress-wait{from{transform:translateX(0)}to{transform:translateX(185%)}}
+@media(prefers-reduced-motion:reduce){.r27-progress-indeterminate{animation:none;width:100%}}
+.r27-study-overview{
+  margin-bottom:12px;
+}
+.r27-study-overview > .r27-replay{
+  border:1px solid var(--border);
+  border-radius:0;
+}
+.r27-study-overview .r27-playback-figure{border-radius:2px}
+.r27-study-overview > .r27-summary-panel{min-width:0}
+.r27-study-overview > .r27-summary-panel .panel-body{padding:0 9px 9px}
+.r27-summary-panel .r27-table-scroll{
+  max-height:550px;
+  overflow:auto;
+  border:1px solid var(--soft-border);
+  border-radius:0;
+}
+.r27-summary-panel .r27-table{
+  width:max-content;
+  min-width:100%;
+  border-collapse:collapse;
+  font-size:11px;
+}
+.r27-summary-panel .r27-table th,
+.r27-summary-panel .r27-table td{
+  white-space:nowrap;
+  padding:7px 9px;
+  border-bottom:1px solid var(--soft-border);
+}
+.r27-summary-panel .r27-table th{
+  color:#5c6975;
+  background:#f8fafb;
+  position:sticky;
+  top:0;
+}
+.r27-summary-empty{
+  min-height:160px;
+  display:grid;
+  align-items:center;
+  justify-items:center;
+  padding:20px;
+  color:var(--muted);
+  font-size:12px;
+  text-align:center;
+}
+.r27-research-kpis{margin:0 0 12px}
+.r27-research-kpis .kpi{
+  border:1px solid var(--border);
+  border-radius:0;
+  background:var(--surface);
+  box-shadow:none;
+}
+.r27-research-kpis .kpi-label{font-size:15px}
+.r27-research-kpis .kpi-value{font-size:29px}
+.r27-study-summary,
+.r27-comparison-panel,
+.r27-petri-report,
+.r27-study-limits{
+  margin:0 0 12px;
+  border:1px solid var(--border);
+  border-radius:0;
+  background:var(--surface);
+  box-shadow:none;
+  min-width:0;
+}
+.r27-study-summary .panel-body,
+.r27-petri-report .panel-body,
+.r27-study-limits .panel-body{padding:0 13px 12px}
+.r27-study-summary .panel-body >p,
+.r27-petri-report .panel-body >p{
+  font-size:12px;
+  line-height:1.5;
+  color:#46535f;
+  margin:5px 0 8px;
+}
+.r27-meta{margin:6px 0 0;gap:8px}
+.r27-meta span{
+  background:#f8fafb;
+  border-color:var(--soft-border);
+  border-radius:2px;
+  padding:5px 8px;
+  color:#53616e;
+}
+.r27-comparison-panel .panel-header{align-items:center;gap:12px;flex-wrap:wrap}
+.r27-comparison-panel .panel-body{padding:0 9px 9px}
+.r27-metric{margin:0;gap:7px;color:#53616e;font-size:11px}
+.r27-metric select{
+  min-width:170px;
+  height:28px;
+  padding:3px 8px;
+  font-size:11px;
+  border-radius:2px;
+  border-color:#bdc9d4;
+}
+.r27-comparison-panel .r27-chart{
+  padding:2px 3px 0;
+  border:0;
+  border-radius:0;
+  margin:0;
+  min-height:320px;
+}
+.r27-analytics{
+  gap:12px;
+  margin:0 0 12px;
+}
+.r27-analytics > .panel.r27-panel{
+  margin:0;
+  padding:0;
+  min-width:0;
+  border:1px solid var(--border);
+  border-radius:0;
+  background:var(--surface);
+  box-shadow:none;
+}
+.r27-analytics .r27-panel .panel-header{
+  padding:11px 13px 7px;
+  min-height:47px;
+}
+.r27-analytics .r27-panel .panel-header h2{
+  margin:0;
+  font-size:14px;
+  color:var(--imas-text);
+  font-weight:680;
+}
+.r27-analytics .r27-panel .panel-header p{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.35;
+}
+.r27-analytics .r27-panel .panel-body{padding:0 9px 9px}
+.r27-analytics .r27-table-scroll,
+.r27-analytics .r27-state-scroll{
+  border:1px solid var(--soft-border);
+  border-radius:0;
+}
+.r27-analytics .r27-table th{
+  background:#f8fafb;
+  color:#5c6975;
+}
+.r27-study-limits .r27-result-tools{
+  align-self:flex-start;
+  margin:0 0 0 10px;
+  flex-wrap:wrap;
+}
+.r27-study-limits .r27-result-tools button,
+.r27-settings-reset{
+  border-radius:3px;
+  border:1px solid #afbdca;
+  color:var(--navy);
+  background:#fff;
+  padding:6px 9px;
+  font-size:11px;
+  cursor:pointer;
+}
+.r27-study-limits .r27-result-tools button:hover,
+.r27-settings-reset:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+.r27-study-limits .r27-note{margin:0;line-height:1.5}
+.r27-study-empty{
+  min-height:120px;
+  font-size:12px;
+  padding:24px 15px;
+}
+.workspace > .r27-unified-settings.sidebar .r27-settings-intro{
+  font-size:11px;
+  line-height:1.45;
+  color:var(--muted);
+  margin:0 0 14px;
+}
+.workspace > .r27-unified-settings.sidebar .r27-first-settings h3{
+  margin:0 0 11px;
+  font-size:15px;
+}
+.workspace > .r27-unified-settings.sidebar .r27-first-settings{margin-top:0}
+.workspace > .r27-unified-settings.sidebar .sidebar-section{margin-top:8px}
+.workspace > .r27-unified-settings.sidebar .r27-setting-field input{
+  font-size:12px;
+  height:31px;
+  border-radius:3px;
+}
+@media(max-width:1250px){
+  .r27-study-overview{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)}
+  .r27-study-overview .r27-playback-controls{display:flex;flex-wrap:wrap}
+}
