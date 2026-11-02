@@ -1,5 +1,5 @@
 import fs, { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, chmod } from "node:fs/promises";
+import { mkdir, chmod, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -15,14 +15,20 @@ const runtimeMarker = path.join(runtime, ".complete");
 
 async function extractTar(source, destination) {
   await mkdir(destination, { recursive: true });
-  const tar = spawn("tar", ["--no-same-owner", "-xf", "-", "-C", destination]);
-  const completed = new Promise((resolve, reject) => {
-    tar.on("close", resolve);
-    tar.on("error", reject);
-  });
-  await pipeline(createReadStream(source), createBrotliDecompress(), tar.stdin);
-  const code = await completed;
-  if (code !== 0) throw new Error(`tar extraction failed: ${source}`);
+  // Extract from an intermediate file: piping into tar stdin can close
+  // prematurely under heavily loaded GitHub Actions containers.
+  const archive = path.join(runtime, path.basename(source) + ".tmp.tar");
+  await pipeline(createReadStream(source), createBrotliDecompress(), createWriteStream(archive));
+  try {
+    const tar = spawn("tar", ["--no-same-owner", "-xf", archive, "-C", destination], { stdio: "ignore" });
+    const code = await new Promise((resolve, reject) => {
+      tar.on("error", reject);
+      tar.on("close", resolve);
+    });
+    if (code !== 0) throw new Error("tar extraction failed: " + source + ", code " + code);
+  } finally {
+    await rm(archive, { force: true });
+  }
 }
 
 async function ensureBundledChromium() {
