@@ -41,7 +41,7 @@ export async function runBrowserExperiment(payload,onProgress=()=>{}){
  const results=Array(plan.total).fill(null);
  for(const item of previous?.completed||[])if(item&&item.index>=0&&item.index<plan.total)results[item.index]=item.result;
  const pending=results.map((r,i)=>r===null?i:null).filter(x=>x!==null);
- if(!pending.length){const result=assembleResult(plan,results);await storage("complete:"+key,result);return{result,cache_hit:true,state:"completed"};}
+ if(!pending.length){const result=assembleResult(plan,results);result.parallel_workers_used=0;await storage("complete:"+key,result);return{result,cache_hit:true,state:"completed"};}
  const cores=Number(globalThis.navigator?.hardwareConcurrency)||2;
  const requested=Number(payload.config?.parallel_workers)||0;
  const count=Math.max(1,Math.min(pending.length,4,requested>0?requested:Math.max(1,cores-1)));
@@ -56,7 +56,7 @@ export async function runBrowserExperiment(payload,onProgress=()=>{}){
  const save=async()=>storage("checkpoint:"+key,{completed:results.map((result,index)=>result===null?null:{index,result}).filter(Boolean)});
  const finish=async()=>{
   if(job.done)return;job.done=true;active=null;job.workers.forEach(w=>w.terminate());
-  try{const result=assembleResult(plan,results);await storage("complete:"+key,result);await storage("checkpoint:"+key,null);job.resolve({result,cache_hit:false,state:"completed"});}
+  try{const result=assembleResult(plan,results);if(plan.action!=="trace")result.parallel_workers_used=count;await storage("complete:"+key,result);await storage("checkpoint:"+key,null);job.resolve({result,cache_hit:false,state:"completed"});}
   catch(error){job.reject(error);}
  };
  const fail=(error)=>{if(job.done)return;job.done=true;active=null;job.workers.forEach(w=>w.terminate());job.reject(Error(String(error)));};
@@ -84,6 +84,7 @@ export async function stopBrowserExperiment(){
  if(!job.count){job.reject(Error("Расчет остановлен до получения результатов"));return true;}
  try{
   const completed=job.results.filter(Boolean),result=assembleResult(job.plan,completed);
+  if(job.plan.action!=="trace")result.parallel_workers_used=job.workers.length;
   // For a partial Monte-Carlo run ordering can be sparse; completed run data
   // are aggregated, while IDs are retained in the checkpoint for exact resume.
   result.partial=true;job.resolve({result,state:"stopped",cache_hit:false});
