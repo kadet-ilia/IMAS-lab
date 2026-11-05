@@ -306,8 +306,9 @@ for (let i=0; i<researchTabs.length; i++) {
   const currentChrome=await pageChromeSnapshot();
   const comparable=structure=>{
    const {geometry,...rest}=structure;
-   // Dimensions depend on content text; compare fixed column widths and shared chrome.
-   return {...rest,overview:{display:structure.overview.display,gap:structure.overview.gap}};
+   // Dimensions and runtime states vary; compare shared structure, not active/idle calculation state.
+   const mainParts=rest.mainParts.map(name=>name.includes("progress-strip")?name.replace(/\.(?:running|done)\b/g,""):name);
+   return {...rest,mainParts,overview:{display:structure.overview.display,gap:structure.overview.gap}};
   };
   const base=comparable(baselineChrome),actual=comparable(currentChrome);
   if(JSON.stringify(base)!==JSON.stringify(actual)){
