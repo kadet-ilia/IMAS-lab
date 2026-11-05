@@ -19,7 +19,7 @@ export const DEFAULTS={
  honest_quality:.92,byzantine_quality:.1,honest_noise_sigma:.2,observer_noise_sigma:.02,
  static_bias:4,subtle_bias:.65,collusion_bias:1.5,on_off_period:10,on_off_attack_steps:4,
  trust_window_steps:20,forgetting_factor:.95,initial_trust:.5,trust_prior_strength:2,
- minimum_weight:.05,reputation_damping:.85,isolation_threshold:.25,isolation_patience:3,
+ minimum_weight:.05,reputation_damping:.85,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
  minimum_evidence_steps:8,isolation_cooldown_steps:30,trim_each_side:10,
  clip_radius:1.25,safe_action_min:-2,safe_action_max:2,correctness_tolerance:.5,
  network_enabled:false,network_topology:"complete",network_edge_probability:.25,
@@ -235,7 +235,6 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  for(let t=0;t<c.n_steps;t++){
   const eligible=all(n).map(i=>!sybil[i]||t+1>=c.sybil_activation_step);
   for(let i=0;i<n;i++){if(!active[i]&&eligible[i]&&(sybil[i]&&until[i]<0||until[i]>=0&&until[i]<t)){active[i]=true;low[i]=0;}}
-  if(!active.some((x,i)=>x&&eligible[i])){const i=all(n).find(i=>!sybil[i]);active[i]=true;until[i]=-1;low[i]=0;}
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
   const proposed=samples(t,scenario,c,bad,sybil,r),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
@@ -265,7 +264,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
   for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
   trustWallMs+=performance.now()-evidenceT0;
-  if(t+1>=c.minimum_evidence_steps){
+  if(c.isolation_enabled&&t+1>=c.minimum_evidence_steps){
    for(let i=0;i<n;i++){
     low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
     if(running[i]&&low[i]>=c.isolation_patience){
@@ -299,7 +298,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       mae_to_truth:e.length?mean(e):null,rmse_to_truth:e.length?Math.sqrt(mean(e.map(x=>x*x))):null,
       bias:sgn.length?mean(sgn):null,nominal_band_rate:cover[method].length?mean(cover[method]):null,
       consensus_error:consensus[method].length?mean(consensus[method]):null,
-      detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
+      isolation_enabled:c.isolation_enabled,detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
       communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,
       delivery_ratio:ratio,simulation_wall_ms:performance.now()-startWall,aggregation_bundle_wall_ms:aggregateBundleWallMs,trust_evidence_wall_ms:trustWallMs,transport_wall_ms:transportWallMs,completed_steps:c.n_steps};
  });
