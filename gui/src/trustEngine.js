@@ -1,5 +1,6 @@
 import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 import {auditFactorialDesign,estimateFactorialContrasts,FACTORIAL_AUDIT_VERSION} from "./factorialAudit.js";
+import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./metricPassport.js";
 /**
  * IMAS_LaB_test — browser-only JavaScript port of experiment.py.
  *
@@ -533,22 +534,28 @@ export function makePlan(payload){
   }
  }throw Error("Неизвестный режим моделирования "+action);
 }
+function withMetricPassport(result){
+ const integrity=auditResultMetrics("trust",result);
+ if(!integrity.valid)throw Error("Контроль показателей доверия: "+integrity.issues.join("; "));
+ return {...result,metricPassport:passportForStudy("trust"),metricPassportVersion:METRIC_PASSPORT_VERSION,
+  metricIntegrity:integrity};
+}
 export function assembleResult(plan,completed){
  const {c,scenario,action,mode,tasks,total}=plan;const partial=completed.length<total;
- if(action==="trace")return completed[0]?.detail||simulateRun(c,scenario,0,0,true).result;
+ if(action==="trace")return withMetricPassport(completed[0]?.detail||simulateRun(c,scenario,0,0,true).result);
  const rows=completed.flatMap(x=>x.rows);
  if(action==="monte_carlo"){
   const paths=completed.map(x=>x.trajectory);
-  return {summary:summaryFromRuns(rows),runs:rows,trajectory_statistics:trajectoryStats(paths,c),
+  return withMetricPassport({summary:summaryFromRuns(rows),runs:rows,trajectory_statistics:trajectoryStats(paths,c),
   trajectory_statistics_definition:{center:"sample_mean_and_median",dispersion:"sample_standard_deviation",ddof:1,run_count:completed.length,requested_run_count:c.n_runs,bands:["mean ± 1s","mean ± 2s","P25–P75","P5–P95"],quantiles:[.05,.25,.5,.75,.95]},
-  bootstrap_comparisons:bootstrapComparisons(rows,c),distributions:distributionPayload(rows),configuration:configDetail(c),scenario,partial,completed_runs:completed.length,requested_runs:c.n_runs,resumed_runs:0,parallel_workers_used:1};
+  bootstrap_comparisons:bootstrapComparisons(rows,c),distributions:distributionPayload(rows),configuration:configDetail(c),scenario,partial,completed_runs:completed.length,requested_runs:c.n_runs,resumed_runs:0,parallel_workers_used:1});
  }
  if(mode==="ablation")
-  return summarizeAblation(plan,rows,partial,completed.length);
+  return withMetricPassport(summarizeAblation(plan,rows,partial,completed.length));
  if(mode==="one_factor"){
   const result=[];for(const f of [...new Set(tasks.map(x=>x.index))])for(const method of METHODS){const rr=rows.filter(x=>x.n_byzantine===f&&x.method===method);if(!rr.length)continue;
    result.push({n_byzantine:f,method,probability_correct:finiteMean(rr.map(x=>x.probability_correct)),rmse:rr.some(x=>good(x.rmse_to_truth))?finiteMean(rr.map(x=>x.rmse_to_truth)):null,detection_rate:finiteMean(rr.map(x=>x.detection_rate)),delivery_ratio:finiteMean(rr.map(x=>x.delivery_ratio))});}
-  return {mode,sensitivity:result,raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
+  return withMetricPassport({mode,sensitivity:result,raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1});
  }
  const results=[];for(const d of plan.designs)for(const method of METHODS){
   const rr=rows.filter(x=>x.design_index===d.index&&x.method===method);if(!rr.length)continue;
@@ -575,7 +582,7 @@ export function assembleResult(plan,completed){
   mainEffectsWithCI:withCI,confidenceLevel:.95,
   caveat:"Точечные эффекты оцениваются только при полном наборе ячеек. Интервал рассчитывается по вариации отдельных повторов внутри каждой ячейки (≥2 на ячейку), без учёта неопределённости самой модели, смешения высших взаимодействий или поправки на множественные сравнения."
  };
- return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,factorialUncertainty,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>(b.absolute_effect??-1)-(a.absolute_effect??-1)).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
+ return withMetricPassport({mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,factorialUncertainty,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>(b.absolute_effect??-1)-(a.absolute_effect??-1)).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1});
 }
 export function runTask(plan,task){
  const scenarioIndex=plan.action==="sensitivity"&&plan.mode==="factorial"?task.index:0;
