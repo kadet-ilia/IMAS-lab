@@ -3,7 +3,7 @@
  * Frequentist intervals represent finite Monte-Carlo sampling variation only.
  * They do not quantify model error, parameter uncertainty or external validity.
  */
-export const STATISTICS_VERSION="statistics-2027-1.0";
+export const STATISTICS_VERSION="statistics-2027-1.1";
 export const Z95=1.959963984540054;
 
 const quantile=(a,q)=>{
