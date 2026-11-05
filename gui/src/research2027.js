@@ -1,4 +1,5 @@
 import {wilson95,mean95,pairedDifference95,bootstrap95,pairedSignFlipP,holmAdjusted,STATISTICS_VERSION} from "./statistics2027.js";
+import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./metricPassport.js";
 /* IMAS-lab 2027: independent, seeded, synthetic research kernels.
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
@@ -310,7 +311,12 @@ export function validateStudy(id,raw={}){
  if(id==="misinformation"&&c.agents!==7)throw Error("Параметр agents: для информационного графа требуется N=7");
  return c;
 }
-export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
+export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);
+   const metricIntegrity=auditResultMetrics(id,result);
+   if(!metricIntegrity.valid)throw Error("Контроль показателей "+id+": "+metricIntegrity.issues.join("; "));
+   return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,
+    metricPassportVersion:METRIC_PASSPORT_VERSION,metricPassport:passportForStudy(id),metricIntegrity,
+    ...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
 export function statisticalIndicators(values){return quantileInfo(values);}
 
