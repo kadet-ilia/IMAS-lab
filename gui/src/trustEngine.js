@@ -103,12 +103,12 @@ export function validateConfig(value={}){
 }
 const all=(n)=>Array.from({length:n},(_,i)=>i);
 const makeMat=(n,value=0)=>Array.from({length:n},()=>Array(n).fill(value));
-function buildAdjacency(c,r,byzantine){
+export function buildAdjacency(c,r,byzantine){
  const n=c.n_agents+c.n_sybil_agents,a=makeMat(n,false);
  if(!c.network_enabled||c.network_topology==="complete"){for(let i=0;i<n;i++)for(let j=0;j<n;j++)a[i][j]=i!==j;return a;}
  const link=(i,j)=>{if(i!==j){a[i][j]=true;a[j][i]=true;}};
  if(c.network_topology==="ring")for(let i=0;i<n;i++)link(i,(i+1)%n);
- if(c.network_topology==="random"){for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(r.random()<c.network_edge_probability)link(i,j);for(let i=0;i<n;i++)link(i,(i+1)%n);}
+ if(c.network_topology==="random"){for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(r.random()<c.network_edge_probability)link(i,j);}
  if(c.network_topology==="small_world"){
   const half=Math.max(1,Math.floor(Math.min(c.small_world_neighbors,n-1)/2));
   for(let i=0;i<n;i++)for(let k=1;k<=half;k++)link(i,(i+k)%n);
@@ -198,16 +198,24 @@ export function observations(t,scenario,c,bad,active,labels,r,budget){
  return{matrix:e,stats:{attempted,delivered,lost,bandwidth_dropped:dropped}};
 }
 function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r){
- const n=active.length;if(!c.network_enabled)return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
+ const n=active.length;if(!c.network_enabled)return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,expired:0,backlogged:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
  const largest=[...comps].sort((a,b)=>b.length-a.length||a[0]-b[0])[0]||[],set=new Set(largest);
- let lost=0;for(const i of largest){if(r.random()<c.message_loss_probability){lost++;continue;}const delay=r.integer(c.message_delay_min_steps,c.message_delay_max_steps);queue.push({due:t+delay,source:i,value:proposals[i],delay});}
+ let lost=0;for(const i of largest){if(r.random()<c.message_loss_probability){lost++;continue;}const delay=r.integer(c.message_delay_min_steps,c.message_delay_max_steps);queue.push({due:t+delay,sent:t,source:i,value:proposals[i],delay});}
  queue.sort((a,b)=>a.due-b.due);
- let budget=c.bandwidth_messages_per_step,delivered=0,dropped=0;const delayList=[],retain=[];
- for(const q of queue){if(q.due<=t&&budget>0){lastValues[q.source]=q.value;lastSteps[q.source]=t;budget--;delivered++;delayList.push(q.delay);}
-  else{retain.push(q);if(q.due<=t)dropped++;}}
+ let budget=c.bandwidth_messages_per_step,delivered=0,expired=0;const delayList=[],retain=[];
+ for(const q of queue){
+  // A queued message is not dropped simply because bandwidth is exhausted.
+  // Expiration is measured from its original production tick, not delivery tick.
+  if(t-q.sent>c.max_message_staleness_steps){expired++;continue;}
+  if(q.due<=t&&budget>0){
+   lastValues[q.source]=q.value;lastSteps[q.source]=q.sent;budget--;delivered++;delayList.push(t-q.sent);
+  }else retain.push(q);
+ }
  queue.splice(0,queue.length,...retain);
+ const backlogged=queue.filter(q=>q.due<=t).length;
  return{values:[...lastValues],available:all(n).map(i=>set.has(i)&&good(lastValues[i])&&t-lastSteps[i]<=c.max_message_staleness_steps),
- budget,stats:{attempted:largest.length,delivered,lost,bandwidth_dropped:dropped,component_size:largest.length,queued:queue.length,mean_delay:delayList.length?mean(delayList):0}};
+ budget,stats:{attempted:largest.length,delivered,lost,expired,backlogged,
+ bandwidth_dropped:0,component_size:largest.length,queued:queue.length,mean_delay:delayList.length?mean(delayList):0}};
 }
 const finiteMean=a=>mean(valid(a));
 function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,effective_agent_count:c.n_agents+c.n_sybil_agents,effective_byzantine_count:c.n_byzantine+c.n_sybil_agents};}
@@ -220,7 +228,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  const hist=[],queue=[],lastValues=Array(n).fill(NaN),lastSteps=Array(n).fill(-1e9);
  let previous=Object.fromEntries(METHODS.map(m=>[m,null]));
  const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
- let attempted=0,delivered=0,lost=0,dropped=0;
+ let attempted=0,delivered=0,lost=0,dropped=0,expired=0,queued=0;
  const series=[],network_series=[],reputationHistory=[],states=[],events=[];
  const t0=performance.now();
  for(let t=0;t<c.n_steps;t++){
@@ -246,7 +254,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   }
   const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget);
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
-  attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;
+  attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
   const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
   for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
   if(t+1>=c.minimum_evidence_steps){
@@ -260,11 +268,11 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
    }
   }
   const row={step:t+1,truth:c.desired_action,active_agents:running.filter((x,i)=>x&&active[i]).length,available_agents:tx.available.filter(Boolean).length,isolated_agents:eligible.filter((x,i)=>x&&!active[i]).length,
-    largest_component:tx.stats.component_size,messages_delivered:tx.stats.delivered+evidence.stats.delivered,messages_lost:tx.stats.lost+evidence.stats.lost,messages_bandwidth_dropped:tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped,
+    largest_component:tx.stats.component_size,messages_delivered:tx.stats.delivered+evidence.stats.delivered,messages_lost:tx.stats.lost+evidence.stats.lost,messages_bandwidth_dropped:tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped,messages_expired:tx.stats.expired,messages_backlogged:tx.stats.backlogged,messages_queued:tx.stats.queued,
     partition_active:Number(partition),attack_active:Number(activeAttack(t,scenario,c)),...decisions};
   series.push(row);
   if(detail){
-   network_series.push({...row,proposal_queue:tx.stats.queued,mean_message_delay:tx.stats.mean_delay,delivery_ratio:row.messages_delivered/Math.max(1,tx.stats.attempted+evidence.stats.attempted)});
+   network_series.push({...row,proposal_queue:tx.stats.queued,mean_message_delay:tx.stats.mean_delay,delivery_ratio:delivered/Math.max(1,attempted),message_balance:attempted-delivered-lost-dropped-expired-queued});
    for(let i=0;i<n;i++){
     reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],localTrust:scores[i],eigenReputation:eigen[i],isolationScore:newScores[i],isolationThreshold:c.isolation_threshold,byzantine:bad[i],sybil:sybil[i],active:active[i]});
     states.push({step:t+1,agent:i+1,state:sybil[i]&&!eligible[i]?"dormant":!active[i]?"isolated":sybil[i]?"sybil":bad[i]?"byzantine":"honest"});
@@ -284,17 +292,17 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       bias:sgn.length?mean(sgn):null,coverage95:cover[method].length?mean(cover[method]):null,
       consensus_error:consensus[method].length?mean(consensus[method]):null,
       detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
-      communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,
+      communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,
       delivery_ratio:ratio,aggregation_seconds:(performance.now()-t0)/1000,completed_steps:c.n_steps};
  });
  if(!detail)return{rows,trajectory:series};
  return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,reputation:reputationHistory,states,events,
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,coverage95:rows[i].coverage95})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i]})),
-   summary:{detection_rate:detectionRate,mean_detection_time:meanTime,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
+   summary:{detection_rate:detectionRate,mean_detection_time:meanTime,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:attempted-delivered-lost-dropped-expired-queued,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
    configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
 }
-const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","coverage95","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","delivery_ratio","aggregation_seconds","completed_steps"];
+const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","coverage95","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","aggregation_seconds","completed_steps"];
 export function summaryFromRuns(rows){
  const out=[];for(const method of METHODS){const group=rows.filter(x=>x.method===method);if(!group.length)continue;
  const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):0;row[m+"_ci95"]=v.length?1.96*(v.length>1?stdev(v):0)/Math.sqrt(v.length):null;}out.push(row);}
