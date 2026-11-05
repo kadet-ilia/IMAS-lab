@@ -218,3 +218,19 @@ test("UP-11 timing labels differentiate entire simulation from aggregation bundl
   assert.ok(!Object.hasOwn(row,"aggregation_seconds"));
  }
 });
+
+
+test("UP-10 explicitly labels nominal error-band hits as diagnostic, not a confidence interval",()=>{
+ const x=simulateRun({...cfg,network_enabled:false},"static_bias",0,0,true);
+ for(const row of x.rows){
+  assert.equal(Object.hasOwn(row,"coverage95"),false);
+  assert.ok(row.nominal_band_rate>=0&&row.nominal_band_rate<=1);
+ }
+ for(const metric of x.result.metrics){
+  assert.equal(Object.hasOwn(metric,"coverage95"),false);
+  assert.ok(metric.nominal_band_rate>=0&&metric.nominal_band_rate<=1);
+ }
+ const p=runActionSync({action:"monte_carlo",scenario:"static_bias",config:cfg});
+ assert.ok(p.summary.every(row=>Object.hasOwn(row,"nominal_band_rate_mean")));
+ assert.ok(p.runs.every(row=>!Object.hasOwn(row,"coverage95")));
+});
