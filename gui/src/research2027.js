@@ -38,6 +38,21 @@ export function spreadOneTick(current,edges,uniforms,p){
  edges.forEach(([a,b],i)=>{if(snapshot.has(a)&&!snapshot.has(b)&&uniforms[i]<p){newly.add(b);activeEdges.push([a,b]);}});
  return {next:new Set([...snapshot,...newly]),newly,activeEdges};
 }
+/**
+ * Uses only observation values, their observed age and known noise scale.
+ * Hidden malicious/stale flags and the true state are deliberately ignored.
+ * This is a synthetic, not externally calibrated, reliability estimator.
+ */
+export function estimateReliabilityFromObservations(observations,noiseScale=.2){
+ const values=observations.map(o=>o.x),center=pct(values,.5);
+ const mad=pct(values.map(x=>Math.abs(x-center)),.5);
+ const scale=Math.max(.15,1.4826*mad,noiseScale);
+ return observations.map(o=>{
+  const residual=Math.abs(o.x-center);
+  const observableAge=Math.max(1,Number.isFinite(o.d)?o.d:1);
+  return Math.max(.01,1/(1+residual/scale)/(1+.25*(observableAge-1)));
+ });
+}
 const quantileInfo=x=>({mean:avg(x),p05:pct(x,.05),p50:pct(x,.5),p95:pct(x,.95)});
 function graph(n,p,r){const edges=[];for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j&&r.random()<p)edges.push([i,j]);return edges;}
 const fixedEdges8=[[0,1],[0,2],[1,3],[1,4],[2,4],[2,5],[3,6],[4,6],[4,7],[5,7],[6,7]];
@@ -49,19 +64,25 @@ const scenarioSettings=[
  {name:"Несвоевременные сообщения",noise:1.2,missing:0.9,delay:0.55}
 ];
 export function runUncertainty(c){
- const r=rng(c.seed);const rows=[],samples=[];const names=["Знак среднего","Робастное согласование","Оракульные веса (верхняя оценка)"];
- for(const s of scenarioSettings){const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0}));for(let k=0;k<c.runs;k++){
+ const r=rng(c.seed);const rows=[],samples=[],oracleBenchmark=[];const names=["Знак среднего","Робастное согласование","Оценка по наблюдаемым признакам"];
+ for(const s of scenarioSettings){const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
   const truth=r.random()<.5?-1:1;const obs=[];
-  for(let i=0;i<c.agents;i++){if(r.random()<clamp(c.loss*s.missing,0,.9))continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,w:reliability,d:stale?3:1});}
+  for(let i=0;i<c.agents;i++){if(r.random()<clamp(c.loss*s.missing,0,.9))continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,oracleWeight:reliability,d:stale?3:1});}
   const values=obs.map(o=>o.x).sort((a,b)=>a-b);const trim=Math.min(Math.floor(values.length*.16),Math.floor((values.length-1)/2));
   const trimmed=values.slice(trim,values.length-trim);
-  const decisions=[avg(values),avg(trimmed),obs.length?obs.reduce((a,o)=>a+o.x*o.w,0)/obs.reduce((a,o)=>a+o.w,0):0];
+  const weights=estimateReliabilityFromObservations(obs,c.signalNoise*s.noise);
+  const decisions=[avg(values),avg(trimmed),obs.length?obs.reduce((a,o,i)=>a+o.x*weights[i],0)/weights.reduce((a,b)=>a+b,0):0];
+  const oracleEstimate=obs.length?obs.reduce((a,o)=>a+o.x*o.oracleWeight,0)/obs.reduce((a,o)=>a+o.oracleWeight,0):0;
+  if(obs.length>=Math.ceil(c.agents*.3)&&Math.abs(oracleEstimate)>=c.threshold){
+   oracle.accepted++;if(Math.sign(oracleEstimate)===truth)oracle.correct++;
+  }
   decisions.forEach((v,j)=>{const ready=obs.length>=Math.ceil(c.agents*.3)&&Math.abs(v)>=c.threshold;
    if(ready){acc[j].accepted++;if(Math.sign(v)===truth)acc[j].correct++;else acc[j].wrong++;acc[j].delay+=avg(obs.map(o=>o.d));}
   });
  }
- acc.forEach((m,j)=>{const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,correctUnconditional:m.correct/c.runs,accuracy:m.accepted?m.correct/m.accepted:null,errorRate:m.wrong/c.runs,latency:m.accepted?m.delay/m.accepted:0};rows.push(row);samples.push(row);});}
- return {rows,summary:"Оценка качества коллективного решения при четырёх видах информационной неопределённости. Точность среди принятых решений следует анализировать совместно с долей отказов.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Оценка достоверности имитируется условными весами, известными генератору; это оптимистичный контрольный вариант, а не доказательство реализуемости идеального детектора."};
+ acc.forEach((m,j)=>{const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,correctUnconditional:m.correct/c.runs,accuracy:m.accepted?m.correct/m.accepted:null,errorRate:m.wrong/c.runs,latency:m.accepted?m.delay/m.accepted:null};rows.push(row);samples.push(row);});
+ oracleBenchmark.push({scenario:s.name,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});}
+ return {rows,oracleBenchmark,summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
 export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
  const infected=new Set(initial),history=[infected.size];let available=new Set(initial);
@@ -136,24 +157,25 @@ export function runCascade(c){
  }}
  return {rows,summary:"Оценка прямого и каскадного ущерба при поражении каждого из восьми функционально зависимых агентов (11 ориентированных связей). CVaR95 — средняя потеря в верхнем хвосте распределения.",chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",limits:"Условные коэффициенты критичности и интенсивности распространения не являются оценками денежных потерь или эксплуатационных вероятностей."};
 }
-function tmean(x){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(1,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
+function tmean(x,trimEachSide=3){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(trimEachSide,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
 export function runMisinformation(c){
- const r=rng(c.seed),rows=[],methods=["Обычное среднее","Взвешивание по доверию","Усечённое среднее"];
+ const r=rng(c.seed),rows=[],methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
  for(let bad=0;bad<=Math.min(3,c.agents-1);bad++){const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0,exposed:0}));
   for(let k=0;k<c.runs;k++){
    const truth=r.random()<.5?1:-1;const seeds=new Set();while(seeds.size<bad)seeds.add(sample(r,c.agents));const exposed=new Set(seeds);
    for(let t=0;t<3;t++){const eventTape=fixedEdges7.map(()=>r.random());const tick=spreadOneTick(exposed,fixedEdges7,eventTape,c.spread);exposed.clear();for(const v of tick.next)exposed.add(v);}
    const points=[];for(let i=0;i<c.agents;i++){const compromised=seeds.has(i),misled=exposed.has(i);
     const x=truth+r.normal()*c.noise+(compromised?-truth*c.attackBias:misled?-truth*c.attackBias*.7:0);
-    const trust=compromised?.08:misled?.55:.94;points.push({x,trust});
+    points.push({x});
    }
-   const votes=[avg(points.map(x=>x.x)),points.reduce((a,x)=>a+x.x*x.trust,0)/points.reduce((a,x)=>a+x.trust,0),tmean(points.map(x=>x.x))];
+   const weights=estimateReliabilityFromObservations(points,c.noise);
+   const votes=[avg(points.map(x=>x.x)),points.reduce((a,x,i)=>a+x.x*weights[i],0)/weights.reduce((a,b)=>a+b,0),tmean(points.map(x=>x.x),3)];
    votes.forEach((v,j)=>{const m=stats[j];if(Math.abs(v)<c.threshold)m.abstain++;else if(Math.sign(v)===truth)m.correct++;else m.wrong++;
      m.deviation+=Math.abs(v-truth);m.exposed+=exposed.size/c.agents;});
   }
   stats.forEach((s,j)=>rows.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,method:methods[j],runs:c.runs,wrongProbability:s.wrong/c.runs,correctProbability:s.correct/c.runs,abstentionProbability:s.abstain/c.runs,meanDeviation:s.deviation/c.runs,meanExposedFraction:s.exposed/c.runs,risk:s.wrong/c.runs*1}));
  }
- return {rows,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Истинность и качество сообщений известны генератору; оценка доверия задана условно. Результат нельзя переносить на реальные ИМАС без независимой калибровки."};
+ return {rows,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки."};
 }
 export function validateStudy(id,raw={}){
  const def=STUDY_DEFS.find(s=>s.id===id);if(!def)throw Error("Неизвестный эксперимент");
