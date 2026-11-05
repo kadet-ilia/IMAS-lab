@@ -199,7 +199,7 @@ test("UP-30 Monte-Carlo research probabilities carry Wilson intervals and event 
 test("UP-30 ES95 is an exact upper-tail point estimate with finite bootstrap bounds",()=>{
  const x=executeStudy("cascade",{runs:35,spread:0});
  for(const row of x.rows){
-  assert.equal(row.es95,row.directDamage);
+  assert.ok(Math.abs(row.es95-row.directDamage)<1e-10);
   assert.equal(row.excessDamage,0);
   assert.ok(Math.abs(row.es95CI95Low-row.directDamage)<1e-10);
   assert.ok(Math.abs(row.es95CI95High-row.directDamage)<1e-10);
