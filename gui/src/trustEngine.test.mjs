@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
- simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency
+ simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
@@ -276,7 +276,9 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  const full=runActionSync(payload);
  assert.equal(full.ablation_rows.length,12);
  assert.equal(full.ablation_contrasts.length,26);
- assert.equal(full.design.strictCommonRandomNumbers,false);
+ assert.equal(full.design.strictCommonRandomNumbers,true);
+ assert.match(full.design.exogenousEventScheme,/keyed-by-seed-run/);
+ assert.ok(plan.tasks.every(task=>task.c.paired_exogenous_events===true));
  assert.equal(full.partial,false);
  assert.equal(full.completed_tasks,40);
  assert.ok(full.ablation_rows.every(x=>x.runs===10));
@@ -298,4 +300,45 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  assert.equal(partial.partial,true);
  assert.equal(partial.completed_tasks,2);
  assert.ok(partial.ablation_contrasts.some(x=>x.n_pairs===0));
+});
+
+
+test("UP-07 strict common exogenous draws do not depend on policy/attack branch",()=>{
+ const seeds=[7,123456],stages=EXOGENOUS_EVENT_STAGES;
+ assert.deepEqual(stages,["proposal","transport","observation","evidenceLoss","evidencePriority"]);
+ for(const seed of seeds)for(const stage of stages)for(const t of [0,1,14])for(const source of [0,3,6]){
+  const fixed=Array.from({length:6},()=>exogenousEventRng(seed,11,stage,t,source,2).random());
+  const matching=Array.from({length:6},()=>exogenousEventRng(seed,11,stage,t,source,2).random());
+  assert.deepEqual(fixed,matching);
+  assert.notDeepEqual(fixed,Array.from({length:6},()=>exogenousEventRng(seed,12,stage,t,source,2).random()));
+ }
+ assert.throws(()=>exogenousEventRng(1,2,"unknown",3));
+});
+test("UP-07 active on-off periods coincide exactly with persistent attacks when duty cycle is 100%",()=>{
+ const base={...cfg,paired_exogenous_events:true,network_enabled:true,network_topology:"ring",
+  message_loss_probability:.18,message_delay_min_steps:0,message_delay_max_steps:2,
+  bandwidth_messages_per_step:12,minimum_evidence_steps:1,isolation_threshold:.92,
+  on_off_period:5,on_off_attack_steps:5};
+ for(const policy of [false,true]){
+  const c={...base,isolation_enabled:policy};
+  const onoff=simulateRun(c,"on_off",4,0,true);
+  const constant=simulateRun(c,"static_bias",4,0,true);
+  assert.deepEqual(onoff.result.series,constant.result.series);
+  assert.deepEqual(onoff.result.events,constant.result.events);
+  assert.deepEqual(onoff.result.network_series,constant.result.network_series);
+  assert.deepEqual(onoff.result.reputation,constant.result.reputation);
+  assert.deepEqual(onoff.result.agents,constant.result.agents);
+ }
+});
+test("UP-07 keyed observation evidence stays invariant for shared witnesses despite unrelated isolation",()=>{
+ const c=validateConfig({...cfg,paired_exogenous_events:true,network_enabled:true,message_loss_probability:0,
+  bandwidth_messages_per_step:999,attack_start_step:3});
+ const bad=Array(c.n_agents).fill(false);bad[3]=true;
+ const base=Array(c.n_agents).fill(true),reduced=base.slice();reduced[8]=false;
+ const labels=Array(c.n_agents).fill(0);
+ const first=observations(5,"on_off",c,bad,base,labels,createRng(1),999,7);
+ const second=observations(5,"on_off",c,bad,reduced,labels,createRng(1000),999,7);
+ for(let i=0;i<c.n_agents;i++)for(let j=0;j<c.n_agents;j++){
+  if(i!==8&&j!==8)assert.equal(first.matrix[i][j],second.matrix[i][j],"common witness "+i+","+j);
+ }
 });
