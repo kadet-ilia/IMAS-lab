@@ -23,7 +23,7 @@ export const DEFAULTS={
  minimum_weight:.05,reputation_damping:.85,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
  minimum_evidence_steps:8,isolation_cooldown_steps:30,trim_each_side:10,
  clip_radius:1.25,safe_action_min:-2,safe_action_max:2,correctness_tolerance:.5,
- network_enabled:false,network_topology:"complete",network_edge_probability:.25,
+ paired_exogenous_events:false,network_enabled:false,network_topology:"complete",network_edge_probability:.25,
  small_world_neighbors:4,small_world_rewire_probability:.1,
  message_loss_probability:0,message_delay_min_steps:0,message_delay_max_steps:0,
  max_message_staleness_steps:5,bandwidth_messages_per_step:100000,
@@ -44,6 +44,19 @@ export function createRng(...parts){let s=rngSeed(...parts),spare=null;const ran
 const normal=()=>{if(spare!==null){const v=spare;spare=null;return v;}const r=Math.sqrt(-2*Math.log(Math.max(random(),1e-12))),t=2*Math.PI*random();spare=r*Math.sin(t);return r*Math.cos(t);};
 const integer=(a,b)=>a+Math.floor(random()*(b-a+1));const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=integer(0,i);[b[i],b[j]]=[b[j],b[i]];}return b;};
 return{random,normal,integer,shuffle,choice:(a,n)=>shuffle(a).slice(0,n)};}
+const EXOGENOUS_STAGES=Object.freeze({proposal:1101,transport:2202,observation:3303,evidenceLoss:4404,evidencePriority:5505});
+/**
+ * Counter-keyed reproducible exogenous events (not a mutable shared RNG).
+ * Identical (seed, run, stage, step, observer, target) addresses yield identical
+ * independent random streams irrespective of agent activity or isolation.
+ * The stochastic graph/initial Byzantine identity is seeded separately but
+ * identically for all ablation arms with the same run index.
+ */
+export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
+ if(!Object.hasOwn(EXOGENOUS_STAGES,stage))throw Error("Неизвестная стадия экзогенного события");
+ return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
+}
+export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
 export const TRUST_MODEL_VERSION="trust-js-2.3.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
@@ -178,11 +191,12 @@ function samples(t,scenario,c,bad,sybil,r){
  if(c.n_sybil_agents){const common=v+c.attack_direction*c.collusion_bias+.005*r.normal();for(let i=c.n_agents;i<n;i++)x[i]=common+.002*r.normal();}
  return x;
 }
-export function observations(t,scenario,c,bad,active,labels,r,budget){
+export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0){
  const n=bad.length,attack=activeAttack(t,scenario,c),e=makeMat(n,NaN);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   const quality=attack&&bad[j]?c.byzantine_quality:c.honest_quality;
-  let v=attack&&bad[i]?(bad[j]?.98:.02):clamp((r.random()<quality?1:0)+r.normal()*c.observer_noise_sigma,0,1);
+  const eventRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"observation",t,i,j):r;
+  let v=attack&&bad[i]?(bad[j]?.98:.02):clamp((eventRng.random()<quality?1:0)+eventRng.normal()*c.observer_noise_sigma,0,1);
   if(i===j)v=c.honest_quality;
   e[i][j]=v;
  }
@@ -191,18 +205,38 @@ export function observations(t,scenario,c,bad,active,labels,r,budget){
  const candidates=[];
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   if(!(active[i]&&active[j]&&labels[i]>=0&&labels[i]===labels[j])){e[i][j]=NaN;continue;}
-  attempted++;if(i!==j&&r.random()<c.message_loss_probability){e[i][j]=NaN;lost++;}else candidates.push([i,j]);
+  attempted++;
+  const lossRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"evidenceLoss",t,i,j):r;
+  if(i!==j&&lossRng.random()<c.message_loss_probability){e[i][j]=NaN;lost++;}else candidates.push([i,j]);
  }
  let keep=candidates;
- if(candidates.length>budget){const selected=new Set(r.choice(all(candidates.length),Math.max(0,budget)));keep=candidates.filter((x,i)=>selected.has(i));dropped=candidates.length-keep.length;}
+ if(candidates.length>budget){
+  if(c.paired_exogenous_events){
+   // Per-edge priorities are fixed even if other candidates vanish after isolation.
+   const ranked=candidates.map(([i,j])=>({id:i*n+j,rank:exogenousEventRng(c.seed,runIndex,"evidencePriority",t,i,j).random()}))
+    .sort((a,b)=>a.rank-b.rank||a.id-b.id);
+   const selected=new Set(ranked.slice(0,Math.max(0,budget)).map(x=>x.id));
+   keep=candidates.filter(([i,j])=>selected.has(i*n+j));
+  }else{
+   const selected=new Set(r.choice(all(candidates.length),Math.max(0,budget)));
+   keep=candidates.filter((x,i)=>selected.has(i));
+  }
+  dropped=candidates.length-keep.length;
+ }
  const allowed=new Set(keep.map(([i,j])=>i*n+j));for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(!allowed.has(i*n+j))e[i][j]=NaN;
  delivered=keep.length;
  return{matrix:e,stats:{attempted,delivered,lost,bandwidth_dropped:dropped}};
 }
-function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r){
+function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r,runIndex=0){
  const n=active.length;if(!c.network_enabled)return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,expired:0,backlogged:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
  const largest=[...comps].sort((a,b)=>b.length-a.length||a[0]-b[0])[0]||[],set=new Set(largest);
- let lost=0;for(const i of largest){if(r.random()<c.message_loss_probability){lost++;continue;}const delay=r.integer(c.message_delay_min_steps,c.message_delay_max_steps);queue.push({due:t+delay,sent:t,source:i,value:proposals[i],delay});}
+ let lost=0;
+ for(const i of largest){
+  const eventRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"transport",t,i):r;
+  if(eventRng.random()<c.message_loss_probability){lost++;continue;}
+  const delay=eventRng.integer(c.message_delay_min_steps,c.message_delay_max_steps);
+  queue.push({due:t+delay,sent:t,source:i,value:proposals[i],delay});
+ }
  queue.sort((a,b)=>a.due-b.due);
  let budget=c.bandwidth_messages_per_step,delivered=0,expired=0;const delayList=[],retain=[];
  for(const q of queue){
@@ -238,11 +272,12 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   for(let i=0;i<n;i++){if(!active[i]&&eligible[i]&&(sybil[i]&&until[i]<0||until[i]>=0&&until[i]<t)){active[i]=true;low[i]=0;}}
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
-  const proposed=samples(t,scenario,c,bad,sybil,r),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
+  const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
+  const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
   const transportT0=performance.now();
-  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r);
+  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex);
   transportWallMs+=performance.now()-transportT0;
   const aggregateT0=performance.now();
   const decisions=aggregate(tx.values,rep,tx.available,c,previous);
@@ -259,7 +294,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
   }
   const evidenceT0=performance.now();
-  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget);
+  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex);
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
   const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
@@ -450,8 +485,10 @@ function summarizeAblation(plan,rows,partial,completed){
   completed_tasks:completed,requested_tasks:plan.total,parallel_workers_used:1,
   design:{controller:["isolation_enabled=false","isolation_enabled=true"],
    schedule:["on_off (cyclic)","persistent (static_bias)"],methods:METHODS,
-   sameSeed:true,sameInitialBadAgents:true,strictCommonRandomNumbers:false,
-   disclaimer:"Отдельные действия контроллера меняют активность агентов и потребление генератора. Парные индексы и начальные идентичности совпадают, но случайные события после расхождения траекторий не идентичны. Интервалы не скорректированы на множественные сравнения; результат носит поисковый характер."}};
+   sameSeed:true,sameInitialBadAgents:true,strictCommonRandomNumbers:true,
+   exogenousEventScheme:"keyed-by-seed-run-stage-step-source-target-v1",
+   scope:"Внешние шумы, транспортные решения и свидетельства для совпадающих адресов событий; распределения эндогенных состояний могут различаться.",
+   disclaimer:"Экзогенные случайные события привязаны к фиксированным адресам (seed, run, стадия, такт, агент, цель) и совпадают между ветвями при одинаковых адресах. При этом активные множества и история изоляции закономерно различаются. Парная оценка условна по модели; интервалы не скорректированы на множественные сравнения. Нельзя переносить эффект на реальные ИМАС без калибровки."}};
 }
 export function makePlan(payload){
  const c=validateConfig(payload.config),scenario=payload.scenario||"collusion";
@@ -468,7 +505,7 @@ export function makePlan(payload){
   }
   if(mode==="ablation"){
     const tasks=ABLATION_ARMS.flatMap((arm,armIndex)=>all(c.n_sensitivity_runs).map(run=>({
-      index:armIndex*c.n_sensitivity_runs+run,c:{...c,isolation_enabled:arm.isolation_enabled},
+      index:armIndex*c.n_sensitivity_runs+run,c:{...c,isolation_enabled:arm.isolation_enabled,paired_exogenous_events:true},
       scenario:arm.scenario,run,arm
     })));
     return {action,c,scenario,mode,tasks,total:tasks.length};
