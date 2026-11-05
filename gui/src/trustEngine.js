@@ -221,7 +221,7 @@ function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r){
 const finiteMean=a=>mean(valid(a));
 function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,effective_agent_count:c.n_agents+c.n_sybil_agents,effective_byzantine_count:c.n_byzantine+c.n_sybil_agents};}
 export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false){
- const c=validateConfig(rawConfig),n=c.n_agents+c.n_sybil_agents,r=createRng(c.seed,scenarioIndex,runIndex);
+ const c=validateConfig(rawConfig),startWall=performance.now(),n=c.n_agents+c.n_sybil_agents,r=createRng(c.seed,scenarioIndex,runIndex);
  const sybil=all(n).map(i=>i>=c.n_agents),bad=sybil.slice(),badIds=r.choice(all(c.n_agents),c.n_byzantine);badIds.forEach(i=>bad[i]=true);
  const a=buildAdjacency(c,r,bad),groups=Array(n).fill(0);
  r.choice(all(n),clamp(Math.round(n*c.partition_fraction),1,n-1)).forEach(i=>groups[i]=1);
@@ -231,17 +231,22 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
  let attempted=0,delivered=0,lost=0,dropped=0,expired=0,queued=0;
  const series=[],network_series=[],reputationHistory=[],states=[],events=[];
- const t0=performance.now();
+ let aggregateBundleWallMs=0,trustWallMs=0,transportWallMs=0;
  for(let t=0;t<c.n_steps;t++){
   const eligible=all(n).map(i=>!sybil[i]||t+1>=c.sybil_activation_step);
   for(let i=0;i<n;i++){if(!active[i]&&eligible[i]&&(sybil[i]&&until[i]<0||until[i]>=0&&until[i]<t)){active[i]=true;low[i]=0;}}
   if(!active.some((x,i)=>x&&eligible[i])){const i=all(n).find(i=>!sybil[i]);active[i]=true;until[i]=-1;low[i]=0;}
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
-  const proposed=samples(t,scenario,c,bad,sybil,r),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
+  const proposed=samples(t,scenario,c,bad,sybil,r),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
-  const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);
-  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r),decisions=aggregate(tx.values,rep,tx.available,c,previous);previous=decisions;
+  const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
+  const transportT0=performance.now();
+  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r);
+  transportWallMs+=performance.now()-transportT0;
+  const aggregateT0=performance.now();
+  const decisions=aggregate(tx.values,rep,tx.available,c,previous);
+  aggregateBundleWallMs+=performance.now()-aggregateT0;previous=decisions;
   const honest=all(n).filter(i=>tx.available[i]&&!bad[i]),reference=honest.length?median(honest.map(i=>tx.values[i])):null;
   const half=honest.length?1.96*c.honest_noise_sigma/Math.sqrt(honest.length):null;
   for(const m of METHODS){
@@ -253,11 +258,13 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     if(good(reference))consensus[m].push(Math.abs(decisions[m]-reference));
     if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
   }
+  const evidenceT0=performance.now();
   const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget);
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
   const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
   for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
+  trustWallMs+=performance.now()-evidenceT0;
   if(t+1>=c.minimum_evidence_steps){
    for(let i=0;i<n;i++){
     low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
@@ -294,7 +301,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       consensus_error:consensus[method].length?mean(consensus[method]):null,
       detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
       communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,
-      delivery_ratio:ratio,aggregation_seconds:(performance.now()-t0)/1000,completed_steps:c.n_steps};
+      delivery_ratio:ratio,simulation_wall_ms:performance.now()-startWall,aggregation_bundle_wall_ms:aggregateBundleWallMs,trust_evidence_wall_ms:trustWallMs,transport_wall_ms:transportWallMs,completed_steps:c.n_steps};
  });
  if(!detail)return{rows,trajectory:series};
  return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,reputation:reputationHistory,states,events,
@@ -303,7 +310,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:attempted-delivered-lost-dropped-expired-queued,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
    configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
 }
-const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","coverage95","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","aggregation_seconds","completed_steps"];
+const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","coverage95","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
  const out=[];for(const method of METHODS){const group=rows.filter(x=>x.method===method);if(!group.length)continue;
  const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):0;row[m+"_ci95"]=v.length?1.96*(v.length>1?stdev(v):0)/Math.sqrt(v.length):null;}out.push(row);}
