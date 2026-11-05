@@ -28,7 +28,7 @@ test("UP-23 truncated BFS is never allowed to claim bounded safety",()=>{
  const complete=runPetri(validateStudy("petri",{...params,stateLimit:50000}));
  const reference=petriReference({...params,detectionDelay:10});
  assert.equal(complete.verdict,reference.verdict);
- const cut=runPetri(validateStudy("petri",{...params,stateLimit:5}));
+ const cut=runPetri({...validateStudy("petri",{...params,stateLimit:100}),stateLimit:5}); // Probe internal BFS limit, below public UI minimum.
  assert.equal(cut.verdict,"inconclusive");
  assert.ok(cut.enqueued>cut.processed);
  assert.equal(cut.witness.length,0);
