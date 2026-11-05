@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,propagate,estimateReliabilityFromObservations,RESEARCH_MODEL_VERSION} from "./research2027.js";
+import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,propagate,runPetri,estimateReliabilityFromObservations,RESEARCH_MODEL_VERSION} from "./research2027.js";
 
 const small={
  uncertainty:{runs:20,agents:21},
@@ -162,4 +162,17 @@ test("UP-28 predefined trim for seven agents withstands three extreme outliers i
  assert.ok(robust);
  assert.equal(robust.wrongProbability,0);
  assert.equal(robust.abstentionProbability,0);
+});
+
+
+test("UP-23 Petri BFS exact exhaustion is complete, unfinished frontier is inconclusive",()=>{
+ const config=validateStudy("petri",{steps:1,criticalCount:7,detectionDelay:10});
+ const complete=runPetri({...config,stateLimit:100});
+ const exact=runPetri({...config,stateLimit:complete.processed});
+ assert.equal(complete.verdict,"unreachable_within_bound");
+ assert.equal(exact.verdict,"unreachable_within_bound");
+ assert.equal(exact.processed,complete.processed);
+ const limited=runPetri({...config,stateLimit:Math.max(1,complete.processed-1)});
+ assert.equal(limited.verdict,"inconclusive");
+ assert.ok(limited.enqueued>limited.processed);
 });
