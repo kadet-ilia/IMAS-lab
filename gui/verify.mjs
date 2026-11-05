@@ -204,6 +204,11 @@ for(const [id,name] of trustModes){
   if((await page.locator("main[data-study='trust'] > .imas-experiment-heading").count())!==1)throw Error("Trust heading missing after mode switch: "+name);
   await assertStandardWorkspace(name);
 }
+await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
+const ablationMode=page.locator(".sensitivity-action select");
+await ablationMode.selectOption("ablation");
+if((await ablationMode.inputValue())!=="ablation")throw Error("UP-07/09 ablation mode missing from sensitivity control");
+if(!(await page.getByText("Запустите абляционный эксперимент.").count()))throw Error("UP-07/09 ablation panel not mounted");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 if((await page.getByRole("combobox",{name:"Режим исследования"}).count())!==0)throw Error("Trust mode selector should not remain duplicated in sidebar");
 
@@ -373,6 +378,14 @@ for (let i=0; i<researchTabs.length; i++) {
   }
   if((await topbar.getByText("Автономный локальный эксперимент").count())!==0){
     throw Error(researchTabs[i]+": legacy study-specific topbar must be removed");
+  }
+  if(researchValues[i]==="study-petri"){
+    const policy=page.getByRole("combobox",{name:"Политика изоляции"});
+    if((await policy.inputValue())!=="0")throw Error("UP-22 default Petri policy must remain nondeterministic");
+    await policy.selectOption("1");
+    if((await policy.inputValue())!=="1")throw Error("UP-22 mandatory Petri controller selection does not persist");
+    await topbar.getByRole("button",{name:"Сбросить",exact:true}).click();
+    if((await policy.inputValue())!=="0")throw Error("UP-22 Petri reset did not restore optional policy");
   }
 
 }
