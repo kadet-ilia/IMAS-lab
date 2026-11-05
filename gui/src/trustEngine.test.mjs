@@ -190,3 +190,31 @@ test("UP-13 design uses a verified 32-run resolution-VI regular fraction",()=>{
  assert.equal(complete.designs.length,64);
  assert.throws(()=>validateConfig({...cfg,factorial_max_points:8}),/factorial_max_points/);
 });
+
+
+test("UP-08/31 Monte-Carlo with no deliveries leaves conditional statistics undefined",()=>{
+ const noData={...cfg,n_runs:3,network_enabled:true,network_topology:"ring",
+  message_loss_probability:1,minimum_evidence_steps:18};
+ const run=runActionSync({action:"monte_carlo",scenario:"static_bias",config:noData});
+ assert.equal(run.trajectory_statistics.length,noData.n_steps);
+ for(const trace of run.trajectory_statistics){
+  assert.equal(trace.proposed_robust_mean,null);
+  assert.equal(trace.proposed_robust_band90,null);
+  assert.equal(trace.proposed_robust_available_runs,0);
+ }
+ for(const method of run.summary){
+  assert.equal(method.rmse_to_truth_mean,null);
+  assert.equal(method.rmse_to_truth_ci95,null);
+  assert.equal(method.rmse_to_truth_n,0);
+  assert.equal(method.probability_correct_mean,0);
+ }
+});
+test("UP-11 timing labels differentiate entire simulation from aggregation bundle",()=>{
+ const run=simulateRun({...cfg,n_runs:1},"static_bias");
+ for(const row of run.rows){
+  assert.ok(Number.isFinite(row.simulation_wall_ms)&&row.simulation_wall_ms>=0);
+  assert.ok(Number.isFinite(row.aggregation_bundle_wall_ms)&&row.aggregation_bundle_wall_ms>=0);
+  assert.ok(row.simulation_wall_ms>=row.aggregation_bundle_wall_ms);
+  assert.ok(!Object.hasOwn(row,"aggregation_seconds"));
+ }
+});
