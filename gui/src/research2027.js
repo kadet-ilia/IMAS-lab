@@ -134,8 +134,8 @@ export function runPetri(c){
  const start={mask:1,isolated:0,t:0,trace:["t=0: скомпрометирован A1"]};let q=[start],index=0,seen=new Set(["1:0:0"]),reachable=false,witness=[],statesByTime=Array(T+1).fill(0),truncated=false;
  const add=(mask,isolated,t,trace)=>{const key=[mask,isolated,t].join(":");if(!seen.has(key)){seen.add(key);q.push({mask,isolated,t,trace});}};
  const popcount=mask=>{let n=0;while(mask){n+=mask&1;mask>>>=1;}return n;};
- while(index<q.length){const state=q[index++];statesByTime[state.t]++;if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
-  if(index>=c.stateLimit){truncated=true;break;}if(state.t>=T)continue;
+ while(index<q.length&&index<c.stateLimit){const state=q[index++];statesByTime[state.t]++;if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
+  if(state.t>=T)continue;
   // Timed transitions: transmission and isolation each consume one simulated tick.
   const next=state.t+1;
   add(state.mask,state.isolated,next,[...state.trace,"t="+next+": ожидание"]);
@@ -144,8 +144,10 @@ export function runPetri(c){
   if(next>=c.detectionDelay){for(let v=0;v<n;v++)if((state.mask&(1<<v))&&!(state.isolated&(1<<v)))
    add(state.mask,state.isolated|(1<<v),next,[...state.trace,"t="+next+": изоляция A"+(v+1)]);}
  }
+ if(!reachable&&index<q.length)truncated=true;
+ const verdict=reachable?"reachable":truncated?"inconclusive":"unreachable_within_bound";
  const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
- return {rows,witness,statesByTime,edges,summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости."};
+ return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости."};
 }
 export function runCascade(c){
  const r=rng(c.seed),rows=[],impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3.0].map(x=>x*c.lossScale),conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
