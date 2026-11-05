@@ -409,7 +409,10 @@ function summarizeAblation(plan,rows,partial,completed){
    conditional_rmse:possible.length?mean(possible):null,conditional_rmse_n:possible.length,
    detection_rate:finiteMean(group.map(x=>x.detection_rate)),
    false_isolations:finiteMean(group.map(x=>x.false_isolations)),
-   attack_active_steps:finiteMean(group.map(x=>x.attack_active_steps))
+   attack_active_steps:finiteMean(group.map(x=>x.attack_active_steps)),
+   attack_on_correct:group.some(x=>good(x.attack_on_correct))?finiteMean(group.map(x=>x.attack_on_correct)):null,
+   attack_off_correct:group.some(x=>good(x.attack_off_correct))?finiteMean(group.map(x=>x.attack_off_correct)):null,
+   attack_off_steps:finiteMean(group.map(x=>x.attack_off_steps))
   });
  }
  const key=(a,m,r)=>a+"/"+m+"/"+r;
@@ -522,10 +525,15 @@ export function runTask(plan,task){
  const value=simulateRun(task.c,task.scenario||plan.scenario,task.run,scenarioIndex,plan.action==="trace");
  if(plan.action==="trace")return{detail:value.result,rows:value.rows,trajectory:value.trajectory};
  const rows=value.rows.map(row=>{
-  if(plan.action==="sensitivity"&&plan.mode==="ablation")
+  if(plan.action==="sensitivity"&&plan.mode==="ablation"){
+   const activeSteps=value.trajectory.filter(step=>step.attack_active);
+   const pauseSteps=value.trajectory.filter(step=>step.step>=task.c.attack_start_step&&!step.attack_active);
+   const pCorrect=steps=>steps.length?steps.filter(step=>good(step[row.method])&&Math.abs(step[row.method]-task.c.desired_action)<=task.c.correctness_tolerance).length/steps.length:null;
    return {...row,arm_id:task.arm.id,attack_schedule:task.arm.schedule,
      isolation_enabled:task.arm.isolation_enabled,
-     attack_active_steps:value.trajectory.filter(step=>step.attack_active).length};
+     attack_active_steps:activeSteps.length,attack_off_steps:pauseSteps.length,
+     attack_on_correct:pCorrect(activeSteps),attack_off_correct:pCorrect(pauseSteps)};
+  }
   if(plan.action==="sensitivity"&&plan.mode==="one_factor")return{...row,n_byzantine:task.index};
   if(plan.action==="sensitivity"&&plan.mode==="factorial"){
    const out={...row,design_index:task.index};for(const [f,v]of Object.entries(task.design.values))out["factor_"+f]=v;
