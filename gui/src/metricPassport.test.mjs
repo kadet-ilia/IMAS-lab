@@ -39,7 +39,7 @@ test("UP-04 regression: malformed accounting is rejected instead of exported unm
  const validation=auditResultMetrics("misinformation",changed);
  assert.equal(validation.valid,false);
  assert.match(validation.issues.join(" " ),/outcome partition/);
- const trust=runActionSync({action:"trace",config:{n_agents:11,n_byzantine:2,n_steps:10,trim_each_side:2}});
+ const trust=runActionSync({action:"trace",config:{n_agents:11,n_byzantine:2,n_steps:10,attack_start_step:3,trim_each_side:2}});
  assert.equal(auditResultMetrics("trust",trust).valid,true);
  assert.ok(trust.metricPassport.length>=4);
  assert.ok(trust.metricIntegrity.valid);
