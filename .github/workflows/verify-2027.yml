@@ -1,5 +1,12 @@
 name: Verify IMAS_LaB_test (browser-only)
 on:
+  push:
+    branches:
+      - 'IMAS_LaB_test'
+    paths:
+      - 'gui/**'
+      - 'README.md'
+      - '.github/workflows/verify-2027.yml'
   pull_request:
     paths:
       - 'gui/**'
