@@ -14,7 +14,8 @@ const PARAMETERS={
  spread:["pₛ — вероятность распространения","Вероятность передачи нарушения по ребру на одном такте.",0,1,.01],
  steps:["T — горизонт, тактов","Число модельных временных тактов.",1,20,1],
  criticalFraction:["q — опасная доля","Минимальная доля поражённых агентов, соответствующая опасному состоянию.",0,1,.01],
- detectionDelay:["τ — задержка изоляции","Первый такт, после которого доступен переход изоляции.",0,20,1],
+ detectionDelay:["τ — начало возможности изоляции","В необязательной модели разрешает, но не требует переход изоляции. В приоритетной идеализированной модели принудительная одновременная изоляция всех обнаруженных агентов начинается с этого такта.",0,20,1],
+ isolationPolicy:["Политика изоляции","Необязательная — проверка EF при недетерминированных переходах. Приоритетная — идеальный контроллер: обнаруживает всех заражённых и принудительно изолирует их до любой передачи, начиная с такта τ.",0,1,1],
  criticalCount:["K — критическое число","Число поражённых агентов для критической маркировки.",1,100,1],
  stateLimit:["M — предел маркировок","Максимальное количество состояний для ограниченной проверки.",100,200000,100],
  lossScale:["k — масштаб ущерба","Положительный коэффициент условного ущерба. При нуле относительный критерий опасности не определён.",.01,100,.01],
@@ -38,7 +39,7 @@ const GROUPS={
  ],
  petri:[
   ["Основные параметры",["agents","runs"]],
-  ["Маркировки и переходы",["steps","criticalCount","detectionDelay"]],
+  ["Маркировки и переходы",["steps","criticalCount","detectionDelay","isolationPolicy"]],
   ["Формальная верификация",["stateLimit"]],
  ],
  cascade:[
@@ -58,7 +59,11 @@ function ResearchField({name,value,onChange,disabled=false}){
  const [title,description,min,max,step]=PARAMETERS[name]||[name,"",undefined,undefined,1];
  return <label className="field r27-setting-field">
    <span className="field-label"><span>{title}</span><ExperimentParameterTooltip text={description}/></span>
-   <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?7:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>
+   {name==="isolationPolicy"?<select aria-label={title} value={value} disabled={disabled} onChange={e=>onChange(name,Number(e.target.value))}>
+     <option value={0}>Необязательная (недетерминированная)</option>
+     <option value={1}>Приоритетная принудительная (идеальная)</option>
+    </select>:
+   <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?7:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>}
    {disabled?<small>Фиксированная конфигурация исследовательского графа</small>:null}
  </label>;
 }
