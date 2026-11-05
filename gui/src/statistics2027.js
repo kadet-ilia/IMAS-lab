@@ -56,3 +56,51 @@ export function pairedDifference95(first,second,seed=1,replicates=300){
  const result=bootstrap95(differences,a=>a.reduce((s,v)=>s+v,0)/a.length,seed,replicates);
  return {...result,baseline:"second",direction:"first-minus-second",paired:true};
 }
+
+
+/**
+ * Two-sided paired sign-flip reference test for a zero mean contrast.
+ * Exact for n<=14. Larger arrays use a seeded Monte Carlo randomisation test.
+ * Validity requires pairwise sign-exchangeability under the null; a shared
+ * exogenous RNG by itself does not establish that hypothesis.
+ */
+export function pairedSignFlipP(differences,seed=1,replicates=4095){
+ if(!Array.isArray(differences)||differences.length<2||
+    differences.some(x=>!Number.isFinite(x)))throw Error("Sign-flip: требуется не менее двух конечных пар");
+ if(!Number.isInteger(replicates)||replicates<100||replicates>20000)
+  throw Error("Sign-flip: число перестановок 100..20000");
+ const n=differences.length,observed=Math.abs(differences.reduce((a,b)=>a+b,0));
+ const tolerance=1e-12*Math.max(1,observed,differences.reduce((a,v)=>a+Math.abs(v),0));
+ if(differences.every(x=>Math.abs(x)<=tolerance))return {p:1,n,replicates:0,method:"degenerate-zero"};
+ if(n<=14){
+  let extreme=0;
+  const total=2**n;
+  for(let bits=0;bits<total;bits++){
+   let signed=0;
+   for(let i=0;i<n;i++)signed+=(bits&(1<<i)?1:-1)*differences[i];
+   if(Math.abs(signed)+tolerance>=observed)extreme++;
+  }
+  return {p:extreme/total,n,replicates:total,method:"exact-paired-sign-flip"};
+ }
+ const random=seeded(seed);
+ let extreme=0;
+ for(let b=0;b<replicates;b++){
+  let signed=0;
+  for(const difference of differences)signed+=(random()<.5?-1:1)*difference;
+  if(Math.abs(signed)+tolerance>=observed)extreme++;
+ }
+ return {p:(extreme+1)/(replicates+1),n,replicates,method:"monte-carlo-paired-sign-flip"};
+}
+/** Familywise error rate control, Holm (1979) step-down. */
+export function holmAdjusted(pValues){
+ if(!Array.isArray(pValues)||pValues.some(p=>!Number.isFinite(p)||p<0||p>1))
+  throw Error("Holm: каждое p-значение должно лежать в [0,1]");
+ const m=pValues.length,sorted=pValues.map((p,i)=>({p,i})).sort((a,b)=>a.p-b.p||a.i-b.i);
+ const adjusted=new Array(m);let ceiling=0;
+ for(let rank=0;rank<m;rank++){
+  const {p,i}=sorted[rank];
+  ceiling=Math.max(ceiling,Math.min(1,(m-rank)*p));
+  adjusted[i]=ceiling;
+ }
+ return adjusted;
+}
