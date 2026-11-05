@@ -280,6 +280,17 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  assert.equal(full.partial,false);
  assert.equal(full.completed_tasks,40);
  assert.ok(full.ablation_rows.every(x=>x.runs===10));
+ for(const row of full.ablation_rows){
+  assert.ok(Number.isFinite(row.attack_on_correct)&&row.attack_on_correct>=0&&row.attack_on_correct<=1);
+  if(row.attack_schedule==="persistent"){
+   assert.equal(row.attack_off_correct,null);
+   assert.equal(row.attack_off_steps,0);
+  }else{
+   assert.ok(Number.isFinite(row.attack_off_correct));
+   assert.ok(row.attack_off_steps>0);
+   assert.ok(row.attack_off_correct>=0&&row.attack_off_correct<=1);
+  }
+ }
  assert.ok(full.ablation_contrasts.every(x=>x.n_pairs===10));
  assert.ok(full.ablation_contrasts.every(x=>x.ci95_low!==null));
  assert.deepEqual(full.ablation_rows,runActionSync(payload).ablation_rows);
