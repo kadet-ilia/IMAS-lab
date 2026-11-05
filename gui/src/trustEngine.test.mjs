@@ -6,7 +6,7 @@ import {
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
- n_runs:4,n_sensitivity_runs:2,factorial_runs_per_point:1,factorial_max_points:8,
+ n_runs:4,n_sensitivity_runs:2,factorial_runs_per_point:1,factorial_max_points:32,
  bootstrap_samples:100,minimum_evidence_steps:3,isolation_patience:2,
  trim_each_side:2,trust_window_steps:6,parallel_workers:0};
 
@@ -77,7 +77,7 @@ test("one-factor sensitivity contract, browser-compatible task resumption",()=>{
 test("fractional factorial sensitivity returns main and pair effects",()=>{
  const out=runActionSync({action:"sensitivity",sensitivity_mode:"factorial",scenario:"collusion",config:cfg});
  assert.equal(out.mode,"factorial");
- assert.equal(out.design_points.length,24);
+ assert.equal(out.design_points.length,96);
  assert.ok(out.main_effects.length>=6);
  assert.ok(out.interaction_effects.length>0);
  assert.equal(out.partial,false);
@@ -171,4 +171,22 @@ test("UP-12 delayed and expired messages cannot silently become fresh observatio
  assert.ok(x.result.network_series.every(row=>row.available_agents===0));
  assert.ok(x.result.summary.communication_expired>0);
  assert.ok(x.result.series.every(row=>row.proposed_robust===null));
+});
+
+
+test("UP-13 design uses a verified 32-run resolution-VI regular fraction",()=>{
+ const plan=makePlan({action:"sensitivity",sensitivity_mode:"factorial",scenario:"collusion",config:cfg});
+ assert.equal(plan.designs.length,32);
+ assert.equal(plan.designMetadata.definingRelation,"I=ABCDEF");
+ const coded=plan.designs.map(x=>x.coded);
+ for(const line of coded)assert.equal(line.reduce((p,v)=>p*v,1),1);
+ const columns=coded.map(x=>[1,...x,...x.flatMap((value,i)=>x.slice(i+1).map(other=>value*other))]);
+ assert.equal(columns[0].length,22);
+ for(let i=0;i<22;i++)for(let j=0;j<i;j++){
+  const dot=columns.reduce((sum,x)=>sum+x[i]*x[j],0);
+  assert.equal(dot,0,"main / 2-factor design columns must be orthogonal");
+ }
+ const complete=makePlan({action:"sensitivity",sensitivity_mode:"factorial",scenario:"collusion",config:{...cfg,factorial_max_points:64}});
+ assert.equal(complete.designs.length,64);
+ assert.throws(()=>validateConfig({...cfg,factorial_max_points:8}),/factorial_max_points/);
 });
