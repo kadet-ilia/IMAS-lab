@@ -123,6 +123,24 @@ async function assertStandardWorkspace(section) {
 }
 await assertStandardWorkspace("Расчет доверия");
 
+// UP-02: editing is transactional. Replacing N or T must never mutate f, trim,
+// attack start, or other fields, including during intermediate typing.
+const inputN=page.getByRole("spinbutton",{name:"N — число легитимных агентов"});
+const inputF=page.getByRole("spinbutton",{name:"f — число византийских агентов"});
+const inputT=page.getByRole("spinbutton",{name:"Число шагов (T)"});
+const inputAttack=page.getByRole("spinbutton",{name:"Время начала атаки (шаг)"});
+const initialF=await inputF.inputValue(),initialAttack=await inputAttack.inputValue();
+await inputN.fill("15");await inputN.press("Tab");
+if((await inputN.inputValue())!=="15"||(await inputF.inputValue())!==initialF)
+ throw Error("UP-02: editing N silently rewrote f");
+await inputN.fill("50");await inputN.press("Tab");
+await inputT.fill("3"); // Temporary intermediate input, without committing it.
+await inputT.fill("300");await inputT.press("Tab");
+if((await inputT.inputValue())!=="300"||(await inputAttack.inputValue())!==initialAttack)
+ throw Error("UP-02: editing T silently rewrote attack_start_step");
+await inputT.fill("200");await inputT.press("Tab");
+
+
 
 // Compare the actual structural shell and computed design tokens, not only class names.
 async function pageChromeSnapshot(){
