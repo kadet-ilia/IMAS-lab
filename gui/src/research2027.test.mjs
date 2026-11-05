@@ -255,3 +255,14 @@ test("UP-26/30 cascade paired comparisons have identical outcomes when η=0",()=
  }
  assert.deepEqual(x.pairedRuns,executeStudy("cascade",{runs:60,spread:.53,defenseFactor:0,seed:149}).pairedRuns);
 });
+
+
+test("UP-17 displayed observation age is not mislabeled end-to-end latency",()=>{
+ const x=executeStudy("uncertainty",{runs:30,loss:0,corruption:0,signalNoise:0,threshold:0});
+ for(const row of x.rows){
+  assert.equal(Object.hasOwn(row,"latency"),false);
+  assert.ok(row.meanObservationAge>=1&&row.meanObservationAge<=3);
+ }
+ const none=executeStudy("uncertainty",{runs:30,loss:0,signalNoise:0,corruption:0,threshold:2});
+ assert.ok(none.rows.every(row=>row.meanObservationAge===null));
+});
