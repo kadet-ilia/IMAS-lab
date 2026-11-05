@@ -433,6 +433,29 @@ const report = {
   screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot, research: researchScreenshot },
 };
 
+// UP-35: exercise the full Vite/React → Worker pool → four-arm ablation
+// route, not merely the mode dropdown. Keep the run deliberately small.
+await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
+await page.locator("aside.sidebar summary").filter({hasText:"Дополнительно"}).click();
+const field=async(label,value)=>{
+ const control=page.getByRole("spinbutton",{name:label,exact:true});
+ await control.fill(String(value));await control.press("Tab");
+};
+await field("Усечение с каждой стороны",2);
+await field("f — число византийских агентов",2);
+await field("N — число легитимных агентов",11);
+await field("Число шагов (T)",20);
+await field("Время начала атаки (шаг)",3);
+await page.locator("aside.sidebar summary").filter({hasText:"Статистика и вычисления"}).click();
+await field("Прогонов на точку чувствительности",2);
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Чувствительность"}).click();
+await page.locator(".sensitivity-action select").selectOption("ablation");
+await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
+await page.getByText("Абляционный эксперимент: режим атаки × управляющая изоляция",{exact:true}).waitFor({timeout:45000});
+report.ablationRows=await page.locator("section.panel").filter({hasText:"Абляционный эксперимент: режим атаки × управляющая изоляция"}).locator("tbody tr").count();
+report.ablationWorkerSmoke=report.ablationRows===12;
+if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×3 ablation rows from Web Workers, got "+report.ablationRows);
+
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
