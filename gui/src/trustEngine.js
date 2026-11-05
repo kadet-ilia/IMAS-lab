@@ -297,7 +297,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       abstention_probability:1-mean(availableDecision[method]),
       accuracy_accepted:e.length?sum(correct[method])/e.length:null,
       mae_to_truth:e.length?mean(e):null,rmse_to_truth:e.length?Math.sqrt(mean(e.map(x=>x*x))):null,
-      bias:sgn.length?mean(sgn):null,coverage95:cover[method].length?mean(cover[method]):null,
+      bias:sgn.length?mean(sgn):null,nominal_band_rate:cover[method].length?mean(cover[method]):null,
       consensus_error:consensus[method].length?mean(consensus[method]):null,
       detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
       communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,
@@ -305,12 +305,12 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  });
  if(!detail)return{rows,trajectory:series};
  return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,reputation:reputationHistory,states,events,
-   metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,coverage95:rows[i].coverage95})),
+   metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,nominal_band_rate:rows[i].nominal_band_rate})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i]})),
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:attempted-delivered-lost-dropped-expired-queued,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
    configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
 }
-const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","coverage95","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
+const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
  const out=[];for(const method of METHODS){const group=rows.filter(x=>x.method===method);if(!group.length)continue;
  const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):null;row[m+"_ci95"]=v.length>1?1.96*stdev(v)/Math.sqrt(v.length):null;row[m+"_n"]=v.length;}out.push(row);}
