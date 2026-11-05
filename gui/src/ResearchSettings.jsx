@@ -17,7 +17,7 @@ const PARAMETERS={
  detectionDelay:["τ — задержка изоляции","Первый такт, после которого доступен переход изоляции.",0,20,1],
  criticalCount:["K — критическое число","Число поражённых агентов для критической маркировки.",1,100,1],
  stateLimit:["M — предел маркировок","Максимальное количество состояний для ограниченной проверки.",100,200000,100],
- lossScale:["k — масштаб ущерба","Масштаб условных потерь. Не является валютной единицей.",0,100,.1],
+ lossScale:["k — масштаб ущерба","Положительный коэффициент условного ущерба. При нуле относительный критерий опасности не определён.",.01,100,.01],
  defenseFactor:["η — эффективность защиты","Коэффициент снижения интенсивности распространения.",0,1,.01],
  noise:["σ — СКО шума оценок","Стандартное отклонение исходных оценок агентов.",0,5,.01],
  attackBias:["b — смещение нарушителя","Модуль смещения предложений скомпрометированных агентов.",0,10,.1]
@@ -55,7 +55,7 @@ function ResearchField({name,value,onChange,disabled=false}){
  const [title,description,min,max,step]=PARAMETERS[name]||[name,"",undefined,undefined,1];
  return <label className="field r27-setting-field">
    <span className="field-label"><span>{title}</span><ExperimentParameterTooltip text={description}/></span>
-   <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?undefined:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>
+   <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?7:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>
    {disabled?<small>Фиксированная конфигурация исследовательского графа</small>:null}
  </label>;
 }
@@ -63,7 +63,7 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
  const def=STUDY_DEFS.find(s=>s.id===studyId);
  const groups=GROUPS[studyId]||[];
  const fixed=(studyId==="cascade"||studyId==="misinformation");
- const entries=(fields)=><>{fields.map((key)=><ResearchField key={key} name={key} value={config[key]} disabled={(fixed&&key==="agents")||(studyId==="petri"&&key==="runs")} onChange={onChange}/>)}</>;
+ const entries=(fields)=><>{fields.map((key)=><ResearchField key={key} name={key} value={config[key]} disabled={((fixed||studyId==="petri")&&key==="agents")||(studyId==="petri"&&key==="runs")} onChange={onChange}/>)}</>;
  return <aside className="sidebar r27-unified-settings">
   <div className="sidebar-scroll">
    <h2>Параметры эксперимента</h2>
