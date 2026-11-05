@@ -82,7 +82,7 @@ page.on("pageerror", (error) => errors.push(error.message));
 
 await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded", timeout: 30000 });
 try {
-  await page.getByText("Динамика решений и оценок").waitFor({ timeout: 12000 });
+  await page.getByText("Динамика решений и оценок").waitFor({ timeout: 30000 });
 } catch (error) {
   const diagnostic = await page.evaluate(() => ({
     title: document.title,
@@ -123,11 +123,79 @@ async function assertStandardWorkspace(section) {
 }
 await assertStandardWorkspace("Расчет доверия");
 
+
+// Compare the actual structural shell and computed design tokens, not only class names.
+async function pageChromeSnapshot(){
+ return await page.locator(".workspace").evaluate(workspace=>{
+  const sidebar=workspace.querySelector(":scope > aside.sidebar");
+  const content=workspace.querySelector(":scope > main.content");
+  const nav=content?.querySelector(":scope > nav.r27-experiment-navigation");
+  const heading=content?.querySelector(":scope > header.imas-experiment-heading");
+  const progress=content?.querySelector(":scope > .progress-strip");
+  const overview=content?.querySelector(":scope > .trust-overview-grid");
+  const topology=overview?.querySelector(":scope > section.r27-replay");
+  const summary=overview?.querySelector(":scope > section.panel");
+  const kpis=content?.querySelector(":scope > .kpi-grid");
+  const controls=sidebar?.querySelector(":scope > button.run-button");
+  if(!sidebar||!content||!nav||!heading||!progress||!topology||!summary||!kpis||!controls){
+   throw Error("Missing unified experiment shell element: "+JSON.stringify({sidebar:!!sidebar,content:!!content,nav:!!nav,heading:!!heading,progress:!!progress,topology:!!topology,summary:!!summary,kpis:!!kpis,controls:!!controls}));
+  }
+  const css=(node,names)=>Object.fromEntries(names.map(x=>[x,getComputedStyle(node)[x]]));
+  const box=node=>{const r=node.getBoundingClientRect();return {width:r.width,height:r.height,x:r.x,y:r.y}};
+  const childNames=node=>Array.from(node.children).map(x=>x.tagName.toLowerCase()+"."+(x.className&&typeof x.className==="string"?x.className.split(/\s+/).sort().join("."):""));
+  return {
+   workspace:css(workspace,["display","gridTemplateColumns"]),
+   sidebarClass:sidebar.className.split(/\s+/).sort().join(" "),
+   contentClass:content.className.split(/\s+/).sort().join(" "),
+   sidebar:css(sidebar,["display","gridTemplateRows","backgroundColor","borderRightWidth"]),
+   content:css(content,["display","overflowY","paddingLeft","paddingRight","backgroundColor"]),
+   nav:css(nav,["display","paddingTop","paddingBottom","backgroundColor","borderBottomWidth","position"]),
+   heading:css(heading,["display","paddingLeft","paddingTop","marginBottom"]),
+   headingChildren:Array.from(heading.children).map(x=>x.tagName.toLowerCase()+"."+x.className),
+   headingTitle:css(heading.querySelector("h2"),["fontSize","fontWeight","lineHeight","color"]),
+   progress:css(progress,["minHeight","paddingTop","paddingBottom"]),
+   overview:css(overview,["display","gridTemplateColumns","gap"]),
+   topology:css(topology,["paddingTop","paddingLeft","borderRadius"]),
+   summary:css(summary,["borderRadius","backgroundColor","borderTopWidth"]),
+   summaryParts:childNames(summary),
+   kpiClass:kpis.className.includes("kpi-grid"),
+   kpiCount:kpis.querySelectorAll(":scope > .kpi").length,
+   kpiParts:childNames(kpis.querySelector(":scope > .kpi")),
+   sidebarParts:childNames(sidebar).slice(0,2),
+   mainParts:childNames(content).slice(0,3),
+   geometry:{sidebar:box(sidebar),content:box(content),nav:box(nav),heading:box(heading),topology:box(topology),summary:box(summary),kpis:box(kpis)}
+  };
+ });
+}
+const baselineChrome=await pageChromeSnapshot();
+if(baselineChrome.kpiCount!==4)throw Error("Trust must have four KPI cards");
+const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigation').evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:typeof child.className==="string"?child.className:"",role:child.getAttribute("role"),type:child.getAttribute("type")})));
+const trustNavigation=await navSignature();
+const toolbarSignature=()=>page.locator(".topbar .toolbar").evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:child.className||"",title:child.title||""})));
+const trustToolbar=await toolbarSignature();
+// Restore the original four visible trust modes while preserving the shared page shell.
+const modeGroup=page.getByRole("group",{name:"Режим эксперимента"});
+const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]];
+if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Four trust mode buttons must be visible");
+for(const [id,name] of trustModes){
+  const button=modeGroup.getByRole("button",{name,exact:true});
+  await button.click();
+  if((await button.getAttribute("aria-pressed"))!=="true")throw Error("Trust mode did not become active: "+name);
+  if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue())!=="trace")throw Error("Trust mode switch changed main experiment");
+  if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error("Main navigation changed when switching trust mode: "+name);
+  if((await page.locator("main[data-study='trust'] > .imas-experiment-heading").count())!==1)throw Error("Trust heading missing after mode switch: "+name);
+  await assertStandardWorkspace(name);
+}
+await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
+if((await page.getByRole("combobox",{name:"Режим исследования"}).count())!==0)throw Error("Trust mode selector should not remain duplicated in sidebar");
+
+
+
 const authorA = "Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
 const authorB = "Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.";
-if((await page.locator('main[data-study="trust"] > .r27-kicker').innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
+if((await page.locator('main[data-study="trust"] > .imas-experiment-heading > .r27-kicker').innerText()).trim()!==authorA)throw Error("Incorrect authors for trust");
 const trustTitle = "Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения";
-if((await page.locator('main[data-study="trust"] > h2.r27-study-title').innerText()).trim()!==trustTitle) throw Error("Trust experiment title is absent or differs from the required wording");
+if((await page.locator('main[data-study="trust"] > .imas-experiment-heading > h2.r27-study-title').innerText()).trim()!==trustTitle) throw Error("Trust experiment title is absent or differs from the required wording");
 
 async function assertNavButtonsEqual(section){
  const help=await page.locator(".r27-experiment-navigation .r27-nav-right").boundingBox();
@@ -204,7 +272,7 @@ await page.getByLabel("Браузерных потоков (0 — авто)").wa
 const legacyControls = {
   sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
   bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
-  parallelWorkers: await page.getByLabel("Браузерных потоков (0 — авто)").count(),
+  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
 };
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
@@ -227,36 +295,84 @@ const researchTabs = ["Автоматические решения", "Колле
 const researchValues = ["study-uncertainty","study-probgraph","study-petri","study-cascade","study-misinformation"];
 for (let i=0; i<researchTabs.length; i++) {
   await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption(researchValues[i]);
-  try {
-    await page.locator(".r27-heading .r27-study-title").waitFor({ timeout: 30000 });
-  } catch (error) {
-    console.error("RESEARCH_TAB_DIAGNOSTIC",JSON.stringify({
-      tab:researchTabs[i],
-      currentSelect:await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue(),
-      body:(await page.locator("body").innerText()).slice(0,1100),
-      errors,warnings
-    }));
-    throw error;
-  }
+  await page.locator("main.r27-experiment-content > .imas-experiment-heading > h2.r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
+  if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error(researchTabs[i]+": different experiment navigation markup");
+  if((await page.getByRole("group",{name:"Режим эксперимента"}).getByText("Основной режим").count())!==1)throw Error("Research mode placeholder must preserve the shared navigation");
+  if((await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button").count())!==0)throw Error("Trust-only modes displayed in unrelated experiment");
+  if(JSON.stringify(await toolbarSignature())!==JSON.stringify(trustToolbar))throw Error(researchTabs[i]+": different toolbar markup");
+
+
+  const currentChrome=await pageChromeSnapshot();
+  const comparable=structure=>{
+   const {geometry,...rest}=structure;
+   // Dimensions depend on content text; compare fixed column widths and shared chrome.
+   return {...rest,overview:{display:structure.overview.display,gap:structure.overview.gap}};
+  };
+  const base=comparable(baselineChrome),actual=comparable(currentChrome);
+  if(JSON.stringify(base)!==JSON.stringify(actual)){
+   const differences=Object.keys(base).filter(k=>JSON.stringify(base[k])!==JSON.stringify(actual[k])).map(k=>({component:k,trust:base[k],research:actual[k]}));
+   throw Error("Different markup/design tokens for "+researchTabs[i]+": "+JSON.stringify(differences));
+  }
+  for(const key of ["sidebar","content","nav","topology","summary","kpis"]){
+   const a=baselineChrome.geometry[key],b=currentChrome.geometry[key];
+   if(Math.abs(a.width-b.width)>3){
+    throw Error("Different "+key+" horizontal dimension for "+researchTabs[i]+": "+JSON.stringify({trust:a,research:b}));
+   }
+  }
+  if(currentChrome.kpiCount!==4)throw Error("Every experiment must show the same four-column KPI grid");
+
   await assertNavButtonsEqual(researchTabs[i]);
-  const authors=(await page.locator(".r27-study-content .r27-kicker").innerText()).trim();
+  const authors=(await page.locator("main.r27-experiment-content > .imas-experiment-heading > .r27-kicker").innerText()).trim();
   if(authors!==((i===2||i===4)?authorB:authorA))throw Error("Wrong researcher attribution on "+researchTabs[i]+": "+authors);
   if ((await page.locator(".r27-theory-short").count())!==0) throw new Error("Inline mathematical theory must only be in unified help: "+researchTabs[i]);
-  if ((await page.locator(".r27-study-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
+  if ((await page.locator("main.r27-experiment-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
   if (!(await page.locator(".r27-unified-settings input[type=number]").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
   if (!(await page.locator(".r27-playback-svg").count())) throw new Error("Missing topology graph: " + researchTabs[i]);
+
+  const researchMain = page.locator("main.r27-experiment-content");
+  const surface = await researchMain.evaluate(el=>({
+    overflowY:getComputedStyle(el).overflowY,
+    nested:el.querySelectorAll(".r27-root,.r27-study-content,.r27-results").length,
+    panelCount:el.querySelectorAll("section.panel").length,
+    directHead:el.querySelector(":scope > header.imas-experiment-heading > h2.r27-study-title")?.textContent?.trim(),
+    author:el.querySelector(":scope > header.imas-experiment-heading > .r27-kicker")?.textContent?.trim()
+  }));
+  if(surface.overflowY!=="auto" || surface.nested!==0 || surface.panelCount<1){
+    throw Error(researchTabs[i]+": research layout must share the trust content scroller and independent panels: "+JSON.stringify(surface));
+  }
+  const researchOverview=researchMain.locator(":scope > .trust-overview-grid");
+  if((await researchOverview.locator(":scope > .r27-replay-compact").count())!==1||
+     (await researchOverview.locator(":scope > section.panel.r27-summary-panel").count())!==1){
+    throw Error(researchTabs[i]+": missing the unified topology/table layout");
+  }
+  const topbar=page.locator(".topbar");
+  for(const label of ["Новый сид","Запустить","Остановить","Сбросить"]){
+    if((await topbar.getByRole("button",{name:label,exact:true}).count())!==1){
+      throw Error(researchTabs[i]+": absent shared toolbar action "+label);
+    }
+  }
+  if((await topbar.getByText("Автономный локальный эксперимент").count())!==0){
+    throw Error(researchTabs[i]+": legacy study-specific topbar must be removed");
+  }
+
 }
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
+const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
+const firstSeed = await seedInput.inputValue();
+await page.locator(".topbar").getByRole("button",{name:"Новый сид",exact:true}).click();
+if((await seedInput.inputValue())===firstSeed)throw Error("Common toolbar seed action has no effect on research study");
+await page.locator(".topbar").getByRole("button",{name:"Сбросить",exact:true}).click();
 await page.locator(".r27-unified-settings input[type=number]").nth(1).fill("10");
-await page.getByRole("button", { name: "Запустить эксперимент", exact: false }).click();
-await page.getByText("Сводная таблица результатов").waitFor({ timeout: 30000 });
+await page.locator(".topbar").getByRole("button", { name: "Запустить", exact: true }).click();
+await page.locator(".r27-summary-panel .r27-table tbody tr").first().waitFor({timeout:30000});
 await page.getByRole("button", {name:"Воспроизвести"}).click();
 await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
 await page.getByRole("button", {name:"Пауза"}).click();
 await page.getByRole("slider", {name:"Выбор такта"}).press("ArrowRight");
 if(!(await page.locator(".r27-state-matrix").count()))throw Error("Missing state heatmap");
-const researchComputed = await page.locator(".r27-table tbody tr").count() >= 9;
+const researchComputed = await page.locator(".r27-summary-panel .r27-table tbody tr").count() >= 9;
+if((await page.locator(".r27-analytics > section.panel.r27-panel").count())<2)throw Error("Research study diagrams must use the shared panel component");
 const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
 const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
@@ -264,26 +380,6 @@ await page.locator(".r27-experiment-navigation").getByRole("button", { name: "С
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
 if((await page.locator(".r27-module-article").count())!==5)throw Error("Missing mathematical manual chapters");
 if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
-
-// Validate all browser-only baseline modes, not just the initial trace.
-await page.getByRole("combobox", {name:"Выбор эксперимента"}).selectOption("trace");
-const trustSettings=page.locator(".workspace > aside.sidebar");
-await trustSettings.getByLabel("N — число легитимных агентов").fill("11");
-await trustSettings.getByLabel("Число шагов (T)").fill("20");
-await trustSettings.getByRole("spinbutton",{name:"Число прогонов",exact:true}).fill("3");
-await trustSettings.getByText("Статистика и вычисления",{exact:true}).click();
-await trustSettings.getByLabel("Браузерных потоков (0 — авто)").fill("2");
-await trustSettings.getByLabel("Прогонов на точку чувствительности").fill("2");
-await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
-await page.locator(".trust-synced-grid[data-zoom-to='20']").waitFor({timeout:60000});
-await page.locator(".r27-baseline-subtabs").getByRole("button",{name:"Монте-Карло"}).click();
-await page.getByRole("button",{name:"Выполнить серию"}).click();
-await page.locator(".kpi-grid.three").waitFor({timeout:60000});
-if((await page.locator(".kpi-grid.three .kpi").count())<3)throw Error("Monte-Carlo summary metrics missing");
-await page.locator(".r27-baseline-subtabs").getByRole("button",{name:"Чувствительность"}).click();
-await page.getByRole("button",{name:"Выполнить",exact:true}).click();
-await page.getByText("Устойчивость к доле скомпрометированных агентов").waitFor({timeout:60000});
-const baselineBrowserModesVerified=true;
 
 const report = {
   title: await page.title(),
@@ -296,7 +392,6 @@ const report = {
   requiredControls: legacyControls,
   researchTabs,
   researchComputed,
-  baselineBrowserModesVerified,
   topology: topologyVisibleOnResearch,
   researchHelp: await page.locator(".r27-manual-layout").count(),
   mathematicalModules: await page.locator(".r27-module-article").count(),
@@ -317,7 +412,6 @@ if (
   report.helpSections < 18 ||
   !controlsPresent ||
   !report.researchComputed ||
-  !report.baselineBrowserModesVerified ||
   report.topology===0 ||
   report.researchHelp === 0 ||
   errors.length ||

@@ -21,6 +21,7 @@ import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
+import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip,ExperimentProgress as ProgressStrip} from "./ExperimentLayout.jsx";
 
 const METHODS = {
   arithmetic_mean: "Арифметическое среднее",
@@ -132,7 +133,7 @@ const PARAMETER_TOOLTIPS = {
   partition_end_step: "Шаг завершения разделения сети. Длинное разделение дольше ограничивает обмен наблюдениями.",
   partition_fraction: "Доля узлов в отделенном сегменте. Определяет масштаб нарушения связности и доставки сообщений.",
   bootstrap_samples: "Число bootstrap-перевыборок для интервалов сравнения методов. Больше выборок стабильнее, но медленнее.",
-  parallel_workers: "Число параллельных браузерных Web Workers (не более четырёх). 0 — автоматический выбор в зависимости от аппаратных ядер.",
+  parallel_workers: "Число параллельных браузерных Web Workers (не более 4). 0 — автоматический выбор в зависимости от доступных аппаратных ядер.",
   n_sensitivity_runs: "Число прогонов для каждой точки однофакторного анализа. Больше прогонов уменьшают случайный разброс оценки чувствительности.",
   factorial_runs_per_point: "Число прогонов на точку многофакторного плана. Повышает надежность оценки главных эффектов и взаимодействий.",
   factorial_max_points: "Максимум точек многофакторного плана. Больше точек покрывают больше комбинаций факторов, но резко увеличивают время расчета.",
@@ -191,24 +192,6 @@ function Icon({ name }) {
   return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 
-function ParameterTooltip({ text }) {
-  if (!text) return null;
-  return (
-    <span
-      className="parameter-tooltip"
-      tabIndex={0}
-      aria-label={text}
-      onClick={(event) => {
-        event.preventDefault();
-        event.currentTarget.focus();
-      }}
-    >
-      <Icon name="help" />
-      <span role="tooltip">{text}</span>
-    </span>
-  );
-}
-
 function FieldLabel({ label, tooltip }) {
   return <span className="field-label"><span>{label}</span><ParameterTooltip text={tooltip} /></span>;
 }
@@ -229,14 +212,6 @@ function SelectField({ label, value, onChange, children, tooltip }) {
 
 function BoolField({ label, checked, onChange, hint, tooltip }) {
   return <label className="bool-field"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><span className="bool-label"><span>{label}</span><ParameterTooltip text={tooltip} />{hint ? <small>{hint}</small> : null}</span></label>;
-}
-
-function Kpi({ label, value, note, tone = "blue" }) {
-  return <div className="kpi"><div className="kpi-label">{label}</div><div className={`kpi-value ${tone}`}>{value}</div><div className="kpi-note">{note}</div></div>;
-}
-
-function Panel({ title, subtitle, children, className = "", headerAside = null }) {
-  return <section className={`panel ${className}`}><header className="panel-header"><div><h2>{title}</h2>{subtitle ? <p>{subtitle}</p> : null}</div>{headerAside}</header><div className="panel-body">{children}</div></section>;
 }
 
 function average(values) {
@@ -315,7 +290,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     setConfig((current) => ({ ...current, static_bias: level.static_bias, subtle_bias: level.subtle_bias, collusion_bias: level.collusion_bias }));
   };
   return (
-    <aside className="sidebar">
+    <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
@@ -391,12 +366,6 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
       <button className="run-button" onClick={onRun} disabled={running}><Icon name="play" />{running ? "Выполняется…" : "Запустить эксперимент"}</button>
     </aside>
   );
-}
-
-function ProgressStrip({ progress, running, cacheHit }) {
-  if (!running && !progress) return null;
-  const percent = Math.max(0, Math.min(100, Number(progress?.percent || 0)));
-  return <div className={`progress-strip ${running ? "running" : "done"}`}><div className="progress-head"><strong>{progress?.message || (running ? "Выполняется" : "Завершено")}</strong><span>{Number(progress?.completed || 0)} / {Number(progress?.total || 0)} · {percent.toFixed(1)}%</span>{cacheHit ? <em>кэш</em> : null}<span>Осталось: {formatSeconds(progress?.eta_seconds)}</span></div><div className="progress-track"><i style={{ width: `${percent}%` }} /></div></div>;
 }
 
 function formatChartValue(value, name) {
@@ -630,7 +599,7 @@ function TrustHelpArticle() {
     <section id="bootstrap"><h2>Парный bootstrap различий методов</h2><p>Сравнение выполняется по одним и тем же случайным прогонам, поэтому сохраняется парность наблюдений. На каждой bootstrap-итерации с возвращением выбираются индексы прогонов и вычисляется средняя разность. Для ошибок знак преобразуется так, чтобы положительный эффект всегда означал преимущество робастного метода.</p><Formula number="18">Δ<sub>b</sub>=R<sup>−1</sup>Σ<sub>r∈S<sub>b</sub></sub>[L<sub>base</sub><sup>(r)</sup>−L<sub>rob</sub><sup>(r)</sup>].</Formula><p>95%-й интервал задается эмпирическими квантилями 2.5% и 97.5% bootstrap-распределения.</p></section>
     <section id="distributions"><h2>Распределения результатов</h2><p>Для RMSE, MAE, вероятности правильного решения, полноты и времени обнаружения формируются гистограммы и сводки min, P5, P25, медиана, P75, P95, max. Это позволяет выявить выбросы, асимметрию и несколько режимов функционирования, которые скрываются за средним значением.</p></section>
     <section id="sensitivity"><h2>Анализ чувствительности</h2><p>Однофакторный режим изменяет число византийских агентов. Многофакторный режим реализует двухуровневый план по шести факторам: f, τiso, окно доверия, коэффициент забывания, интенсивность атаки и шум корректных агентов.</p><Formula number="19">E<sub>j</sub>=E[y|z<sub>j</sub>=+1]−E[y|z<sub>j</sub>=−1].</Formula><Formula number="20">E<sub>jk</sub>=E[y|z<sub>j</sub>z<sub>k</sub>=+1]−E[y|z<sub>j</sub>z<sub>k</sub>=−1].</Formula></section>
-    <section id="parallel"><h2>Параллельное выполнение, прогресс и кэш</h2><p>Независимые прогоны распределяются между процессами. Сервер сообщает число завершенных задач и оценку оставшегося времени. После каждого блока сохраняется контрольная точка. При остановке частичные результаты остаются доступными, а повторный запуск той же конфигурации продолжает расчет. Полностью завершенный результат сохраняется в кэше по SHA-256 хешу канонической конфигурации.</p></section>
+    <section id="parallel"><h2>Параллельное выполнение, прогресс и кэш</h2><p>Независимые прогоны распределяются между браузерными Web Workers (до четырёх). Прогресс передаётся в React-интерфейс, результаты завершённых заданий сохраняются в IndexedDB. После остановки вычисления можно продолжить в том же браузере при неизменных параметрах. Для опубликованной версии внешний Node.js/Python-сервер и API заданий не требуются. Контрольные точки относятся к задачам, завершённым до остановки.</p></section>
     <section id="process"><h2>Порядок проведения эксперимента</h2><ol><li>Проверка параметров и построение топологии.</li><li>Выбор византийских агентов и создание Sybil-идентичностей.</li><li>Формирование предложений и сетевая доставка.</li><li>Расчет доверия и репутации по доступным свидетельствам.</li><li>Агрегирование решения и расчет ошибок.</li><li>Обновление свидетельств, изоляция и восстановление.</li><li>Повторение T шагов и R независимых прогонов.</li><li>Расчет σ-, квантильных и bootstrap-интервалов, распределений и чувствительности.</li></ol></section>
     <section id="software"><h2>Описание программного комплекса</h2><table className="help-table"><thead><tr><th>Компонент</th><th>Назначение</th></tr></thead><tbody><tr><td><code>experiment.py</code></td><td>Математическое ядро, сеть, Sybil-модель, параллельные серии, статистика и чувствительность.</td></tr><tr><td><code>gui_bridge.py</code></td><td>JSON-интерфейс и передача сообщений о прогрессе.</td></tr><tr><td><code>gui/server.mjs</code></td><td>Менеджер заданий, остановка, контрольные точки, кэш и журналирование.</td></tr><tr><td><code>gui/src/main.jsx</code></td><td>Интерфейс, графики, статистические панели и справка.</td></tr><tr><td><code>test_experiment.py</code></td><td>Проверки численных процедур, сети, статистики и возобновления.</td></tr></tbody></table></section>
     <section id="interpretation"><h2>Интерпретация результатов</h2><ul><li>Узкие σ- и квантильные области означают воспроизводимость решения.</li><li>Различие между средним и медианой указывает на асимметрию распределения.</li><li>Bootstrap-интервал, полностью расположенный выше нуля, подтверждает преимущество робастного метода по выбранной метрике.</li><li>Снижение крупнейшей компоненты и доли доставки показывает влияние разделения, потерь и пропускной способности.</li><li>Сильный главный эффект определяет параметр, наиболее существенно изменяющий отклик в исследованном диапазоне.</li></ul></section>
@@ -653,8 +622,9 @@ function App() {
   const [lastRun, setLastRun] = useState(null);
   const [progress, setProgress] = useState(null);
   const [cacheHit, setCacheHit] = useState(false);
-  const jobRef = useRef(null);
   const runningRef = useRef(false);
+  const researchActionsRef = useRef(null);
+  const [researchRuntime,setResearchRuntime] = useState(null);
 
   const request = async (action, options = {}) => {
     if (runningRef.current) return;
@@ -686,6 +656,7 @@ function App() {
   };
   useEffect(()=>{request("trace");},[]);
   const stop=()=>stopBrowserExperiment();
+
   const reset = () => {
     stop();
     setConfig(DEFAULT_CONFIG);
@@ -714,7 +685,11 @@ function App() {
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
   };
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-  const lastTimestamp = lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—";
+  const isResearch=activeTab.startsWith("study-");
+  const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
+  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):running;
+  const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—");
   const experimentNavigation = (
 <nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
@@ -726,37 +701,57 @@ function App() {
 <option value="study-cascade">Каскадные последствия</option>
 <option value="study-misinformation">Нарушение коллективного решения</option>
 </select></label>
-{["trace","mc","sensitivity","data"].includes(activeTab)?<div className="r27-baseline-subtabs">{[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=><button type="button" key={id} className={activeTab===id?"active":""} onClick={()=>setActiveTab(id)}>{name}</button>)}</div>:null}
+<div className="r27-mode-tabs" role="group" aria-label="Режим эксперимента">
+ {["trace","mc","sensitivity","data"].includes(activeTab)
+   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=>
+      <button type="button" key={id} className={"r27-mode-tab"+(activeTab===id?" active":"")} aria-pressed={activeTab===id} onClick={()=>setActiveTab(id)}>{name}</button>)
+   : <span className="r27-mode-placeholder">Основной режим</span>}
+</div>
+
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
 <button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>
 </nav>
   );
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div>{!(activeTab.startsWith("study-")||activeTab==="help2027")?<div className="top-meta"><span>Статус:</span><strong className={running ? "busy-text" : "ready-text"}>{running ? "Выполняется" : "Готов к запуску"}</strong><span className="meta-separator" /><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator" /><span>Сид:</span><strong>{config.seed}</strong>{lastRun?.cacheHit ? <span className="cache-badge">кэш</span> : null}</div>:<div className="top-meta"><strong>Автономный локальный эксперимент</strong></div>}<div className="toolbar">
-{["trace","mc","sensitivity","data"].includes(activeTab)?<>
-<button onClick={newSeed} disabled={running}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={runForTab} disabled={running||activeTab==="data"}><Icon name="play"/>Запустить</button>
-<button onClick={stop} disabled={!running}><Icon name="stop"/>Остановить</button>
-<button onClick={reset} disabled={running}><Icon name="reset"/>Сбросить</button>
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
+{activeTab!=="help2027"?<>
+<button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(running||activeTab==="data")}><Icon name="play"/>Запустить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!running}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
 </div></header>
     <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
-      {activeTab.startsWith("study-")
-        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation}/>
-        : <>
-            {activeTab==="help2027"?null:<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running} />}
-            <main className={"content"+(activeTab==="help2027"?" r27-research-content":"")} data-study={activeTab==="help2027"?"help": "trust"}>
-              {experimentNavigation}
-              {["trace","mc","sensitivity","data"].includes(activeTab)?<div className="r27-kicker">Авторы · ктн Ушаков И.А. · Трофимова Н.А.</div>:null}
-              {["trace","mc","sensitivity","data"].includes(activeTab)?<h2 className="r27-study-title">Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения</h2>:null}
-              {["trace","mc","sensitivity","data"].includes(activeTab)?<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>:null}{error ? <div className="error-banner">{error}</div> : null}{activeTab === "trace" ? <SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} /> : null}{activeTab === "mc" ? <MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running} /> : null}{activeTab === "sensitivity" ? <Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={(mode) => request("sensitivity", { sensitivityMode: mode })} running={running} /> : null}{activeTab === "data" ? <DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} /> : null}{activeTab === "help2027" ? <ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/> : null}
-            </main>
-          </>}
+      {isResearch
+        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
+        : activeTab==="help2027"
+          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
+          : <ExperimentLayout
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              navigation={experimentNavigation}
+              studyId="trust"
+              authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
+              title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
+              description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
+              progress={<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+              error={error?<div className="error-banner">{error}</div>:null}
+            >
+              {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
+              {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
+            </ExperimentLayout>}
     </div>
-    {(activeTab.startsWith("study-")||activeTab==="help2027")?<footer className="statusbar"><span>IMAS-lab · локальные вычисления</span><span>{activeTab==="help2027"?"Единая справка по шести экспериментам":"Пошаговое воспроизведение — в рабочей области"}</span><span>Модельные показатели не являются эксплуатационной оценкой</span></footer>:<footer className="statusbar"><span>Шаг: {currentTrace?.series?.at(-1)?.step ?? 0} / {config.n_steps}</span><span>Время: {lastRun ? formatSeconds(lastRun.seconds) : "—"}</span><span>{progress ? `${progress.completed ?? 0} / ${progress.total ?? 0}` : "—"}</span><span>Сид: {config.seed}</span><span className="status-log">{lastRun?.log ? `Лог: ${lastRun.log}` : ""}</span></footer>}
+    <footer className="statusbar">
+      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Время: {isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
+      <span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
+      <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
+      <span className="status-log">{isResearch?"Синтетическая модель — результаты требуют независимой валидации":activeTab==="help2027"?"Единая справка по шести экспериментам":lastRun?.log?"Лог: "+lastRun.log:""}</span>
+    </footer>
   </div>;
 }
 

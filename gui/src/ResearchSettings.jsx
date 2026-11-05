@@ -1,5 +1,6 @@
 import React from "react";
 import {STUDY_DEFS} from "./research2027.js";
+import {ExperimentParameterTooltip} from "./ExperimentLayout.jsx";
 
 const PARAMETERS={
  agents:["N — число агентов","Число моделируемых агентов. Для двух графов риска количество вершин фиксировано структурой исследовательской постановки.",3,100,1],
@@ -53,7 +54,7 @@ const GROUPS={
 function ResearchField({name,value,onChange,disabled=false}){
  const [title,description,min,max,step]=PARAMETERS[name]||[name,"",undefined,undefined,1];
  return <label className="field r27-setting-field">
-   <span className="field-label"><span>{title}</span><span tabIndex={0} className="parameter-tooltip" aria-label={description}>ⓘ<span role="tooltip">{description}</span></span></span>
+   <span className="field-label"><span>{title}</span><ExperimentParameterTooltip text={description}/></span>
    <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?undefined:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>
    {disabled?<small>Фиксированная конфигурация исследовательского графа</small>:null}
  </label>;
@@ -66,7 +67,6 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
  return <aside className="sidebar r27-unified-settings">
   <div className="sidebar-scroll">
    <h2>Параметры эксперимента</h2>
-   <p className="r27-settings-intro">{def?.short||""}. Параметры используются при воспроизводимом модельном расчёте.</p>
    {groups.map(([title,fields],index)=><div key={title} className={index===0?"r27-first-settings":"sidebar-section"}>
     {index!==0?<h3>{title}</h3>:null}{entries(fields)}
    </div>)}
@@ -79,9 +79,7 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
      <button type="button" className="r27-settings-reset" disabled={running} onClick={onReset}>Восстановить параметры по умолчанию</button>
    </div></details>
   </div>
-  <div className="r27-sidebar-actions">
-   <button type="button" className="run-button" disabled={running} onClick={onStart}>{running?"Выполняется…":"▶ Запустить эксперимент"}</button>
-   {running?<button type="button" className="r27-settings-stop" onClick={onStop}>Остановить расчёт</button>:null}
-  </div>
+  <button type="button" className="run-button" disabled={running} onClick={onStart}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8 18.4 12 7 19.2Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>{running?"Выполняется…":"Запустить эксперимент"}</button>
+  {running?<button type="button" className="r27-settings-stop" onClick={onStop}>Остановить расчёт</button>:null}
  </aside>;
 }
