@@ -170,22 +170,53 @@ export function runPetri(c){
  return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости."};
 }
 export function runCascade(c){
- const r=rng(c.seed),rows=[],impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3.0].map(x=>x*c.lossScale),conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
- for(let start=0;start<c.agents;start++){for(const [method,defense] of conditions){const losses=[],affected=[],critical=[];for(let k=0;k<c.runs;k++){
-  const p=propagate(8,fixedEdges8,[start],r,c.spread,8,defense);const cost=[...p.infected].reduce((s,i)=>s+impacts[i],0);
-  losses.push(cost);affected.push(p.infected.size);critical.push(cost>=impacts.reduce((a,b)=>a+b,0)*.45?1:0);}
-  const es95=expectedShortfall(losses,.95);
-  const meanCI=mean95(losses),dangerCI=wilson95(critical.reduce((a,b)=>a+b,0),c.runs);
-  const tail=bootstrap95(losses,a=>expectedShortfall(a,.95),c.seed+start*109+Math.round(defense*100),200);
-  rows.push({scenario:"Начальная компрометация A"+(start+1),method,runs:c.runs,directDamage:impacts[start],expectedDamage:meanCI.estimate,
-   expectedDamageCI95Low:meanCI.lower,expectedDamageCI95High:meanCI.upper,
-   excessDamage:avg(losses.map(v=>Math.max(0,v-impacts[start]))),dangerProbability:dangerCI.estimate,
-   dangerCI95Low:dangerCI.lower,dangerCI95High:dangerCI.upper,dangerEvents:dangerCI.events,
-   p95Damage:pct(losses,.95),es95,es95CI95Low:tail.lower,es95CI95High:tail.upper,tailSamples:.05*c.runs,
-   tailWarning:.05*c.runs<10?"Менее 10 эквивалентных наблюдений верхних 5%; хвостовая оценка нестабильна":null,
-   affectedAgents:avg(affected)});
- }}
- return {rows,summary:"Оценка прямого и каскадного ущерба при поражении каждого из восьми функционально зависимых агентов (11 ориентированных связей). ES95 — средняя потеря худших 5% вероятностной массы, включая дробную массу на границе.",chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",limits:"Условные коэффициенты критичности и интенсивности распространения не являются оценками денежных потерь или эксплуатационных вероятностей."};
+ const rows=[],pairedRuns=[],pairedEffects=[];
+ const impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
+ const criticalDamage=.45*impacts.reduce((a,b)=>a+b,0);
+ const conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
+ for(let start=0;start<c.agents;start++){
+  const scenario="Начальная компрометация A"+(start+1);
+  const stats=conditions.map(()=>({losses:[],affected:[],critical:[]}));
+  for(let run=0;run<c.runs;run++){
+   const eventSeed=((c.seed>>>0)^Math.imul(start+1,0x9e3779b9)^Math.imul(run+1,0x85ebca6b))>>>0;
+   const random=rng(eventSeed);
+   const tape=Array.from({length:8},()=>fixedEdges8.map(()=>random.random()));
+   const pair={scenario,run,eventSeed,initialNode:start,methods:[]};
+   conditions.forEach(([method,defense],index)=>{
+    const p=propagate(8,fixedEdges8,[start],random,c.spread,8,defense,tape);
+    const cost=[...p.infected].reduce((sum,i)=>sum+impacts[i],0);
+    const danger=Number(cost>=criticalDamage);
+    stats[index].losses.push(cost);stats[index].affected.push(p.infected.size);
+    stats[index].critical.push(danger);
+    pair.methods.push({method,defense,loss:cost,danger,affectedCount:p.infected.size});
+   });
+   pairedRuns.push(pair);
+  }
+  conditions.forEach(([method,defense],index)=>{
+   const {losses,affected,critical}=stats[index];
+   const meanCI=mean95(losses),dangerCI=wilson95(critical.reduce((u,v)=>u+v,0),c.runs);
+   const tail=bootstrap95(losses,values=>expectedShortfall(values,.95),c.seed+start*109+Math.round(defense*100),200);
+   rows.push({scenario,method,runs:c.runs,directDamage:impacts[start],expectedDamage:meanCI.estimate,
+    expectedDamageCI95Low:meanCI.lower,expectedDamageCI95High:meanCI.upper,
+    excessDamage:avg(losses.map(v=>Math.max(0,v-impacts[start]))),
+    dangerProbability:dangerCI.estimate,dangerCI95Low:dangerCI.lower,dangerCI95High:dangerCI.upper,
+    dangerEvents:dangerCI.events,p95Damage:pct(losses,.95),
+    es95:expectedShortfall(losses,.95),es95CI95Low:tail.lower,es95CI95High:tail.upper,
+    tailSamples:.05*c.runs,
+    tailWarning:.05*c.runs<10?"Менее 10 эквивалентных наблюдений верхних 5%; хвостовая оценка нестабильна":null,
+    affectedAgents:avg(affected)});
+  });
+  const damage=pairedDifference95(stats[0].losses,stats[1].losses,c.seed+start*107+1,300);
+  const danger=pairedDifference95(stats[0].critical,stats[1].critical,c.seed+start*107+2,300);
+  pairedEffects.push({scenario,runs:c.runs,baseline:conditions[0][0],method:conditions[1][0],
+   reductionDamage:damage.estimate,reductionDamageCI95Low:damage.lower,reductionDamageCI95High:damage.upper,
+   reductionDanger:danger.estimate,reductionDangerCI95Low:danger.lower,reductionDangerCI95High:danger.upper,
+   intervalMethod:damage.method,paired:true});
+ }
+ return {rows,pairedRuns,pairedEffects,comparisonDesign:"paired-common-random-numbers",
+  summary:"Сравнение режимов каскадного распространения выполняется на общих таблицах случайных событий. ES95 — средняя потеря худших 5% вероятностной массы, включая дробную массу на границе квантиля.",
+  chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",
+  limits:"Коэффициенты критичности и распространения синтетические. Интервалы описывают только вариацию Монте-Карло; при малом числе хвостовых наблюдений оценки ES95 ненадёжны."};
 }
 function tmean(x,trimEachSide=3){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(trimEachSide,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
 export function runMisinformation(c){
