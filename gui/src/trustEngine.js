@@ -1,4 +1,5 @@
 import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
+import {auditFactorialDesign,estimateFactorialContrasts,FACTORIAL_AUDIT_VERSION} from "./factorialAudit.js";
 /**
  * IMAS_LaB_test — browser-only JavaScript port of experiment.py.
  *
@@ -410,7 +411,8 @@ function factorialDesign(c,rawRanges){
   const settings={...c},values={};factors.forEach((f,j)=>{const v=ranges[f][coded[j]>0?1:0];values[f]=v;if(f==="attack_intensity_multiplier"){settings.static_bias=c.static_bias*v;settings.subtle_bias=c.subtle_bias*v;settings.collusion_bias=c.collusion_bias*v;}else settings[f]=["n_byzantine","trust_window_steps"].includes(f)?Math.round(v):v;});
   settings.trim_each_side=settings.n_byzantine;return{index,coded,values,settings:validateConfig(settings)};
  });
- return{factors,ranges,designs,designMetadata:{
+ const audit=auditFactorialDesign(factors,ranges,designs);
+ return{factors,ranges,designs,designMetadata:{...audit,methodologyVersion:FACTORIAL_AUDIT_VERSION,
   type:c.factorial_max_points===64?"complete-2^6":"regular-2^(6-1)",
   points:c.factorial_max_points,designResolution:c.factorial_max_points===64?"full":"VI",
   definingRelation:c.factorial_max_points===64?"none":"I=ABCDEF",
@@ -554,22 +556,26 @@ export function assembleResult(plan,completed){
   for(let i=0;i<plan.factors.length;i++){x["factor_"+plan.factors[i]]=d.values[plan.factors[i]];x["coded_"+plan.factors[i]]=d.coded[i];}
   results.push(x);
  }
- const proposed=results.filter(x=>x.method==="proposed_robust"),effects=[],interactions=[];
- for(const metric of ["probability_correct","rmse_to_truth","detection_rate","delivery_ratio"]){
-  for(const factor of plan.factors){
-   const high=proposed.filter(x=>x["coded_"+factor]>0),low=proposed.filter(x=>x["coded_"+factor]<0);
-   if(!high.length||!low.length)continue;
-   const highValues=valid(high.map(x=>x[metric])),lowValues=valid(low.map(x=>x[metric]));
-   if(!highValues.length||!lowValues.length)continue;
-   const effect=mean(highValues)-mean(lowValues);
-   effects.push({metric,factor,effect_high_minus_low:effect,benefit_effect:metric==="rmse_to_truth"?-effect:effect,low_value:plan.ranges[factor][0],high_value:plan.ranges[factor][1]});
-  }
-  for(let i=0;i<plan.factors.length;i++)for(let j=i+1;j<plan.factors.length;j++){
-   const one=plan.factors[i],two=plan.factors[j],high=proposed.filter(x=>x["coded_"+one]*x["coded_"+two]>0),low=proposed.filter(x=>x["coded_"+one]*x["coded_"+two]<0);
-   if(high.length&&low.length){const u=valid(high.map(x=>x[metric])),v=valid(low.map(x=>x[metric]));if(!u.length||!v.length)continue;const e=mean(u)-mean(v);interactions.push({metric,factors:[one,two],effect:e,absolute_effect:Math.abs(e)});}
-  }
- }
- return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>b.absolute_effect-a.absolute_effect).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
+ const keys=["probability_correct","rmse_to_truth","detection_rate","delivery_ratio"];
+ const analysed=estimateFactorialContrasts(plan.designs,rows,keys);
+ const effects=analysed.effects.map(e=>({
+  ...e,factor:plan.factors[e.factorIndex],effect_high_minus_low:e.effect,
+  benefit_effect:e.effect===null?null:(e.metric==="rmse_to_truth"?-e.effect:e.effect),
+  low_value:plan.ranges[plan.factors[e.factorIndex]][0],
+  high_value:plan.ranges[plan.factors[e.factorIndex]][1]
+ }));
+ const interactions=analysed.interactions.map(e=>({
+  ...e,factors:e.factorIndices.map(j=>plan.factors[j])
+ }));
+ const estimable=effects.filter(e=>e.estimable).length;
+ const withCI=effects.filter(e=>e.ci95_low!==null).length;
+ const factorialUncertainty={
+  method:"within-cell-replicate-independent-normal-approx-95",metrics:keys,
+  expectedMainEffects:6*keys.length,estimableMainEffects:estimable,
+  mainEffectsWithCI:withCI,confidenceLevel:.95,
+  caveat:"Точечные эффекты оцениваются только при полном наборе ячеек. Интервал рассчитывается по вариации отдельных повторов внутри каждой ячейки (≥2 на ячейку), без учёта неопределённости самой модели, смешения высших взаимодействий или поправки на множественные сравнения."
+ };
+ return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,factorialUncertainty,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>(b.absolute_effect??-1)-(a.absolute_effect??-1)).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
 }
 export function runTask(plan,task){
  const scenarioIndex=plan.action==="sensitivity"&&plan.mode==="factorial"?task.index:0;
