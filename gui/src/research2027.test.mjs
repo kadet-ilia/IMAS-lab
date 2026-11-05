@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {executeStudy,STUDY_DEFS,toCsv,validateStudy} from "./research2027.js";
+import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,RESEARCH_MODEL_VERSION} from "./research2027.js";
 
 const small={
  uncertainty:{runs:20,agents:21},
@@ -72,4 +72,48 @@ test("replay respects zero-propagation and simulated state transitions",()=>{
  assert.ok(m.replay.frames.every(f=>f.status.filter(x=>x==="misled").length===0));
  const n=executeStudy("petri",{criticalCount:3,steps:4,detectionDelay:10});
  assert.ok(n.replay.frames.at(-1).status.filter(s=>s==="compromised").length>=3);
+});
+
+
+test("UP-03/21 strict fixed Petri graph and integral marking thresholds",()=>{
+ for(const agents of [6,8,20,100])assert.throws(()=>validateStudy("petri",{agents}),/N=7/);
+ for(const [key,value] of [["criticalCount",3.5],["detectionDelay",1.5],["stateLimit",999.5],["steps",2.2],["runs",2]])
+   assert.throws(()=>validateStudy("petri",{[key]:value}),new RegExp(key));
+ const result=executeStudy("petri",{agents:7,criticalCount:7,steps:1});
+ assert.equal(result.config.agents,7);assert.equal(result.replay.vertices.length,7);
+ assert.equal(result.modelVersion,RESEARCH_MODEL_VERSION);
+});
+test("UP-15/17 all decision methods use the same threshold and absent decisions mean null accuracy",()=>{
+ const none=executeStudy("uncertainty",{runs:40,threshold:2,loss:0,corruption:0,signalNoise:0});
+ for(const row of none.rows){
+  assert.equal(row.coverage,0);
+  assert.equal(row.accuracy,null);
+ }
+ const same=executeStudy("uncertainty",{runs:40,threshold:1.2,loss:0,corruption:0,signalNoise:0});
+ assert.ok(same.rows.every(row=>row.coverage===0),"Method-dependent 0.75δ is forbidden");
+});
+test("UP-18 initial outbreak agents are sampled without replacement",()=>{
+ for(const n of [3,7,30])for(const k of [0,1,n]){
+  const v=chooseUniqueNodes(rng(99),n,k);
+  assert.equal(v.length,k);assert.equal(new Set(v).size,k);
+  assert.ok(v.every(i=>i>=0&&i<n));
+ }
+ assert.throws(()=>chooseUniqueNodes(rng(1),3,4),/K/);
+});
+test("UP-24/25 meaningful loss scale and exact discrete expected shortfall",()=>{
+ assert.throws(()=>validateStudy("cascade",{lossScale:0}),/lossScale/);
+ const values=[...Array(990).fill(1),...Array(4).fill(2.1),...Array(6).fill(2.2)];
+ assert.ok(Math.abs(expectedShortfall(values,.95)-1.232)<1e-12);
+ assert.equal(expectedShortfall([3,3,3],.95),3);
+ const zero=executeStudy("cascade",{spread:0,runs:10});
+ for(const row of zero.rows)assert.equal(row.excessDamage,0);
+});
+test("UP-27 misinformation spread uses the source snapshot each tick",()=>{
+ const edges=[[0,1],[1,2]],uniforms=[0,0];
+ const first=spreadOneTick(new Set([0]),edges,uniforms,1);
+ assert.deepEqual([...first.next].sort(),[0,1]);
+ const second=spreadOneTick(first.next,edges,uniforms,1);
+ assert.deepEqual([...second.next].sort(),[0,1,2]);
+ assert.deepEqual(first.activeEdges,[[0,1]]);
+ assert.deepEqual(second.activeEdges,[[1,2]]);
 });
