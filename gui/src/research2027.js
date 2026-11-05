@@ -1,4 +1,4 @@
-import {wilson95,mean95,pairedDifference95,bootstrap95,STATISTICS_VERSION} from "./statistics2027.js";
+import {wilson95,mean95,pairedDifference95,bootstrap95,pairedSignFlipP,holmAdjusted,STATISTICS_VERSION} from "./statistics2027.js";
 /* IMAS-lab 2027: independent, seeded, synthetic research kernels.
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
@@ -141,12 +141,20 @@ export function runProbGraph(c){
   });
   for(let mode=1;mode<modes.length;mode++){
    const ci=pairedDifference95(statistics[0].events,statistics[mode].events,c.seed+scenarioIndex*101+mode,300);
+   const differences=statistics[0].events.map((v,i)=>v-statistics[mode].events[i]);
+   const p=c.runs>=2?pairedSignFlipP(differences,c.seed+scenarioIndex*101+mode,4095):null;
    pairedEffects.push({scenario,baseline:modes[0][0],method:modes[mode][0],runs:c.runs,
     reductionDanger:ci.estimate,reductionCI95Low:ci.lower,reductionCI95High:ci.upper,
-    paired:true,intervalMethod:ci.method,warning:"Интервал учитывает лишь Monte-Carlo-вариацию и не является доказательством защитного механизма"});
+    pRaw:p?.p??null,pHolm:null,holmReject05:null,pMethod:p?.method??null,
+    paired:true,intervalMethod:ci.method,warning:"Интервал учитывает вариацию Монте-Карло и не скорректирован на множественные сравнения. p-значения корректируются Холмом."});
   }
  });
- return {rows,pairedRuns,pairedEffects,statisticsVersion:STATISTICS_VERSION,comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
+ const tested=pairedEffects.filter(row=>row.pRaw!==null);
+ const adjusted=holmAdjusted(tested.map(row=>row.pRaw));
+ tested.forEach((row,i)=>{row.pHolm=adjusted[i];row.holmReject05=adjusted[i]<.05;});
+ return {rows,pairedRuns,pairedEffects,statisticsVersion:STATISTICS_VERSION,
+  multipleTesting:{family:"E3-protection-vs-baseline",tested:tested.length,planned:pairedEffects.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
+  comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
 export function runPetri(c){
  const n=c.agents,T=c.steps,critical=c.criticalCount;
@@ -218,12 +226,28 @@ export function runCascade(c){
   });
   const damage=pairedDifference95(stats[0].losses,stats[1].losses,c.seed+start*107+1,300);
   const danger=pairedDifference95(stats[0].critical,stats[1].critical,c.seed+start*107+2,300);
+  const damageP=c.runs>=2?pairedSignFlipP(stats[0].losses.map((v,i)=>v-stats[1].losses[i]),c.seed+start*107+1,4095):null;
+  const dangerP=c.runs>=2?pairedSignFlipP(stats[0].critical.map((v,i)=>v-stats[1].critical[i]),c.seed+start*107+2,4095):null;
   pairedEffects.push({scenario,runs:c.runs,baseline:conditions[0][0],method:conditions[1][0],
    reductionDamage:damage.estimate,reductionDamageCI95Low:damage.lower,reductionDamageCI95High:damage.upper,
    reductionDanger:danger.estimate,reductionDangerCI95Low:danger.lower,reductionDangerCI95High:danger.upper,
+   pRawDamage:damageP?.p??null,pRawDanger:dangerP?.p??null,
+   pHolmDamage:null,pHolmDanger:null,holmRejectDamage05:null,holmRejectDanger05:null,
    intervalMethod:damage.method,paired:true});
  }
- return {rows,pairedRuns,pairedEffects,comparisonDesign:"paired-common-random-numbers",
+ const allTests=pairedEffects.flatMap(row=>[
+  ...(row.pRawDamage===null?[]:[{row,metric:"Damage",p:row.pRawDamage}]),
+  ...(row.pRawDanger===null?[]:[{row,metric:"Danger",p:row.pRawDanger}])
+ ]);
+ const corrected=holmAdjusted(allTests.map(x=>x.p));
+ allTests.forEach((test,i)=>{
+  test.row["pHolm"+test.metric]=corrected[i];
+  test.row["holmReject"+test.metric+"05"]=corrected[i]<.05;
+ });
+ return {rows,pairedRuns,pairedEffects,multipleTesting:{
+   family:"E5-eight-sources-times-two-outcomes",tested:allTests.length,
+   planned:pairedEffects.length*2,correction:"Holm-FWER-0.05",unadjustedCI:true},
+  comparisonDesign:"paired-common-random-numbers",
   summary:"Сравнение режимов каскадного распространения выполняется на общих таблицах случайных событий. ES95 — средняя потеря худших 5% вероятностной массы, включая дробную массу на границе квантиля.",
   chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",
   limits:"Коэффициенты критичности и распространения синтетические. Интервалы описывают только вариацию Монте-Карло; при малом числе хвостовых наблюдений оценки ES95 ненадёжны."};
