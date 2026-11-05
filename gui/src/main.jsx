@@ -21,6 +21,7 @@ import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
+import {validateConfig} from "./trustEngine.js";
 import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip,ExperimentProgress as ProgressStrip} from "./ExperimentLayout.jsx";
 
 const METHODS = {
@@ -197,11 +198,34 @@ function FieldLabel({ label, tooltip }) {
 }
 
 function NumberField({ label, value, min, max, step = 1, onChange, hint, id, tooltip }) {
+  const [draft,setDraft]=useState(Number.isFinite(value)?String(value):"");
+  const [focused,setFocused]=useState(false);
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    if(!focused){setDraft(Number.isFinite(value)?String(value):"");setError("");}
+  },[value,focused]);
+  const commit=()=>{
+    const v=draft.trim()===""?NaN:Number(draft);
+    if(!Number.isFinite(v)||step===1&&!Number.isInteger(v)||
+       min!=null&&v<min||max!=null&&v>max){
+      setError("Недопустимое значение "+label+". Диапазон "+(min??"−∞")+"…"+(max??"+∞")+".");
+      setFocused(false);
+      return;
+    }
+    setError("");setFocused(false);if(v!==value)onChange(v);
+  };
   return (
     <label className="field" htmlFor={id}>
       <FieldLabel label={label} tooltip={tooltip} />
-      <input id={id} aria-label={label} type="number" value={Number.isFinite(value) ? value : ""} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} />
-      {hint ? <small>{hint}</small> : null}
+      <input id={id} aria-label={label} type="number" value={draft}
+        min={min} max={max} step={step} aria-invalid={Boolean(error)}
+        onFocus={()=>setFocused(true)}
+        onChange={event=>{setDraft(event.target.value);setError("");}}
+        onBlur={commit}
+        onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();
+          if(event.key==="Escape"){setDraft(Number.isFinite(value)?String(value):"");setError("");event.currentTarget.blur();}}}
+      />
+      {error?<small role="alert" className="imas-validation-error">{error}</small>:hint?<small>{hint}</small>:null}
     </label>
   );
 }
@@ -271,19 +295,10 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
   const effectiveTotal = config.n_agents + config.n_sybil_agents;
   const effectiveBad = config.n_byzantine + config.n_sybil_agents;
   const honestMajority = effectiveTotal > 2 * effectiveBad;
-  const updateAgents = (value) => setConfig((current) => {
-    const n = Math.max(3, value);
-    const maxBad = Math.floor((n - 1) / 2);
-    return { ...current, n_agents: n, n_byzantine: Math.min(current.n_byzantine, maxBad), trim_each_side: Math.min(current.trim_each_side, maxBad) };
-  });
-  const updateSteps = (value) => setConfig((current) => ({
-    ...current,
-    n_steps: value,
-    attack_start_step: Math.min(current.attack_start_step, value),
-    sybil_activation_step: Math.min(current.sybil_activation_step, value),
-    partition_start_step: Math.min(current.partition_start_step, value),
-    partition_end_step: Math.min(Math.max(current.partition_end_step, current.partition_start_step), value),
-  }));
+  const updateAgents = (value) => set("n_agents")(value);
+  const updateSteps = (value) => set("n_steps")(value);
+  let configError=null;
+  try{validateConfig(config);}catch(e){configError=e.message;}
   const changeLevel = (value) => {
     const level = ATTACK_LEVELS[value];
     setAttackLevel(value);
@@ -294,7 +309,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
-        <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={(value) => setConfig((current) => ({ ...current, n_byzantine: value, trim_each_side: value }))} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
+        <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("n_byzantine")} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
         <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={500} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
 
         <div className="sidebar-section">
@@ -363,7 +378,8 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
           </div>
         </details>
       </div>
-      <button className="run-button" onClick={onRun} disabled={running}><Icon name="play" />{running ? "Выполняется…" : "Запустить эксперимент"}</button>
+      {configError?<p className="imas-validation-error" role="alert">{configError}. Исправьте параметры перед расчётом.</p>:null}
+      <button className="run-button" onClick={onRun} disabled={running||Boolean(configError)}><Icon name="play" />{running ? "Выполняется…" : "Запустить эксперимент"}</button>
     </aside>
   );
 }
