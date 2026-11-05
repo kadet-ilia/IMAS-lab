@@ -80,7 +80,7 @@ const glossary=[
 ];
 const fmt=(x)=>x===null||x===undefined?"—":typeof x==="number"?(Number.isInteger(x)?String(x):x.toLocaleString("ru-RU",{maximumFractionDigits:4})):String(x);
 const pctFields=FRACTION_METRICS;
-const metricNames={correctUnconditional:"Правильные решения / все опыты",accuracy:"Точность среди выданных решений",coverage:"Доля выданных решений",errorRate:"Доля неправильных решений",dangerProbability:"Вероятность опасного состояния",expectedFraction:"Средняя доля поражённых",p95Fraction:"95-й процентиль поражения",expectedDamage:"Средний ущерб",excessDamage:"Каскадный ущерб",es95:"ES95",es95CI95Low:"ES95 нижняя граница",es95CI95High:"ES95 верхняя граница",tailSamples:"Эквивалентный объём хвоста",tailWarning:"Предупреждение о хвостовой оценке",wrongProbability:"Вероятность неверного решения",meanDeviation:"Среднее смещение",abstentionProbability:"Доля отказов",risk:"Нормированный риск",costWrong:"Цена неправильного решения",costRefuse:"Цена отказа",meanObservationAge:"Возраст наблюдения, такт (не задержка решения)",dangerCI95Low:"P опасности: нижняя 95%",dangerCI95High:"P опасности: верхняя 95%",dangerEvents:"Число опасных исходов",reductionDanger:"Снижение вероятности опасности",reductionDamage:"Снижение ожидаемого ущерба"};
+const metricNames={correctUnconditional:"Правильные решения / все опыты",accuracy:"Точность среди выданных решений",coverage:"Доля выданных решений",errorRate:"Доля неправильных решений",dangerProbability:"Вероятность опасного состояния",expectedFraction:"Средняя доля поражённых",p95Fraction:"95-й процентиль поражения",expectedDamage:"Средний ущерб",excessDamage:"Каскадный ущерб",es95:"ES95",es95CI95Low:"ES95 нижняя граница",es95CI95High:"ES95 верхняя граница",tailSamples:"Эквивалентный объём хвоста",tailWarning:"Предупреждение о хвостовой оценке",wrongProbability:"Вероятность неверного решения",meanDeviation:"Среднее смещение",abstentionProbability:"Доля отказов",risk:"Нормированный риск",costWrong:"Цена неправильного решения",costRefuse:"Цена отказа",meanObservationAge:"Возраст наблюдения, такт (не задержка решения)",dangerCI95Low:"P опасности: нижняя 95%",dangerCI95High:"P опасности: верхняя 95%",dangerEvents:"Число опасных исходов",reductionDanger:"Снижение вероятности опасности",reductionDamage:"Снижение ожидаемого ущерба",pRaw:"p (исходное)",pHolm:"p (Холм)",holmReject05:"Значимо при FWER 5%",pRawDamage:"p ущерба (исходное)",pRawDanger:"p опасности (исходное)",pHolmDamage:"p ущерба (Холм)",pHolmDanger:"p опасности (Холм)",holmRejectDamage05:"Ущерб: FWER 5%",holmRejectDanger05:"Опасность: FWER 5%"};
 function download(name,text,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function ScientificGraph({result,metric}) {
  const rows=result.rows||[];const methods=[...new Set(rows.map(x=>x.method).filter(Boolean))],scenarios=[...new Set(rows.map(x=>x.scenario))];
@@ -164,9 +164,13 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      </ExperimentPanel>
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
-   {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки снижения риска (95% bootstrap)" subtitle={studyId==="cascade"?"Эффект = базовый ущерб/риск минус защищённый, при общей таблице случайных событий":"Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события"}>
+   {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки эффектов (95% bootstrap)" subtitle={studyId==="cascade"?"Эффект = базовый ущерб/риск минус защищённый, при общей таблице случайных событий":"Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события"}>
       <ResultTable rows={result.pairedEffects}/>
-      <p className="r27-note">Интервал отражает только неопределённость Монте-Карло. Если он включает нуль, знак эффекта не установлен; при малом R и редких событиях необходимо увеличить выборку.</p>
+      <p className="r27-note">
+      Множественные сравнения: {result.multipleTesting?.tested??0} из {result.multipleTesting?.planned??0} проверок,
+      {result.multipleTesting?.correction||" поправка не выполнялась"}. Вывод о значимости возможен только по скорректированным p-значениям при условии обменности знаков парных разностей в рамках нулевой гипотезы.
+      Показанные 95%-е bootstrap-интервалы не скорректированы на число сравнений и отражают только вариацию Монте-Карло. При малой выборке и редких событиях необходимы дополнительные независимые прогоны.
+     </p>
     </ExperimentPanel>:null}
    {result?.scenarioMetrics?.length? <ExperimentPanel title="Информационный охват сценариев" subtitle="Общая характеристика распространения, не отдельного алгоритма принятия решений">
       <ResultTable rows={result.scenarioMetrics}/>
