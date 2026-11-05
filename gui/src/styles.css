@@ -480,3 +480,7 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
   .trust-overview-grid .r27-playback-controls{display:flex;flex-wrap:wrap}
   .trust-overview-grid .r27-playback-controls input[type=range]{flex:1 0 100px}
 }
+
+/* Explicit feedback for out-of-domain mathematical parameters. */
+.imas-validation-error{display:block;margin:6px 10px;color:#a52d2d;font-size:11px;font-weight:600;line-height:1.35}
+.field input[aria-invalid="true"]{outline:2px solid #aa3f3f;outline-offset:1px}
