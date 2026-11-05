@@ -301,3 +301,33 @@ test("UP-22/31 mandatory Petri policy is faithfully shown by the replay, not arb
  assert.equal(b.replay.frames[1].status[0],"compromised");
  assert.match(a.replay.notes,/Фронт BFS исчерпан/);
 });
+
+
+test("UP-30 E3 controls familywise error across eight paired protection contrasts",()=>{
+ const a=executeStudy("probgraph",{runs:40,seed:99,spread:.52});
+ assert.equal(a.multipleTesting.planned,8);
+ assert.equal(a.multipleTesting.tested,8);
+ assert.equal(a.pairedEffects.length,8);
+ for(const effect of a.pairedEffects){
+  assert.ok(effect.pRaw>=0&&effect.pRaw<=1);
+  assert.ok(effect.pHolm>=effect.pRaw&&effect.pHolm<=1);
+  assert.equal(effect.holmReject05,effect.pHolm<.05);
+ }
+ const singleton=executeStudy("probgraph",{runs:1,seed:99});
+ assert.equal(singleton.multipleTesting.tested,0);
+ assert.ok(singleton.pairedEffects.every(x=>x.pRaw===null&&x.pHolm===null));
+});
+test("UP-30 E5 controls a combined 16-comparison family for damage and danger",()=>{
+ const a=executeStudy("cascade",{runs:35,seed:990,spread:.6});
+ assert.equal(a.multipleTesting.planned,16);
+ assert.equal(a.multipleTesting.tested,16);
+ for(const effect of a.pairedEffects){
+  for(const suffix of ["Damage","Danger"]){
+   assert.ok(effect["pRaw"+suffix]>=0&&effect["pRaw"+suffix]<=1);
+   assert.ok(effect["pHolm"+suffix]>=effect["pRaw"+suffix]);
+   assert.equal(effect["holmReject"+suffix+"05"],effect["pHolm"+suffix]<.05);
+  }
+ }
+ const repeated=executeStudy("cascade",{runs:35,seed:990,spread:.6});
+ assert.deepEqual(a.pairedEffects,repeated.pairedEffects);
+});
