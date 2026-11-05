@@ -234,3 +234,24 @@ test("UP-30 E2 selective accuracy uses accepted sample size, null if no accepted
   assert.ok(row.coverageCI95High<1);
  }
 });
+
+
+test("UP-26/30 cascade paired comparisons have identical outcomes when η=0",()=>{
+ const x=executeStudy("cascade",{runs:60,spread:.53,defenseFactor:0,seed:149});
+ assert.equal(x.pairedRuns.length,8*60);
+ assert.equal(x.pairedEffects.length,8);
+ for(const run of x.pairedRuns){
+  assert.equal(run.methods.length,2);
+  assert.deepEqual(
+   [run.methods[0].loss,run.methods[0].danger,run.methods[0].affectedCount],
+   [run.methods[1].loss,run.methods[1].danger,run.methods[1].affectedCount]
+  );
+ }
+ for(const difference of x.pairedEffects){
+  assert.equal(difference.reductionDanger,0);
+  assert.equal(difference.reductionDamage,0);
+  assert.equal(difference.reductionDamageCI95Low,0);
+  assert.equal(difference.reductionDamageCI95High,0);
+ }
+ assert.deepEqual(x.pairedRuns,executeStudy("cascade",{runs:60,spread:.53,defenseFactor:0,seed:149}).pairedRuns);
+});
