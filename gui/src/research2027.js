@@ -7,7 +7,7 @@ export const STUDY_DEFS = [
   { id:"probgraph", short:"Граф угроз", title:"Графо-вероятностное моделирование сценариев реализации угроз безопасности информации в интеллектуальной мультиагентной системе поддержки принятия решений с учётом межагентных взаимодействий",
     origin:"Статья 2 2027", defaults:{agents:30,runs:2500,seed:20270201,edgeProbability:0.16,spread:0.24,steps:6,criticalFraction:0.33} },
   { id:"petri", short:"Сети Петри", title:"Формальное моделирование сценариев реализации угроз безопасности информации и верификация достижимости опасных состояний интеллектуальной мультиагентной системы на основе временных раскрашенных сетей Петри",
-    origin:"Статья 2 2027", defaults:{agents:7,runs:1,seed:20270202,steps:6,detectionDelay:3,criticalCount:3,stateLimit:30000} },
+    origin:"Статья 2 2027", defaults:{agents:7,runs:1,seed:20270202,steps:6,detectionDelay:3,isolationPolicy:0,criticalCount:3,stateLimit:30000} },
   { id:"cascade", short:"Каскадные риски", title:"Метод оценки рисков нарушения функционирования интеллектуальной мультиагентной системы поддержки принятия решений на основе сценарного моделирования каскадных последствий кибератак",
     origin:"Статья 3 2027", defaults:{agents:8,runs:3000,seed:20270301,spread:0.34,lossScale:1,defenseFactor:0.45} },
   { id:"misinformation", short:"Коллективное решение", title:"Метод оценки рисков нарушения процессов коллективного принятия решений в интеллектуальной мультиагентной системе при компрометации агентов и распространении недостоверной информации",
@@ -158,16 +158,26 @@ export function runPetri(c){
   if(state.t>=T)continue;
   // Timed transitions: transmission and isolation each consume one simulated tick.
   const next=state.t+1;
+  if(c.isolationPolicy===1&&next>=c.detectionDelay){
+   // Idealised PRIORITY controller. Detection is assumed perfect: all currently
+   // compromised and non-isolated agents are isolated together in this tick.
+   // Waiting/transmission are disabled whenever this mandatory rule is enabled.
+   const newly=state.mask&~state.isolated;
+   const names=Array.from({length:n},(_,i)=>newly&(1<<i)?"A"+(i+1):null).filter(Boolean);
+   add(state.mask,state.isolated|newly,next,[...state.trace,
+    "t="+next+": обязательная изоляция "+(names.join(", ")||"нет новых агентов")]);
+   continue;
+  }
   add(state.mask,state.isolated,next,[...state.trace,"t="+next+": ожидание"]);
   for(const [a,b] of edges)if(state.mask&(1<<a)&&!(state.isolated&(1<<a))&&!(state.mask&(1<<b))&&!(state.isolated&(1<<b)))
    add(state.mask|(1<<b),state.isolated,next,[...state.trace,"t="+next+": передача A"+(a+1)+" → A"+(b+1)]);
-  if(next>=c.detectionDelay){for(let v=0;v<n;v++)if((state.mask&(1<<v))&&!(state.isolated&(1<<v)))
+  if(c.isolationPolicy===0&&next>=c.detectionDelay){for(let v=0;v<n;v++)if((state.mask&(1<<v))&&!(state.isolated&(1<<v)))
    add(state.mask,state.isolated|(1<<v),next,[...state.trace,"t="+next+": изоляция A"+(v+1)]);}
  }
  if(!reachable&&index<q.length)truncated=true;
  const verdict=reachable?"reachable":truncated?"inconclusive":"unreachable_within_bound";
- const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
- return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости."};
+ const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"},{criterion:"Стратегия изоляции",value:c.isolationPolicy===0?"Необязательная":"Приоритетная, идеализированная"}];
+ return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,isolationPolicy:c.isolationPolicy,policyName:c.isolationPolicy===0?"optional_nondeterministic":"ideal_mandatory_priority",summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости. Необязательная изоляция не обязана менять EF при варьировании τ. Приоритетная политика предполагает мгновенное безошибочное обнаружение всех ранее компрометированных агентов, одновременно изолирует их и запрещает ожидание и передачу на таком такте. Она является идеализированной верхней границей управляемой защиты, а не реалистичным детектором."};
 }
 export function runCascade(c){
  const rows=[],pairedRuns=[],pairedEffects=[];
@@ -265,6 +275,7 @@ export function validateStudy(id,raw={}){
  if("steps" in c)integer("steps",1,20);
  if("criticalCount" in c)integer("criticalCount",1,c.agents);
  if("detectionDelay" in c)integer("detectionDelay",0,20);
+ if("isolationPolicy" in c)integer("isolationPolicy",0,1);
  if("stateLimit" in c)integer("stateLimit",100,200000);
  if("lossScale" in c)bounded("lossScale",Number.MIN_VALUE,100);
  if(id==="petri"){
