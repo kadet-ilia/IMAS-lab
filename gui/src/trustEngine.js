@@ -1,4 +1,4 @@
-import {pairedDifference95} from "./statistics2027.js";
+import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 /**
  * IMAS_LaB_test — browser-only JavaScript port of experiment.py.
  *
@@ -460,10 +460,14 @@ function summarizeAblation(plan,rows,partial,completed){
    if(first&&second&&good(first[metric])&&good(second[metric])){aa.push(first[metric]);bb.push(second[metric]);}
   }
   const delta=aa.length?mean(aa.map((v,i)=>v-bb[i])):null;
-  const confidence=aa.length>=10?pairedDifference95(aa,bb,plan.c.seed+category.length+methodA.length+armA.length,300):null;
+  const seed=plan.c.seed+category.length+methodA.length+armA.length;
+  const confidence=aa.length>=10?pairedDifference95(aa,bb,seed,300):null;
+  const signFlip=aa.length>=10?pairedSignFlipP(aa.map((v,i)=>v-bb[i]),seed,4095):null;
   contrasts.push({category,armA,methodA,armB,methodB,metric,definition,n_pairs:aa.length,
     difference_mean:delta,ci95_low:confidence?.lower??null,ci95_high:confidence?.upper??null,
-    intervalMethod:confidence?"seed-matched percentile-bootstrap, unadjusted 95%":null});
+    intervalMethod:confidence?"seed-matched percentile-bootstrap, unadjusted 95%":null,
+    pRaw:signFlip?.p??null,pHolm:null,holmReject05:null,
+    pMethod:signFlip?.method??null});
  };
  for(const schedule of ["on_off","persistent"]){
   const a=schedule+"_with_isolation",b=schedule+"_no_isolation";
@@ -480,7 +484,17 @@ function summarizeAblation(plan,rows,partial,completed){
  for(const iso of ["with_isolation","no_isolation"])for(const method of METHODS)
   add("attack_schedule","on_off_"+iso,method,"persistent_"+iso,method,
    "probability_correct","On–off минус постоянное смещение при равном максимальном сдвиге");
+ const validIndices=contrasts.map((row,index)=>row.pRaw===null?null:index).filter(index=>index!==null);
+ const adjusted=holmAdjusted(validIndices.map(index=>contrasts[index].pRaw));
+ validIndices.forEach((index,i)=>{
+  contrasts[index].pHolm=adjusted[i];
+  contrasts[index].holmReject05=adjusted[i]<.05;
+ });
  return {mode:"ablation",ablation_rows,ablation_contrasts:contrasts,raw_runs:rows,
+  multipleTesting:{family:"all-confirmable-ablation-contrasts",tested:validIndices.length,
+   planned:contrasts.length,correction:"Holm-FWER-0.05",
+   pMethod:"two-sided paired sign-flip (exact n≤14, seeded randomisation n>14)",
+   unadjustedCI:true,limitation:"Holm относится к p-значениям, а не к показываемым 95%-м percentile-bootstrap интервалам. Требуется допущение попарной обменности знаков при нулевой гипотезе."},
   modelVersion:TRUST_MODEL_VERSION,configuration:configDetail(plan.c),partial,
   completed_tasks:completed,requested_tasks:plan.total,parallel_workers_used:1,
   design:{controller:["isolation_enabled=false","isolation_enabled=true"],
@@ -488,7 +502,7 @@ function summarizeAblation(plan,rows,partial,completed){
    sameSeed:true,sameInitialBadAgents:true,strictCommonRandomNumbers:true,
    exogenousEventScheme:"keyed-by-seed-run-stage-step-source-target-v1",
    scope:"Внешние шумы, транспортные решения и свидетельства для совпадающих адресов событий; распределения эндогенных состояний могут различаться.",
-   disclaimer:"Экзогенные случайные события привязаны к фиксированным адресам (seed, run, стадия, такт, агент, цель) и совпадают между ветвями при одинаковых адресах. При этом активные множества и история изоляции закономерно различаются. Парная оценка условна по модели; интервалы не скорректированы на множественные сравнения. Нельзя переносить эффект на реальные ИМАС без калибровки."}};
+   disclaimer:"Экзогенные случайные события привязаны к фиксированным адресам (seed, run, стадия, такт, агент, цель) и совпадают между ветвями при одинаковых адресах. При этом активные множества и история изоляции закономерно различаются. Парная оценка условна по модели; для набора доступных контрастов двусторонние p-значения корректируются по Холму (FWER 0,05), но показанные 95%-е bootstrap-интервалы остаются нескорректированными. Ни проверка обменности знаков при нулевой гипотезе, ни перенос на реальные ИМАС без калибровки не подтверждены."}};
 }
 export function makePlan(payload){
  const c=validateConfig(payload.config),scenario=payload.scenario||"collusion";
