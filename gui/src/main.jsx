@@ -77,6 +77,7 @@ const DEFAULT_CONFIG = {
   trust_prior_strength: 2,
   minimum_weight: 0.05,
   reputation_damping: 0.85,
+  isolation_enabled: true,
   isolation_threshold: 0.25,
   isolation_patience: 3,
   minimum_evidence_steps: 8,
@@ -114,6 +115,7 @@ const PARAMETER_TOOLTIPS = {
   forgetting_factor: "Скорость уменьшения веса старых свидетельств. Чем выше λ, тем быстрее система забывает прошлое и тем чувствительнее становится к новым наблюдениям.",
   initial_trust: "Стартовое доверие к агентам до накопления свидетельств. Высокое значение медленнее наказывает нарушителей, низкое делает систему изначально осторожной.",
   minimum_weight: "Минимальный вес агента при агрегировании. Не дает полностью обнулить вклад агента, но слишком высокий минимум ослабляет защиту от нарушителей.",
+  isolation_enabled: "Включает управляющую изоляцию после оценки свидетельств. Выключение позволяет анализировать вклад изоляции отдельно от выбора агрегатора, не отключая вычисление доверия.",
   isolation_threshold: "Порог репутации для перевода агента в изоляцию. Высокий порог изолирует агрессивнее, низкий снижает риск ложных изоляций.",
   isolation_patience: "Сколько раз подряд агент должен быть ниже порога перед изоляцией. Большое k уменьшает ложные срабатывания, но замедляет реакцию на атаку.",
   isolation_cooldown_steps: "Минимальное время до восстановления изолированного агента. Большое значение дольше удерживает нарушителей вне решения, но медленнее возвращает ошибочно изолированных.",
@@ -331,6 +333,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
 
         <div className="sidebar-section">
           <h3>Параметры изоляции</h3>
+          <BoolField label="Включить управляющую изоляцию" checked={config.isolation_enabled} onChange={set("isolation_enabled")} tooltip={PARAMETER_TOOLTIPS.isolation_enabled} />
           <NumberField label="Порог изоляции (τiso)" value={config.isolation_threshold} min={0.05} max={0.9} step={0.01} onChange={set("isolation_threshold")} tooltip={PARAMETER_TOOLTIPS.isolation_threshold} />
           <NumberField label="Подтверждений для изоляции (k)" value={config.isolation_patience} min={1} max={20} onChange={set("isolation_patience")} tooltip={PARAMETER_TOOLTIPS.isolation_patience} />
           <NumberField label="Охлаждение изоляции (шагов)" value={config.isolation_cooldown_steps} min={1} max={100} onChange={set("isolation_cooldown_steps")} tooltip={PARAMETER_TOOLTIPS.isolation_cooldown_steps} />
@@ -573,7 +576,28 @@ function Sensitivity({ data, mode, setMode, onRun, running }) {
   }, [oneRows]);
   const effects = data?.mode === "factorial" ? (data.main_effects || []).filter((row) => row.metric === metric).map((row) => ({ ...row, label: FACTOR_LABELS[row.factor] || row.factor })) : [];
   const interactions = data?.mode === "factorial" ? (data.interaction_effects || []).filter((row) => row.metric === metric).slice(0, 10) : [];
-  return <div className="tab-stack"><div className="tab-action sensitivity-action"><div><h2>Анализ чувствительности</h2><p>Однофакторное изменение f либо двухуровневый многофакторный план по шести параметрам.</p></div><div className="action-controls"><select value={mode} onChange={(event) => setMode(event.target.value)}><option value="one_factor">Однофакторный анализ</option><option value="factorial">Многофакторный план</option></select><button className="secondary-button" onClick={() => onRun(mode)} disabled={running}><Icon name="play" />Выполнить</button></div></div>{data?.partial ? <div className="partial-banner">Сохранены частичные результаты: {data.completed_tasks} из {data.requested_tasks} заданий.</div> : null}{mode === "one_factor" ? (oneChart.length ? <Panel title="Устойчивость к доле скомпрометированных агентов" subtitle="Вероятность правильного решения для трех методов"><ResponsiveContainer width="100%" height={470}><LineChart data={oneChart} margin={{ top: 18, right: 32, left: 0, bottom: 18 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="n_byzantine" tick={{ fontSize: 10 }} label={{ value: "Число византийских агентов f", position: "insideBottom", offset: -8, fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip /><Legend wrapperStyle={{ fontSize: 10 }} />{Object.keys(METHODS).map((method) => <Line key={method} dataKey={method} name={METHODS[method]} stroke={COLORS[method]} strokeWidth={method === "proposed_robust" ? 2.6 : 1.7} dot={{ r: 3 }} isAnimationActive={false} />)}</LineChart></ResponsiveContainer></Panel> : <div className="empty">Запустите однофакторный анализ.</div>) : (effects.length ? <><Panel title="Главные эффекты факторов" subtitle={`Разность средних на двух уровнях. ${data?.designMetadata?.definingRelation||"Полный план"}; взаимодействия высших порядков не оцениваются независимо.`} headerAside={<select className="compact-select" value={metric} onChange={(event) => setMetric(event.target.value)}><option value="probability_correct">P(правильное решение)</option><option value="rmse_to_truth">RMSE</option><option value="detection_rate">Полнота обнаружения</option><option value="delivery_ratio">Доля доставки</option></select>}><ResponsiveContainer width="100%" height={390}><BarChart data={effects} layout="vertical" margin={{ top: 10, right: 25, left: 150, bottom: 10 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tick={{ fontSize: 9 }} /><YAxis type="category" dataKey="label" width={145} tick={{ fontSize: 9 }} /><Tooltip formatter={(value) => Number(value).toFixed(4)} /><ReferenceLine x={0} stroke="#87929d" /><Bar dataKey="effect_high_minus_low" name="Эффект верхний−нижний" fill={COLORS.proposed_robust} radius={[0, 3, 3, 0]} /></BarChart></ResponsiveContainer></Panel><div className="mc-grid"><Panel title="Наиболее сильные взаимодействия факторов"><div className="table-wrap large"><table><thead><tr><th>Факторы</th><th>Эффект</th></tr></thead><tbody>{interactions.map((row, index) => <tr key={index}><td>{row.factors.map((factor) => FACTOR_LABELS[factor] || factor).join(" × ")}</td><td>{row.effect.toFixed(4)}</td></tr>)}</tbody></table></div></Panel><Panel title="Точки факторного плана"><div className="table-wrap large"><table><thead><tr><th>№</th><th>Метод</th><th>Pправ.</th><th>RMSE</th><th>Детекция</th></tr></thead><tbody>{(data.design_points || []).slice(0, 80).map((row, index) => <tr key={index}><td>{row.design_index + 1}</td><td>{SHORT_METHODS[row.method]}</td><td>{row.probability_correct.toFixed(3)}</td><td>{row.rmse_to_truth.toFixed(3)}</td><td>{row.detection_rate.toFixed(3)}</td></tr>)}</tbody></table></div></Panel></div></> : <div className="empty">Запустите многофакторный анализ. Полный план содержит до 64 точек.</div>)}</div>;
+  const ablationView=data?.mode==="ablation"&&data.ablation_rows?.length?<>
+    <Panel title="Абляционный эксперимент: режим атаки × управляющая изоляция" subtitle="Четыре группы: on–off / постоянное смещение × включенная / отключенная изоляция">
+      <div className="table-wrap large"><table><thead><tr><th>Режим атаки</th><th>Изоляция</th><th>Метод</th><th>R</th><th>Pправ. (все)</th><th>Покрытие</th><th>RMSE (при решении)</th><th>Ошибочные изоляции</th></tr></thead>
+       <tbody>{data.ablation_rows.map((row,index)=><tr key={index}>
+        <td>{row.attack_schedule==="on_off"?"On–off":"Постоянная"}</td><td>{row.isolation_enabled?"Включена":"Отключена"}</td>
+        <td>{SHORT_METHODS[row.method]||row.method}</td><td>{row.runs}</td>
+        <td>{metricPercent(row.unconditional_correct)}</td><td>{metricPercent(row.decision_coverage)}</td>
+        <td>{metricNumber(row.conditional_rmse)}</td><td>{metricNumber(row.false_isolations,2)}</td>
+       </tr>)}</tbody></table></div>
+    </Panel>
+    <Panel title="Контрасты при фиксированном методе или контроллере" subtitle="Разность: первая группа − вторая; поисковые нескорректированные 95%-е интервалы только при R≥10">
+      <div className="table-wrap large"><table><thead><tr><th>Сравнение</th><th>Метод A</th><th>Метод B</th><th>Наблюдений</th><th>Разность</th><th>95% интервал</th></tr></thead>
+      <tbody>{(data.ablation_contrasts||[]).map((row,index)=><tr key={index}>
+        <td title={row.definition}>{row.category==="isolation"?"Изоляция":row.category==="aggregation"?"Агрегатор":"Режим атаки"}</td>
+        <td>{SHORT_METHODS[row.methodA]||row.methodA}</td><td>{SHORT_METHODS[row.methodB]||row.methodB}</td>
+        <td>{row.n_pairs}</td><td>{metricNumber(row.difference_mean,4)}</td>
+        <td>{row.ci95_low===null?"Не определён":metricNumber(row.ci95_low,4)+" … "+metricNumber(row.ci95_high,4)}</td>
+       </tr>)}</tbody></table></div>
+    </Panel>
+    <p className="r27-note"><strong>Ограничения интерпретации:</strong> {data.design?.disclaimer}</p>
+   </>:null;
+  return <div className="tab-stack"><div className="tab-action sensitivity-action"><div><h2>Анализ чувствительности</h2><p>Однофакторное изменение f либо двухуровневый многофакторный план по шести параметрам.</p></div><div className="action-controls"><select value={mode} onChange={(event) => setMode(event.target.value)}><option value="one_factor">Однофакторный анализ</option><option value="factorial">Многофакторный план</option><option value="ablation">Абляция on–off / изоляция</option></select><button className="secondary-button" onClick={() => onRun(mode)} disabled={running}><Icon name="play" />Выполнить</button></div></div>{data?.partial ? <div className="partial-banner">Сохранены частичные результаты: {data.completed_tasks} из {data.requested_tasks} заданий.</div> : null}{mode === "ablation" ? (ablationView||<div className="empty">Запустите абляционный эксперимент.</div>) : mode === "one_factor" ? (oneChart.length ? <Panel title="Устойчивость к доле скомпрометированных агентов" subtitle="Вероятность правильного решения для трех методов"><ResponsiveContainer width="100%" height={470}><LineChart data={oneChart} margin={{ top: 18, right: 32, left: 0, bottom: 18 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" vertical={false} /><XAxis dataKey="n_byzantine" tick={{ fontSize: 10 }} label={{ value: "Число византийских агентов f", position: "insideBottom", offset: -8, fontSize: 10 }} /><YAxis domain={[0, 1]} tick={{ fontSize: 10 }} /><Tooltip /><Legend wrapperStyle={{ fontSize: 10 }} />{Object.keys(METHODS).map((method) => <Line key={method} dataKey={method} name={METHODS[method]} stroke={COLORS[method]} strokeWidth={method === "proposed_robust" ? 2.6 : 1.7} dot={{ r: 3 }} isAnimationActive={false} />)}</LineChart></ResponsiveContainer></Panel> : <div className="empty">Запустите однофакторный анализ.</div>) : (effects.length ? <><Panel title="Главные эффекты факторов" subtitle={`Разность средних на двух уровнях. ${data?.designMetadata?.definingRelation||"Полный план"}; взаимодействия высших порядков не оцениваются независимо.`} headerAside={<select className="compact-select" value={metric} onChange={(event) => setMetric(event.target.value)}><option value="probability_correct">P(правильное решение)</option><option value="rmse_to_truth">RMSE</option><option value="detection_rate">Полнота обнаружения</option><option value="delivery_ratio">Доля доставки</option></select>}><ResponsiveContainer width="100%" height={390}><BarChart data={effects} layout="vertical" margin={{ top: 10, right: 25, left: 150, bottom: 10 }}><CartesianGrid stroke={COLORS.grid} strokeDasharray="3 3" horizontal={false} /><XAxis type="number" tick={{ fontSize: 9 }} /><YAxis type="category" dataKey="label" width={145} tick={{ fontSize: 9 }} /><Tooltip formatter={(value) => Number(value).toFixed(4)} /><ReferenceLine x={0} stroke="#87929d" /><Bar dataKey="effect_high_minus_low" name="Эффект верхний−нижний" fill={COLORS.proposed_robust} radius={[0, 3, 3, 0]} /></BarChart></ResponsiveContainer></Panel><div className="mc-grid"><Panel title="Наиболее сильные взаимодействия факторов"><div className="table-wrap large"><table><thead><tr><th>Факторы</th><th>Эффект</th></tr></thead><tbody>{interactions.map((row, index) => <tr key={index}><td>{row.factors.map((factor) => FACTOR_LABELS[factor] || factor).join(" × ")}</td><td>{row.effect.toFixed(4)}</td></tr>)}</tbody></table></div></Panel><Panel title="Точки факторного плана"><div className="table-wrap large"><table><thead><tr><th>№</th><th>Метод</th><th>Pправ.</th><th>RMSE</th><th>Детекция</th></tr></thead><tbody>{(data.design_points || []).slice(0, 80).map((row, index) => <tr key={index}><td>{row.design_index + 1}</td><td>{SHORT_METHODS[row.method]}</td><td>{row.probability_correct.toFixed(3)}</td><td>{row.rmse_to_truth.toFixed(3)}</td><td>{row.detection_rate.toFixed(3)}</td></tr>)}</tbody></table></div></Panel></div></> : <div className="empty">Запустите многофакторный анализ. Полный план содержит до 64 точек.</div>)}</div>;
 }
 
 function downloadBlob(name, content, type) {
@@ -592,6 +616,7 @@ function DataTab({ trace, monteCarlo, sensitivityByMode }) {
     ["Серия Монте-Карло", "σ- и квантильные области, bootstrap-интервалы и распределения метрик.", "monte_carlo.json", monteCarlo],
     ["Однофакторная чувствительность", "Изменение показателей при варьировании числа нарушителей.", "sensitivity_one_factor.json", sensitivityByMode.one_factor],
     ["Многофакторная чувствительность", "Точки факторного плана, главные эффекты и взаимодействия.", "sensitivity_factorial.json", sensitivityByMode.factorial],
+    ["Абляция: атака и управляющая изоляция", "Четыре режима, раздельные вклады агрегатора и контроллера, ограничения парности.", "sensitivity_ablation.json", sensitivityByMode.ablation],
   ];
   return <div className="data-grid">{items.map(([title, text, filename, value]) => <section className="data-row" key={title}><div><h3>{title}</h3><p>{text}</p>{value?.log_file ? <small>Основной журнал: {value.log_file}</small> : null}{value?.trajectory_log_file ? <small>Пошаговая статистика: {value.trajectory_log_file}</small> : null}{value?.bootstrap_log_file ? <small>Bootstrap: {value.bootstrap_log_file}</small> : null}</div><button onClick={() => downloadBlob(filename, JSON.stringify(value, null, 2), "application/json;charset=utf-8")} disabled={!value}><Icon name="download" />Скачать JSON</button></section>)}</div>;
 }
@@ -634,7 +659,7 @@ function App() {
   const [activeTab, setActiveTab] = useState("trace");
   const [trace, setTrace] = useState(null);
   const [monteCarlo, setMonteCarlo] = useState(null);
-  const [sensitivityByMode, setSensitivityByMode] = useState({ one_factor: null, factorial: null });
+  const [sensitivityByMode, setSensitivityByMode] = useState({ one_factor: null, factorial: null, ablation: null });
   const [sensitivityMode, setSensitivityMode] = useState("one_factor");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
@@ -683,7 +708,7 @@ function App() {
     setAttackLevel("high");
     setTrace(null);
     setMonteCarlo(null);
-    setSensitivityByMode({ one_factor: null, factorial: null });
+    setSensitivityByMode({ one_factor: null, factorial: null, ablation: null });
     setLastRun(null);
     setProgress(null);
     setError("");
@@ -697,6 +722,7 @@ function App() {
   const currentSensitivityByMode = {
     one_factor: sensitivityByMode.one_factor?.client_signature === experimentSignature ? sensitivityByMode.one_factor : null,
     factorial: sensitivityByMode.factorial?.client_signature === experimentSignature ? sensitivityByMode.factorial : null,
+    ablation: sensitivityByMode.ablation?.client_signature === experimentSignature ? sensitivityByMode.ablation : null,
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
   const exportVisibleCharts = () => {
