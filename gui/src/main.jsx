@@ -22,6 +22,7 @@ import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig} from "./trustEngine.js";
+import {passportForStudy,METRIC_PASSPORT_VERSION} from "./metricPassport.js";
 import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip,ExperimentProgress as ProgressStrip} from "./ExperimentLayout.jsx";
 
 const METHODS = {
@@ -622,6 +623,7 @@ function downloadBlob(name, content, type) {
 
 function DataTab({ trace, monteCarlo, sensitivityByMode }) {
   const items = [
+    ["Паспорта ключевых показателей", "Формулы, знаменатели, единицы и правила интерпретации отсутствующих значений · "+METRIC_PASSPORT_VERSION, "trust_metric_passport.json", passportForStudy("trust")],
     ["Трассировка одного прогона", "Решения, репутации, состояния агентов, сетевые показатели и события изоляции.", "trace.json", trace],
     ["Серия Монте-Карло", "σ- и квантильные области, bootstrap-интервалы и распределения метрик.", "monte_carlo.json", monteCarlo],
     ["Однофакторная чувствительность", "Изменение показателей при варьировании числа нарушителей.", "sensitivity_one_factor.json", sensitivityByMode.one_factor],
