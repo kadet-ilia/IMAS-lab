@@ -25,7 +25,9 @@ const FIELD={
  lossScale:["k — масштаб ущерба","Множитель условных потерь вследствие нарушения функций.",.1],
  defenseFactor:["η — эффект защиты","Снижение вероятности распространения при активированных мерах.",.01],
  noise:["σ — шум оценок","Среднеквадратическое отклонение локальных оценок.",.01],
- attackBias:["b — смещение нарушителя","Модуль преднамеренного искажения оценки, направленного против правильного решения.",.1]
+ attackBias:["b — смещение нарушителя","Модуль преднамеренного искажения оценки, направленного против правильного решения.",.1],
+ costWrong:["Cош — цена ошибочного решения","Условная стоимость неправильного автоматического выбора.",.1],
+ costRefuse:["Cотк — цена отказа","Условная стоимость отказа и эскалации оператору.",.1]
 };
 const METHOD_COLORS=["#2164ba","#0a947b","#db6b38","#7955a8"];
 const THEORY={
@@ -75,9 +77,11 @@ const glossary=[
  ["Безопасный режим","Режим отказа от автоматического применения потенциально опасного управляющего действия."],
  ["Доверие","Численная оценка предшествующей надёжности источника, не являющаяся доказательством истинности сообщения."]
 ];
-const fmt=(x)=>typeof x==="number"? (Number.isInteger(x)?String(x):x.toLocaleString("ru-RU",{maximumFractionDigits:4})):String(x??"—");
-const pctFields=new Set(["correctUnconditional","accuracy","coverage","errorRate","dangerProbability","expectedFraction","p95Fraction","wrongProbability","correctProbability","abstentionProbability","meanExposedFraction"]);
-const metricNames={correctUnconditional:"Правильные решения / все опыты",accuracy:"Точность среди выданных решений",coverage:"Доля выданных решений",errorRate:"Доля неправильных решений",dangerProbability:"Вероятность опасного состояния",expectedFraction:"Средняя доля поражённых",p95Fraction:"95-й процентиль поражения",expectedDamage:"Средний ущерб",excessDamage:"Каскадный ущерб",cvar95:"CVaR95",wrongProbability:"Вероятность неверного решения",meanDeviation:"Среднее смещение",abstentionProbability:"Доля отказов",risk:"Условный риск"};
+const fmt=(x)=>x===null||x===undefined?"—":typeof x==="number"?(Number.isInteger(x)?String(x):x.toLocaleString("ru-RU",{maximumFractionDigits:4})):String(x);
+const pctFields=new Set(["correctUnconditional","accuracy","coverage","errorRate","dangerProbability","expectedFraction","p95Fraction","wrongProbability","correctProbability","abstentionProbability","meanExposedFraction",
+ "coverageCI95Low","coverageCI95High","correctCI95Low","correctCI95High","accuracyCI95Low","accuracyCI95High","errorCI95Low","errorCI95High",
+ "expectedFractionCI95Low","expectedFractionCI95High","dangerCI95Low","dangerCI95High","wrongCI95Low","wrongCI95High","abstentionCI95Low","abstentionCI95High"]);
+const metricNames={correctUnconditional:"Правильные решения / все опыты",accuracy:"Точность среди выданных решений",coverage:"Доля выданных решений",errorRate:"Доля неправильных решений",dangerProbability:"Вероятность опасного состояния",expectedFraction:"Средняя доля поражённых",p95Fraction:"95-й процентиль поражения",expectedDamage:"Средний ущерб",excessDamage:"Каскадный ущерб",es95:"ES95",es95CI95Low:"ES95 нижняя граница",es95CI95High:"ES95 верхняя граница",tailSamples:"Эквивалентный объём хвоста",tailWarning:"Предупреждение о хвостовой оценке",wrongProbability:"Вероятность неверного решения",meanDeviation:"Среднее смещение",abstentionProbability:"Доля отказов",risk:"Нормированный риск",costWrong:"Цена неправильного решения",costRefuse:"Цена отказа",dangerCI95Low:"P опасности: нижняя 95%",dangerCI95High:"P опасности: верхняя 95%",dangerEvents:"Число опасных исходов"};
 function download(name,text,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function ScientificGraph({result,metric}) {
  const rows=result.rows||[];const methods=[...new Set(rows.map(x=>x.method).filter(Boolean))],scenarios=[...new Set(rows.map(x=>x.scenario))];
@@ -106,7 +110,7 @@ function ResultTable({rows}){if(!rows?.length)return null;const cols=Object.keys
 const KEY_STATS={
  uncertainty:[["correctUnconditional","Правильных решений"],["coverage","Покрытие"],["errorRate","Ошибочных решений"]],
  probgraph:[["dangerProbability","Опасных состояний"],["expectedFraction","Доля поражённых"],["p95Fraction","95-й процентиль"]],
- cascade:[["expectedDamage","Ожидаемый ущерб"],["dangerProbability","Опасных состояний"],["cvar95","Верхнехвостовой ущерб"]],
+ cascade:[["expectedDamage","Ожидаемый ущерб"],["dangerProbability","Опасных состояний"],["es95","ES95 худших потерь"]],
  misinformation:[["wrongProbability","Ошибочных решений"],["abstentionProbability","Отказов"],["meanExposedFraction","Информационный охват"]]
 };
 function ResearchKpis({studyId,result}){
@@ -161,6 +165,13 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      </ExperimentPanel>
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
+   {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки снижения риска (95% bootstrap)" subtitle="Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события">
+      <ResultTable rows={result.pairedEffects}/>
+      <p className="r27-note">Интервал отражает только неопределённость Монте-Карло. Если он включает нуль, знак эффекта не установлен; при малом R и редких событиях необходимо увеличить выборку.</p>
+    </ExperimentPanel>:null}
+   {result?.scenarioMetrics?.length? <ExperimentPanel title="Информационный охват сценариев" subtitle="Общая характеристика распространения, не отдельного алгоритма принятия решений">
+      <ResultTable rows={result.scenarioMetrics}/>
+    </ExperimentPanel>:null}
    {result?<>
      <section className="panel r27-study-summary">
        <header className="panel-header"><div><h2>Основные результаты исследования</h2><p>Сводные оценки и исходные параметры расчёта</p></div></header>
