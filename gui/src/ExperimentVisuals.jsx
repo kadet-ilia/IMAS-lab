@@ -1,5 +1,6 @@
 import React, {useEffect,useMemo,useState} from "react";
 import {LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,ResponsiveContainer,BarChart,Bar} from "recharts";
+import {FRACTION_METRICS,formatStudyValue} from "./metricFormatting.js";
 import "./research2027.css";
 
 const PALETTE={normal:"#cfe1f1",coordinator:"#6ca6df",missing:"#e3e8ed",misled:"#edb663",compromised:"#d85454",affected:"#d85454",isolated:"#7c83a2"};
@@ -89,7 +90,7 @@ export function StudyVisualization({result,metric}){
     {(replay?.vertices||[]).flatMap((v,i)=>[<b key={"a"+i}>А{i+1}</b>,...frames.map((frame,j)=><span key={i+"_"+j} title={"А"+(i+1)+"; t="+frame.step+"; "+(LABELS[frame.status[i]]||frame.status[i])} style={{background:PALETTE[frame.status[i]]||PALETTE.normal}}/>)])}
    </div></div>
   </div></section>
-  {cells?<section className="panel r27-panel r27-matrix-panel"><header className="panel-header"><div><h2>Сравнительная матрица по сценариям и методам</h2><p>Показатель выбран в меню основной диаграммы; насыщенность пропорциональна значению в текущем наборе.</p></div></header><div className="panel-body"><div className="r27-table-scroll"><table className="r27-table"><thead><tr><th>Сценарий</th>{methods.map(m=><th key={m}>{m}</th>)}</tr></thead><tbody>{scenarios.map((s,i)=><tr key={s}><th>{s}</th>{methods.map((m,j)=>{const v=measured[i][j],z=typeof v==="number"?(v-lo)/span:0;return <td key={m} style={{background:typeof v==="number"?"rgba(24,104,173,"+(0.07+0.43*z)+")":undefined}}>{round(v)}</td>;})}</tr>)}</tbody></table></div></div></section>:null}
+  {cells?<section className="panel r27-panel r27-matrix-panel"><header className="panel-header"><div><h2>Сравнительная матрица по сценариям и методам</h2><p>Показатель выбран в меню основной диаграммы; насыщенность пропорциональна значению в текущем наборе.</p></div></header><div className="panel-body"><div className="r27-table-scroll"><table className="r27-table"><thead><tr><th>Сценарий</th>{methods.map(m=><th key={m}>{m}</th>)}</tr></thead><tbody>{scenarios.map((s,i)=><tr key={s}><th>{s}</th>{methods.map((m,j)=>{const v=measured[i][j],z=typeof v==="number"?(v-lo)/span:0;return <td key={m} style={{background:typeof v==="number"?"rgba(24,104,173,"+(0.07+0.43*z)+")":undefined}}>{formatStudyValue(metric,v)}</td>;})}</tr>)}</tbody></table></div></div></section>:null}
  </div>;
 }
 export function baselineReplay(data,config){
