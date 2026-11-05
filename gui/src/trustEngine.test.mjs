@@ -371,3 +371,37 @@ test("UP-07 keyed transport preserves each agent's loss and delay when unrelated
    "pending exogenous delays for shared sources at tick "+t);
  }
 });
+
+
+test("UP-13 every generated factorial cell preserves physical levels, rank 22 and full design",()=>{
+ for(const points of [32,64]){
+  const plan=makePlan({action:"sensitivity",sensitivity_mode:"factorial",scenario:"static_bias",
+   config:{...cfg,factorial_max_points:points}});
+  assert.equal(plan.designMetadata.valid,true);
+  assert.equal(plan.designMetadata.orthogonal,true);
+  assert.equal(plan.designMetadata.rank,22);
+  assert.equal(plan.designMetadata.points,points);
+  assert.equal(plan.designMetadata.columns,22);
+  assert.equal(plan.designs.length,points);
+ }
+ assert.throws(()=>makePlan({action:"sensitivity",sensitivity_mode:"factorial",
+  config:{...cfg},factor_ranges:{n_byzantine:[2.1,2.4]}}),/совпадают после округления/);
+});
+test("UP-13 factorial effects require complete physical design and ≥2 cell replicates for CI",()=>{
+ const c={...cfg,n_steps:8,factorial_runs_per_point:2};
+ const payload={action:"sensitivity",sensitivity_mode:"factorial",scenario:"static_bias",config:c};
+ const plan=makePlan(payload);
+ const full=runActionSync(payload);
+ assert.equal(full.factorialUncertainty.expectedMainEffects,24);
+ assert.equal(full.factorialUncertainty.mainEffectsWithCI,24);
+ assert.ok(full.main_effects.every(e=>e.estimable&&Number.isFinite(e.ci95_low)&&Number.isFinite(e.ci95_high)));
+ assert.ok(full.main_effects.every(e=>e.ci95_low<=e.effect_high_minus_low&&e.ci95_high>=e.effect_high_minus_low));
+ assert.ok(full.interaction_effects.every(e=>e.min_replicates_per_cell===2));
+ const incomplete=assembleResult(plan,plan.tasks.slice(0,-2).map(task=>runTask(plan,task)));
+ assert.equal(incomplete.partial,true);
+ assert.ok(incomplete.main_effects.some(e=>!e.estimable&&e.effect_high_minus_low===null));
+ assert.ok(incomplete.main_effects.some(e=>e.missing_cells>0));
+ const one=runActionSync({...payload,config:{...c,factorial_runs_per_point:1}});
+ assert.equal(one.factorialUncertainty.mainEffectsWithCI,0);
+ assert.ok(one.main_effects.every(e=>e.ci95_low===null&&e.ci95_high===null));
+});
