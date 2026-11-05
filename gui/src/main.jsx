@@ -578,11 +578,11 @@ function Sensitivity({ data, mode, setMode, onRun, running }) {
   const interactions = data?.mode === "factorial" ? (data.interaction_effects || []).filter((row) => row.metric === metric).slice(0, 10) : [];
   const ablationView=data?.mode==="ablation"&&data.ablation_rows?.length?<>
     <Panel title="Абляционный эксперимент: режим атаки × управляющая изоляция" subtitle="Четыре группы: on–off / постоянное смещение × включенная / отключенная изоляция">
-      <div className="table-wrap large"><table><thead><tr><th>Режим атаки</th><th>Изоляция</th><th>Метод</th><th>R</th><th>Pправ. (все)</th><th>Покрытие</th><th>RMSE (при решении)</th><th>Ошибочные изоляции</th></tr></thead>
+      <div className="table-wrap large"><table><thead><tr><th>Режим атаки</th><th>Изоляция</th><th>Метод</th><th>R</th><th>Pправ. (все)</th><th>Pправ. при атаке</th><th>Pправ. в паузе атаки</th><th>Покрытие</th><th>RMSE (при решении)</th><th>Ошибочные изоляции</th></tr></thead>
        <tbody>{data.ablation_rows.map((row,index)=><tr key={index}>
         <td>{row.attack_schedule==="on_off"?"On–off":"Постоянная"}</td><td>{row.isolation_enabled?"Включена":"Отключена"}</td>
         <td>{SHORT_METHODS[row.method]||row.method}</td><td>{row.runs}</td>
-        <td>{metricPercent(row.unconditional_correct)}</td><td>{metricPercent(row.decision_coverage)}</td>
+        <td>{metricPercent(row.unconditional_correct)}</td><td>{metricPercent(row.attack_on_correct)}</td><td>{metricPercent(row.attack_off_correct)}</td><td>{metricPercent(row.decision_coverage)}</td>
         <td>{metricNumber(row.conditional_rmse)}</td><td>{metricNumber(row.false_isolations,2)}</td>
        </tr>)}</tbody></table></div>
     </Panel>
