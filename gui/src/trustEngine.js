@@ -59,7 +59,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.5.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.6.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],

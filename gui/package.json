@@ -1,7 +1,7 @@
 {
   "name": "imas-lab-test",
   "private": true,
-  "version": "0.6.0-rc.6",
+  "version": "0.7.0-rc.7",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
