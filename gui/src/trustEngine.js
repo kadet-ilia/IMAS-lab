@@ -227,7 +227,7 @@ export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0)
  delivered=keep.length;
  return{matrix:e,stats:{attempted,delivered,lost,bandwidth_dropped:dropped}};
 }
-function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r,runIndex=0){
+export function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r,runIndex=0){
  const n=active.length;if(!c.network_enabled)return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,expired:0,backlogged:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
  const largest=[...comps].sort((a,b)=>b.length-a.length||a[0]-b[0])[0]||[],set=new Set(largest);
  let lost=0;
