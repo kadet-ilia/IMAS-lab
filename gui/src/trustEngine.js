@@ -47,7 +47,7 @@ export const TRUST_MODEL_VERSION="trust-js-2.0.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
- factorial_runs_per_point:[1,50],factorial_max_points:[4,64],bootstrap_samples:[100,10000],parallel_workers:[0,32],
+ factorial_runs_per_point:[1,50],factorial_max_points:[32,64],bootstrap_samples:[100,10000],parallel_workers:[0,32],
  attack_start_step:[1,500],on_off_period:[1,500],on_off_attack_steps:[1,500],trust_window_steps:[2,100],
  isolation_patience:[1,100],minimum_evidence_steps:[1,500],isolation_cooldown_steps:[0,500],trim_each_side:[0,159],
  small_world_neighbors:[2,160],message_delay_min_steps:[0,500],message_delay_max_steps:[0,500],
@@ -88,6 +88,7 @@ export function validateConfig(value={}){
  requireField(c.trust_prior_strength>0,"trust_prior_strength","сила prior должна быть положительной");
  requireField(c.clip_radius>0,"clip_radius","радиус должен быть положительным");
  requireField(c.on_off_attack_steps<=c.on_off_period,"on_off_attack_steps","не превышать период");
+ requireField(c.factorial_max_points===32||c.factorial_max_points===64,"factorial_max_points","допустим только полный план 64 или регулярный полуплан 32");
  requireField(c.trim_each_side<=Math.floor((c.n_agents-1)/2),"trim_each_side","нельзя удалить все наблюдения");
  requireField(c.message_delay_max_steps>=c.message_delay_min_steps,"message_delay_max_steps","меньше минимальной задержки");
  requireField(c.attack_direction===-1||c.attack_direction===1,"attack_direction","допустимы -1 или 1");
@@ -350,12 +351,23 @@ function factorialRanges(c){
 function factorialDesign(c,rawRanges){
  const ranges={...factorialRanges(c)};for(const [k,v] of Object.entries(rawRanges||{}))if(k in ranges&&Array.isArray(v)&&v.length===2)ranges[k]=v;
  const factors=Object.keys(ranges),full=Array.from({length:2**factors.length},(_,i)=>factors.map((_,j)=>i&(1<<(factors.length-j-1))?1:-1));
- const selected=full.length>c.factorial_max_points?createRng(c.seed,541).choice(all(full.length),c.factorial_max_points).sort((a,b)=>a-b).map(i=>full[i]):full;
+ // The regular half-fraction I=ABCDEF (resolution VI) preserves orthogonality
+ // of main and two-factor columns. Arbitrary random subsets do not.
+ const selected=c.factorial_max_points===64?full:
+   full.filter(coded=>coded[5]===coded.slice(0,5).reduce((p,v)=>p*v,1));
+ if(selected.length!==c.factorial_max_points)throw Error("Нарушена структура регулярного факторного плана");
  const designs=selected.map((coded,index)=>{
   const settings={...c},values={};factors.forEach((f,j)=>{const v=ranges[f][coded[j]>0?1:0];values[f]=v;if(f==="attack_intensity_multiplier"){settings.static_bias=c.static_bias*v;settings.subtle_bias=c.subtle_bias*v;settings.collusion_bias=c.collusion_bias*v;}else settings[f]=["n_byzantine","trust_window_steps"].includes(f)?Math.round(v):v;});
   settings.trim_each_side=settings.n_byzantine;return{index,coded,values,settings:validateConfig(settings)};
  });
- return{factors,ranges,designs};
+ return{factors,ranges,designs,designMetadata:{
+  type:c.factorial_max_points===64?"complete-2^6":"regular-2^(6-1)",
+  points:c.factorial_max_points,designResolution:c.factorial_max_points===64?"full":"VI",
+  definingRelation:c.factorial_max_points===64?"none":"I=ABCDEF",
+  inferenceLimit:c.factorial_max_points===64?
+   "Полный двухуровневый план; эффекты оцениваются как маргинальные контрасты.":
+   "Главные эффекты смешаны с пятикратными, двухфакторные — с четырёхфакторными взаимодействиями; интерпретация предполагает пренебрежение эффектами высших порядков."
+ }};
 }
 export function makePlan(payload){
  const c=validateConfig(payload.config),scenario=payload.scenario||"collusion";
@@ -371,9 +383,9 @@ export function makePlan(payload){
    return{action,c,scenario,mode,tasks,total:tasks.length};
   }
   if(mode==="factorial"){
-    const {factors,ranges,designs}=factorialDesign(c,payload.factor_ranges);
+    const {factors,ranges,designs,designMetadata}=factorialDesign(c,payload.factor_ranges);
     const tasks=designs.flatMap(d=>all(c.factorial_runs_per_point).map(run=>({index:d.index,c:d.settings,run,design:d})));
-    return{action,c,scenario,mode,tasks,total:tasks.length,factors,ranges,designs};
+    return{action,c,scenario,mode,tasks,total:tasks.length,factors,ranges,designs,designMetadata};
   }
  }throw Error("Неизвестный режим моделирования "+action);
 }
@@ -411,7 +423,7 @@ export function assembleResult(plan,completed){
    if(high.length&&low.length){const e=mean(high.map(x=>x[metric]))-mean(low.map(x=>x[metric]));interactions.push({metric,factors:[one,two],effect:e,absolute_effect:Math.abs(e)});}
   }
  }
- return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>b.absolute_effect-a.absolute_effect).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
+ return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>b.absolute_effect-a.absolute_effect).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
 }
 export function runTask(plan,task){
  const scenarioIndex=plan.action==="sensitivity"&&plan.mode==="factorial"?task.index:0;
