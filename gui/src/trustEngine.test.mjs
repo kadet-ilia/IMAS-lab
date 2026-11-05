@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
- simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons
+ simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
@@ -86,4 +86,53 @@ test("configuration limits are enforced before any simulation",()=>{
  assert.throws(()=>validateConfig({...cfg,n_byzantine:6}),/N>2f/);
  assert.throws(()=>validateConfig({...cfg,n_steps:501}),/500/);
  assert.throws(()=>validateConfig({...cfg,network_topology:"unknown"}),/топология/);
+});
+
+
+test("UP-01 strict type, probability, prior, radius and integral configuration",()=>{
+ const bad=[
+  ["n_agents",7.5],["n_steps",4.5],["n_byzantine",1.5],["message_loss_probability",1.5],
+  ["reputation_damping",1],["reputation_damping",1.8],["clip_radius",-.1],
+  ["trust_prior_strength",-2],["parallel_workers",1.4],["forgetting_factor",0],
+  ["n_sybil_agents",1.2],["honest_noise_sigma",-1],["network_enabled",1],
+  ["on_off_period",2.5],["bootstrap_samples",NaN],["n_runs","4"]
+ ];
+ for(const [key,value] of bad)assert.throws(()=>validateConfig({...cfg,[key]:value}),new RegExp(key));
+ assert.throws(()=>validateConfig({...cfg,n_steps:4,attack_start_step:5}),/attack_start_step/);
+ assert.throws(()=>validateConfig({...cfg,partition_enabled:true,partition_start_step:4,partition_end_step:80}),/partition_end_step/);
+ assert.equal(validateConfig({...cfg,message_loss_probability:1,clip_radius:.001}).message_loss_probability,1);
+});
+test("UP-06 before activation Byzantine witnesses use the honest evidence generator",()=>{
+ const c=validateConfig({...cfg,attack_start_step:18,network_enabled:false});
+ const active=Array(c.n_agents).fill(true),labels=Array(c.n_agents).fill(0);
+ const honest=Array(c.n_agents).fill(false),compromised=honest.map((_,i)=>i===1||i===3);
+ const ref=observations(0,"collusion",c,honest,active,labels,createRng(101),999).matrix;
+ const actual=observations(0,"collusion",c,compromised,active,labels,createRng(101),999).matrix;
+ assert.deepEqual(actual,ref);
+});
+test("UP-08 complete loss of proposals produces refusal, not a zero-error oracle fallback",()=>{
+ const c={...cfg,network_enabled:true,network_topology:"ring",message_loss_probability:1};
+ const run=simulateRun(c,"collusion",0,0,true);
+ assert.ok(run.result.series.every(x=>x.proposed_robust===null&&x.arithmetic_mean===null));
+ for(const row of run.rows){
+  assert.equal(row.decision_coverage,0);
+  assert.equal(row.abstention_probability,1);
+  assert.equal(row.accuracy_accepted,null);
+  assert.equal(row.mae_to_truth,null);
+  assert.equal(row.rmse_to_truth,null);
+  assert.equal(row.probability_correct,0);
+ }
+ assert.equal(run.result.modelVersion,TRUST_MODEL_VERSION);
+});
+test("UP-05 every isolation is justified by the archived controller score at that tick",()=>{
+ const c={...cfg,isolation_threshold:.95,isolation_patience:1,minimum_evidence_steps:1};
+ const run=simulateRun(c,"collusion",0,0,true).result;
+ assert.ok(run.events.length>0);
+ for(const event of run.events){
+  const row=run.reputation.find(x=>x.agent===event.agent&&x.step===event.step);
+  assert.ok(row);
+  assert.equal(event.isolationScore,row.isolationScore);
+  assert.ok(row.isolationScore<event.threshold);
+  assert.equal(row.isolationThreshold,event.threshold);
+ }
 });
