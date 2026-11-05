@@ -272,7 +272,7 @@ await page.getByLabel("Браузерных потоков (0 — авто)").wa
 const legacyControls = {
   sybil: await page.getByLabel("Число Sybil-идентичностей").count(),
   bootstrap: await page.getByLabel("Bootstrap-выборок").count(),
-  parallelWorkers: await page.getByLabel("Параллельных процессов (0 — авто)").count(),
+  parallelWorkers: await page.getByLabel("Браузерных потоков (0 — авто)").count(),
 };
 const dashboardScreenshot = path.join(here, "dashboard.png");
 await page.screenshot({ path: dashboardScreenshot, fullPage: false });
