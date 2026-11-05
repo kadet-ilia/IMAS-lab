@@ -1,10 +1,10 @@
-import {makePlan,assembleResult} from "./trustEngine.js";
+import {makePlan,assembleResult,TRUST_MODEL_VERSION} from "./trustEngine.js";
 
 /**
  * IMAS_LaB_test: parallel browser workers, IndexedDB checkpoints, no backend.
  * Purely local results belong to the browser's origin and user profile.
  */
-const memory=new Map(),STORE="imas-lab-test-v2";
+const memory=new Map(),STORE="imas-lab-test-trust-v3-remediation";
 let active=null;
 function openStore(){
  if(typeof indexedDB==="undefined")return Promise.resolve(null);
@@ -31,11 +31,11 @@ async function storage(key,value){
   req.onerror=()=>{db.close();resolve(read?memory.get(key):undefined);};
  });
 }
-const canonical=p=>JSON.stringify({action:p.action||"trace",scenario:p.scenario||"collusion",config:p.config,sensitivity_mode:p.sensitivity_mode||"one_factor",f_values:p.f_values||null,factor_ranges:p.factor_ranges||null,run_index:p.run_index||0});
+export const cacheKeyForPayload=p=>JSON.stringify({modelVersion:TRUST_MODEL_VERSION,action:p.action||"trace",scenario:p.scenario||"collusion",config:p.config,sensitivity_mode:p.sensitivity_mode||"one_factor",f_values:p.f_values||null,factor_ranges:p.factor_ranges||null,run_index:p.run_index||0});
 export const isBrowserOnly=()=>true;
 export async function runBrowserExperiment(payload,onProgress=()=>{}){
  if(active)throw Error("Другое вычисление ещё выполняется");
- const key=canonical(payload),cached=await storage("complete:"+key);
+ const key=cacheKeyForPayload(payload),cached=await storage("complete:"+key);
  if(cached)return{result:cached,cache_hit:true,state:"completed"};
  const plan=makePlan(payload),previous=await storage("checkpoint:"+key);
  const results=Array(plan.total).fill(null);
