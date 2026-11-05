@@ -162,7 +162,7 @@ export function trimmedWeightedMean(values,weights,k){
 }
 function aggregate(proposals,reputation,available,c,last){
  const idx=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
- if(!idx.length)return{...last};
+ if(!idx.length)return Object.fromEntries(METHODS.map(method=>[method,null]));
  const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight)),arithmetic=mean(v);
  const weighted=sum(v.map((x,i)=>x*w[i]))/sum(w),center=median(v),cv=v.map(x=>clamp(x,center-c.clip_radius,center+c.clip_radius));
  return {arithmetic_mean:arithmetic,trust_weighted_mean:weighted,proposed_robust:clamp(trimmedWeightedMean(cv,w,c.trim_each_side),c.safe_action_min,c.safe_action_max)};
@@ -176,11 +176,11 @@ function samples(t,scenario,c,bad,sybil,r){
  if(c.n_sybil_agents){const common=v+c.attack_direction*c.collusion_bias+.005*r.normal();for(let i=c.n_agents;i<n;i++)x[i]=common+.002*r.normal();}
  return x;
 }
-function observations(t,scenario,c,bad,active,labels,r,budget){
+export function observations(t,scenario,c,bad,active,labels,r,budget){
  const n=bad.length,attack=activeAttack(t,scenario,c),e=makeMat(n,NaN);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   const quality=attack&&bad[j]?c.byzantine_quality:c.honest_quality;
-  let v=bad[i]?(bad[j]?.98:.02):clamp((r.random()<quality?1:0)+r.normal()*c.observer_noise_sigma,0,1);
+  let v=attack&&bad[i]?(bad[j]?.98:.02):clamp((r.random()<quality?1:0)+r.normal()*c.observer_noise_sigma,0,1);
   if(i===j)v=c.honest_quality;
   e[i][j]=v;
  }
@@ -210,7 +210,7 @@ function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r){
  budget,stats:{attempted:largest.length,delivered,lost,bandwidth_dropped:dropped,component_size:largest.length,queued:queue.length,mean_delay:delayList.length?mean(delayList):0}};
 }
 const finiteMean=a=>mean(valid(a));
-function configDetail(c){return {...c,effective_agent_count:c.n_agents+c.n_sybil_agents,effective_byzantine_count:c.n_byzantine+c.n_sybil_agents};}
+function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,effective_agent_count:c.n_agents+c.n_sybil_agents,effective_byzantine_count:c.n_byzantine+c.n_sybil_agents};}
 export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false){
  const c=validateConfig(rawConfig),n=c.n_agents+c.n_sybil_agents,r=createRng(c.seed,scenarioIndex,runIndex);
  const sybil=all(n).map(i=>i>=c.n_agents),bad=sybil.slice(),badIds=r.choice(all(c.n_agents),c.n_byzantine);badIds.forEach(i=>bad[i]=true);
@@ -218,8 +218,8 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  r.choice(all(n),clamp(Math.round(n*c.partition_fraction),1,n-1)).forEach(i=>groups[i]=1);
  let active=all(n).map(i=>!sybil[i]),low=Array(n).fill(0),isolatedAt=Array(n).fill(null),until=Array(n).fill(-1);
  const hist=[],queue=[],lastValues=Array(n).fill(NaN),lastSteps=Array(n).fill(-1e9);
- let previous=Object.fromEntries(METHODS.map(m=>[m,c.desired_action]));
- const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]]));
+ let previous=Object.fromEntries(METHODS.map(m=>[m,null]));
+ const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
  let attempted=0,delivered=0,lost=0,dropped=0;
  const series=[],network_series=[],reputationHistory=[],states=[],events=[];
  const t0=performance.now();
@@ -233,20 +233,28 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);
   const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r),decisions=aggregate(tx.values,rep,tx.available,c,previous);previous=decisions;
-  const honest=all(n).filter(i=>tx.available[i]&&!bad[i]),reference=honest.length?median(honest.map(i=>tx.values[i])):c.desired_action;
-  const half=1.96*c.honest_noise_sigma/Math.sqrt(Math.max(1,honest.length));
-  for(const m of METHODS){const e=decisions[m]-c.desired_action;errors[m].push(Math.abs(e));signed[m].push(e);correct[m].push(Math.abs(e)<=c.correctness_tolerance?1:0);consensus[m].push(Math.abs(decisions[m]-reference));cover[m].push(Math.abs(e)<=half?1:0);}
+  const honest=all(n).filter(i=>tx.available[i]&&!bad[i]),reference=honest.length?median(honest.map(i=>tx.values[i])):null;
+  const half=honest.length?1.96*c.honest_noise_sigma/Math.sqrt(honest.length):null;
+  for(const m of METHODS){
+    const accepted=good(decisions[m]);availableDecision[m].push(accepted?1:0);
+    if(!accepted){correct[m].push(0);continue;}
+    const e=decisions[m]-c.desired_action;
+    errors[m].push(Math.abs(e));signed[m].push(e);
+    correct[m].push(Math.abs(e)<=c.correctness_tolerance?1:0);
+    if(good(reference))consensus[m].push(Math.abs(decisions[m]-reference));
+    if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
+  }
   const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget);
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;
+  const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
+  for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
   if(t+1>=c.minimum_evidence_steps){
-   const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
-   for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
    for(let i=0;i<n;i++){
     low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
     if(running[i]&&low[i]>=c.isolation_patience){
      if(isolatedAt[i]===null)isolatedAt[i]=t+1;
-     if(detail)events.push({step:t+1,agent:i+1,type:sybil[i]?"sybil":bad[i]?"byzantine":"false_positive",reason:"reputation_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:newScores[i]});
+     if(detail)events.push({step:t+1,agent:i+1,type:sybil[i]?"sybil":bad[i]?"byzantine":"false_positive",reason:"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold});
      active[i]=false;until[i]=t+c.isolation_cooldown_steps;
     }
    }
@@ -258,7 +266,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   if(detail){
    network_series.push({...row,proposal_queue:tx.stats.queued,mean_message_delay:tx.stats.mean_delay,delivery_ratio:row.messages_delivered/Math.max(1,tx.stats.attempted+evidence.stats.attempted)});
    for(let i=0;i<n;i++){
-    reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],byzantine:bad[i],sybil:sybil[i],active:active[i]});
+    reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],localTrust:scores[i],eigenReputation:eigen[i],isolationScore:newScores[i],isolationThreshold:c.isolation_threshold,byzantine:bad[i],sybil:sybil[i],active:active[i]});
     states.push({step:t+1,agent:i+1,state:sybil[i]&&!eligible[i]?"dormant":!active[i]?"isolated":sybil[i]?"sybil":bad[i]?"byzantine":"honest"});
    }
   }
@@ -268,14 +276,19 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  const preserved=all(n).filter(i=>active[i]&&!bad[i]).length/Math.max(1,bad.filter(x=>!x).length),ratio=delivered/Math.max(1,attempted);
  const rows=METHODS.map(method=>{
    const e=errors[method],sgn=signed[method];
-   return{scenario,run:runIndex,method,probability_correct:mean(correct[method]),mae_to_truth:mean(e),rmse_to_truth:Math.sqrt(mean(e.map(x=>x*x))),
-      bias:mean(sgn),coverage95:mean(cover[method]),consensus_error:mean(consensus[method]),
+   return{scenario,run:runIndex,method,modelVersion:TRUST_MODEL_VERSION,
+      probability_correct:mean(correct[method]),decision_coverage:mean(availableDecision[method]),
+      abstention_probability:1-mean(availableDecision[method]),
+      accuracy_accepted:e.length?sum(correct[method])/e.length:null,
+      mae_to_truth:e.length?mean(e):null,rmse_to_truth:e.length?Math.sqrt(mean(e.map(x=>x*x))):null,
+      bias:sgn.length?mean(sgn):null,coverage95:cover[method].length?mean(cover[method]):null,
+      consensus_error:consensus[method].length?mean(consensus[method]):null,
       detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
       communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,
       delivery_ratio:ratio,aggregation_seconds:(performance.now()-t0)/1000,completed_steps:c.n_steps};
  });
  if(!detail)return{rows,trajectory:series};
- return{rows,trajectory:series,result:{series,network_series,reputation:reputationHistory,states,events,
+ return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,reputation:reputationHistory,states,events,
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,coverage95:rows[i].coverage95})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i]})),
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
