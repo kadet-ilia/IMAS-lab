@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,RESEARCH_MODEL_VERSION} from "./research2027.js";
+import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,propagate,RESEARCH_MODEL_VERSION} from "./research2027.js";
 
 const small={
  uncertainty:{runs:20,agents:21},
@@ -116,4 +116,26 @@ test("UP-27 misinformation spread uses the source snapshot each tick",()=>{
  assert.deepEqual([...second.next].sort(),[0,1,2]);
  assert.deepEqual(first.activeEdges,[[0,1]]);
  assert.deepEqual(second.activeEdges,[[1,2]]);
+});
+
+
+test("UP-18/19 each paired graph run keeps unique initial agents and common conditions",()=>{
+ const c={agents:3,runs:14,edgeProbability:0,spread:0,steps:2,criticalFraction:1};
+ const run=executeStudy("probgraph",c);
+ assert.equal(run.pairedRuns.length,4*c.runs);
+ for(const trial of run.pairedRuns){
+  assert.equal(new Set(trial.initialNodes).size,trial.initialCount);
+  assert.ok(trial.initialCount>=1&&trial.initialCount<=3);
+  assert.equal(trial.methods.length,3);
+  assert.ok(trial.methods.every(x=>x.finalFraction===trial.initialCount/3));
+  assert.ok(trial.methods.every(x=>x.danger===(trial.initialCount===3?1:0)));
+ }
+ const three=run.rows.filter(x=>x.scenario==="Согласованная атака");
+ assert.ok(three.every(x=>x.dangerProbability===1));
+ assert.deepEqual(run.pairedRuns,executeStudy("probgraph",c).pairedRuns);
+ const edges=[[0,1],[1,2]],tape=[[.1,.2],[.3,.4]];
+ assert.deepEqual(
+  propagate(3,edges,[0],rng(1),1,2,0,tape).history,
+  propagate(3,edges,[0],rng(999),1,2,0,tape).history
+ );
 });
