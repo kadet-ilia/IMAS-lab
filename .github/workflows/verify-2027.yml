@@ -3,10 +3,12 @@ on:
   push:
     branches:
       - 'IMAS_LaB_test'
+      - 'remediation/imas-lab-scientific-integrity'
     paths:
       - 'gui/**'
       - 'README.md'
       - '.github/workflows/verify-2027.yml'
+      - 'audit/remediation/**'
   pull_request:
     paths:
       - 'gui/**'
