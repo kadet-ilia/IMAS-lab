@@ -290,3 +290,14 @@ test("UP-22 declared ideal priority controller prevents propagation from known i
  assert.throws(()=>validateStudy("petri",{isolationPolicy:2}),/isolationPolicy/);
  assert.throws(()=>validateStudy("petri",{isolationPolicy:.5}),/isolationPolicy/);
 });
+
+
+test("UP-22/31 mandatory Petri policy is faithfully shown by the replay, not arbitrary waiting",()=>{
+ const a=executeStudy("petri",{steps:2,criticalCount:7,detectionDelay:1,isolationPolicy:1});
+ assert.equal(a.verdict,"unreachable_within_bound");
+ assert.equal(a.replay.frames[1].status[0],"isolated");
+ assert.match(a.replay.frames[1].info,/обязательная изоляция A1/);
+ const b=executeStudy("petri",{steps:2,criticalCount:7,detectionDelay:1,isolationPolicy:0});
+ assert.equal(b.replay.frames[1].status[0],"compromised");
+ assert.match(a.replay.notes,/Фронт BFS исчерпан/);
+});
