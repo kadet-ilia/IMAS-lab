@@ -29,11 +29,9 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: gui/package-lock.json
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
       - run: npm ci
+        working-directory: gui
+      - run: npm run test
         working-directory: gui
       - run: npm run build
         working-directory: gui
