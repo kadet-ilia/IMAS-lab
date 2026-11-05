@@ -652,7 +652,7 @@ function App() {
       setProgress({stage:action,completed:1,total:1,percent:100,message:terminal.cache_hit?"Результаты загружены из локального кэша":"Вычисления завершены"});
       if(terminal.state==="stopped"||body.partial)setError("Расчет остановлен. Выполненные прогоны сохранены локально; повторный запуск продолжит серию.");
     }catch(reason){setError(reason.message||String(reason));}
-    finally{jobRef.current=null;runningRef.current=false;setRunning(false);}
+    finally{runningRef.current=false;setRunning(false);}
   };
   useEffect(()=>{request("trace");},[]);
   const stop=()=>stopBrowserExperiment();
