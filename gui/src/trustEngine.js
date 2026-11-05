@@ -43,22 +43,62 @@ export function createRng(...parts){let s=rngSeed(...parts),spare=null;const ran
 const normal=()=>{if(spare!==null){const v=spare;spare=null;return v;}const r=Math.sqrt(-2*Math.log(Math.max(random(),1e-12))),t=2*Math.PI*random();spare=r*Math.sin(t);return r*Math.cos(t);};
 const integer=(a,b)=>a+Math.floor(random()*(b-a+1));const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=integer(0,i);[b[i],b[j]]=[b[j],b[i]];}return b;};
 return{random,normal,integer,shuffle,choice:(a,n)=>shuffle(a).slice(0,n)};}
+export const TRUST_MODEL_VERSION="trust-js-2.0.0-remediation";
+const integerRanges={
+ seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
+ sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
+ factorial_runs_per_point:[1,50],factorial_max_points:[4,64],bootstrap_samples:[100,10000],parallel_workers:[0,32],
+ attack_start_step:[1,500],on_off_period:[1,500],on_off_attack_steps:[1,500],trust_window_steps:[2,100],
+ isolation_patience:[1,100],minimum_evidence_steps:[1,500],isolation_cooldown_steps:[0,500],trim_each_side:[0,159],
+ small_world_neighbors:[2,160],message_delay_min_steps:[0,500],message_delay_max_steps:[0,500],
+ max_message_staleness_steps:[0,500],bandwidth_messages_per_step:[0,1000000],partition_start_step:[1,500],partition_end_step:[1,500]
+};
+const numericRanges={
+ desired_action:[-2,2],honest_quality:[0,1],byzantine_quality:[0,1],honest_noise_sigma:[0,10],
+ observer_noise_sigma:[0,10],static_bias:[0,100],subtle_bias:[0,100],collusion_bias:[0,100],
+ forgetting_factor:[0,1],initial_trust:[0,1],trust_prior_strength:[0,1000000],minimum_weight:[0,1],
+ reputation_damping:[0,1],isolation_threshold:[0,1],clip_radius:[0,100],
+ safe_action_min:[-100,100],safe_action_max:[-100,100],correctness_tolerance:[0,100],
+ network_edge_probability:[0,1],small_world_rewire_probability:[0,1],message_loss_probability:[0,1],
+ partition_fraction:[0,1],attack_direction:[-1,1]
+};
+const requireField=(ok,k,message)=>{if(!ok)throw Error("Параметр "+k+": "+message);};
 export function validateConfig(value={}){
+ requireField(value!==null&&typeof value==="object"&&!Array.isArray(value),"config","ожидается объект");
  const c={...DEFAULTS,...value};
- for(const [k,v] of Object.entries(DEFAULTS)){if(typeof v==="number"&&(!good(Number(c[k]))))throw Error("Недопустимое значение параметра "+k);}
- if(c.n_agents<3||c.n_agents>160||c.n_byzantine<0||c.n_byzantine>=c.n_agents/2)throw Error("Необходимо 3≤N≤160 и N>2f");
- if(c.n_sybil_agents<0||c.n_agents+c.n_sybil_agents>160)throw Error("Общее число агентов не должно превышать 160");
- if(c.n_steps<1||c.n_steps>500||c.n_runs<1||c.n_runs>500)throw Error("Ограничения интерфейса: 1..500 тактов и прогонов");
- if(c.attack_start_step<1||c.attack_start_step>c.n_steps)throw Error("Некорректное время начала атаки");
- if(c.n_sybil_agents&& (c.sybil_activation_step<1||c.sybil_activation_step>c.n_steps))throw Error("Некорректный момент активации Sybil");
- if(c.safe_action_min>=c.safe_action_max)throw Error("Пустой безопасный интервал");
- if(!(c.initial_trust>0&&c.initial_trust<1)||!(c.forgetting_factor>0&&c.forgetting_factor<=1))throw Error("Неправильные параметры памяти доверия");
- if(c.trim_each_side<0||c.minimum_evidence_steps<1||c.isolation_patience<1)throw Error("Некорректные параметры изоляции");
- if(!["complete","ring","random","small_world"].includes(c.network_topology))throw Error("Неизвестная топология");
- if(c.message_delay_max_steps<c.message_delay_min_steps||c.message_delay_min_steps<0)throw Error("Некорректная задержка сообщений");
- if(c.partition_enabled&&(c.partition_start_step>c.partition_end_step||c.partition_end_step>c.n_steps))throw Error("Некорректный интервал разделения сети");
- if(c.bootstrap_samples<100||c.bootstrap_samples>10000)throw Error("Bootstrap: требуется 100..10000 выборок");
- if(c.factorial_max_points<1||c.factorial_max_points>128)throw Error("Недопустимое число точек плана");
+ for(const [k,defaultValue] of Object.entries(DEFAULTS)){
+  const v=c[k];
+  const ok=typeof defaultValue==="number"?typeof v==="number"&&Number.isFinite(v):typeof v===typeof defaultValue;
+  requireField(ok,k,"недопустимый тип или нечисловое значение");
+ }
+ for(const [k,[lo,hi]] of Object.entries(integerRanges)){
+  requireField(Number.isInteger(c[k]),k,"требуется целое число");
+  requireField(c[k]>=lo&&c[k]<=hi,k,"допустимо ["+lo+"; "+hi+"]");
+ }
+ for(const [k,[lo,hi]] of Object.entries(numericRanges))
+  requireField(c[k]>=lo&&c[k]<=hi,k,"допустимо ["+lo+"; "+hi+"]");
+ requireField(c.n_byzantine<c.n_agents/2,"n_byzantine","необходимо N>2f");
+ requireField(c.n_agents+c.n_sybil_agents<=160,"n_sybil_agents","число агентов не более 160");
+ requireField(c.attack_start_step<=c.n_steps,"attack_start_step","превышает горизонт T");
+ if(c.n_sybil_agents)requireField(c.sybil_activation_step<=c.n_steps,"sybil_activation_step","превышает горизонт T");
+ requireField(c.safe_action_min<c.safe_action_max,"safe_action_min","минимум должен быть ниже максимума");
+ requireField(c.initial_trust>0&&c.initial_trust<1,"initial_trust","необходимо 0<w0<1");
+ requireField(c.forgetting_factor>0,"forgetting_factor","необходимо 0<λ≤1");
+ requireField(c.reputation_damping<1,"reputation_damping","коэффициент должен быть меньше 1");
+ requireField(c.trust_prior_strength>0,"trust_prior_strength","сила prior должна быть положительной");
+ requireField(c.clip_radius>0,"clip_radius","радиус должен быть положительным");
+ requireField(c.on_off_attack_steps<=c.on_off_period,"on_off_attack_steps","не превышать период");
+ requireField(c.trim_each_side<=Math.floor((c.n_agents-1)/2),"trim_each_side","нельзя удалить все наблюдения");
+ requireField(c.message_delay_max_steps>=c.message_delay_min_steps,"message_delay_max_steps","меньше минимальной задержки");
+ requireField(c.attack_direction===-1||c.attack_direction===1,"attack_direction","допустимы -1 или 1");
+ requireField(["complete","ring","random","small_world"].includes(c.network_topology),"network_topology","неизвестная топология");
+ if(c.network_enabled&&c.network_topology==="small_world")
+  requireField(c.small_world_neighbors<c.n_agents+c.n_sybil_agents,"small_world_neighbors","недопустимое число соседей");
+ if(c.partition_enabled){
+  requireField(c.partition_start_step<=c.partition_end_step,"partition_start_step","начало позже конца");
+  requireField(c.partition_end_step<=c.n_steps,"partition_end_step","превышает горизонт T");
+  requireField(c.partition_fraction>0&&c.partition_fraction<1,"partition_fraction","необходимо 0<доля<1");
+ }
  return c;
 }
 const all=(n)=>Array.from({length:n},(_,i)=>i);
