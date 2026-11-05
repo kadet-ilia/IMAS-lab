@@ -17,7 +17,7 @@ export function wilson95(success,total){
  const phat=success/total,z2=Z95*Z95,denom=1+z2/total;
  const center=(phat+z2/(2*total))/denom;
  const delta=Z95*Math.sqrt(phat*(1-phat)/total+z2/(4*total*total))/denom;
- return {estimate:phat,lower:Math.max(0,center-delta),upper:Math.min(1,center+delta),n:total,events:success,method:"Wilson-95"};
+ return {estimate:phat,lower:success===0?0:Math.max(0,center-delta),upper:success===total?1:Math.min(1,center+delta),n:total,events:success,method:"Wilson-95"};
 }
 export function mean95(values){
  if(!Array.isArray(values)||!values.length||values.some(x=>!Number.isFinite(x)))throw Error("Mean CI: некорректная выборка");
