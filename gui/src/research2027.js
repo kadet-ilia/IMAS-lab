@@ -88,7 +88,7 @@ export function runUncertainty(c){
    correctUnconditional:m.correct/c.runs,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
    accuracy:m.accepted?m.correct/m.accepted:null,accuracyCI95Low:conditionalCI?.lower??null,accuracyCI95High:conditionalCI?.upper??null,
    errorRate:m.wrong/c.runs,errorCI95Low:wrongCI.lower,errorCI95High:wrongCI.upper,
-   latency:m.accepted?m.delay/m.accepted:null};
+   meanObservationAge:m.accepted?m.delay/m.accepted:null};
   rows.push(row);samples.push(row);
  });
  oracleBenchmark.push({scenario:s.name,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});}
