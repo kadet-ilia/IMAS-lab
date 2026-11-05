@@ -70,7 +70,7 @@ export function runUncertainty(c){
   for(let i=0;i<c.agents;i++){if(r.random()<clamp(c.loss*s.missing,0,.9))continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,oracleWeight:reliability,d:stale?3:1});}
   const values=obs.map(o=>o.x).sort((a,b)=>a-b);const trim=Math.min(Math.floor(values.length*.16),Math.floor((values.length-1)/2));
   const trimmed=values.slice(trim,values.length-trim);
-  const weights=estimateReliabilityFromObservations(obs,c.signalNoise*s.noise);
+  const weights=estimateReliabilityFromObservations(obs.map(({x,d})=>({x,d})),c.signalNoise*s.noise);
   const decisions=[avg(values),avg(trimmed),obs.length?obs.reduce((a,o,i)=>a+o.x*weights[i],0)/weights.reduce((a,b)=>a+b,0):0];
   const oracleEstimate=obs.length?obs.reduce((a,o)=>a+o.x*o.oracleWeight,0)/obs.reduce((a,o)=>a+o.oracleWeight,0):0;
   if(obs.length>=Math.ceil(c.agents*.3)&&Math.abs(oracleEstimate)>=c.threshold){
