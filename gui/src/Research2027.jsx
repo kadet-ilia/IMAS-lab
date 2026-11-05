@@ -5,6 +5,7 @@ import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
 import {ResearchSettings} from "./ResearchSettings.jsx";
 import {ExperimentLayout,ExperimentPanel,ExperimentKpi,ExperimentProgress} from "./ExperimentLayout.jsx";
 import {UnifiedHelp} from "./UnifiedHelp.jsx";
+import {FRACTION_METRICS,formatStudyValue} from "./metricFormatting.js";
 import "./research2027.css";
 
 const FIELD={
@@ -55,7 +56,7 @@ const THEORY={
  cascade:{
  goal:"Оценить ожидаемый ущерб и верхнехвостовой риск распространения последствий компрометации через функциональные зависимости агентов.",
  model:"Рассматривается фиксированный ориентированный граф из восьми агентов и одиннадцати зависимостей. Для каждой из восьми возможных начальных компрометаций воспроизводятся каскадные переходы. Условная критичность агента задаёт потери при отказе его функции. Сопоставляются режимы без защитных мер и с вероятностным подавлением распространения.",
- formulas:["L(ω) = Σᵢ cᵢ · 1{i поражён в ω}","E[L] ≈ (1/R) Σᵣ Lᵣ","ΔL = E[L] − cₛ, cₛ — прямой ущерб от начального агента s","VaR₀.₉₅ = Q₀.₉₅(L)","CVaR₀.₉₅ = E[L | L≥VaR₀.₉₅]"],
+ formulas:["L(ω) = Σᵢ cᵢ · 1{i поражён в ω}","E[L] ≈ (1/R) Σᵣ Lᵣ","ΔL = E[L] − cₛ, cₛ — прямой ущерб от начального агента s","VaR₀.₉₅ = Q₀.₉₅(L)","ES₀.₉₅ = (сумма худших 5% массы потерь)/(0,05R)"],
  procedure:["Задать ориентированный граф зависимостей и условные коэффициенты критичности.","Последовательно инициировать компрометацию каждого из восьми агентов.","Для каждого источника провести Монте-Карло с распространением по зависимостям.","Рассчитать прямой, каскадный, средний и верхнехвостовой ущерб; сравнить режимы защиты."],
  glossary:["Каскад — распространение функционального нарушения за пределы исходного компонента.","Математическое ожидание ущерба — средняя модельная потеря.","VaR — квантиль распределения потерь.","CVaR — средняя потеря в наиболее неблагоприятном хвосте распределения."]
  },
@@ -78,10 +79,8 @@ const glossary=[
  ["Доверие","Численная оценка предшествующей надёжности источника, не являющаяся доказательством истинности сообщения."]
 ];
 const fmt=(x)=>x===null||x===undefined?"—":typeof x==="number"?(Number.isInteger(x)?String(x):x.toLocaleString("ru-RU",{maximumFractionDigits:4})):String(x);
-const pctFields=new Set(["correctUnconditional","accuracy","coverage","errorRate","dangerProbability","expectedFraction","p95Fraction","wrongProbability","correctProbability","abstentionProbability","meanExposedFraction",
- "coverageCI95Low","coverageCI95High","correctCI95Low","correctCI95High","accuracyCI95Low","accuracyCI95High","errorCI95Low","errorCI95High",
- "expectedFractionCI95Low","expectedFractionCI95High","dangerCI95Low","dangerCI95High","wrongCI95Low","wrongCI95High","abstentionCI95Low","abstentionCI95High"]);
-const metricNames={correctUnconditional:"Правильные решения / все опыты",accuracy:"Точность среди выданных решений",coverage:"Доля выданных решений",errorRate:"Доля неправильных решений",dangerProbability:"Вероятность опасного состояния",expectedFraction:"Средняя доля поражённых",p95Fraction:"95-й процентиль поражения",expectedDamage:"Средний ущерб",excessDamage:"Каскадный ущерб",es95:"ES95",es95CI95Low:"ES95 нижняя граница",es95CI95High:"ES95 верхняя граница",tailSamples:"Эквивалентный объём хвоста",tailWarning:"Предупреждение о хвостовой оценке",wrongProbability:"Вероятность неверного решения",meanDeviation:"Среднее смещение",abstentionProbability:"Доля отказов",risk:"Нормированный риск",costWrong:"Цена неправильного решения",costRefuse:"Цена отказа",dangerCI95Low:"P опасности: нижняя 95%",dangerCI95High:"P опасности: верхняя 95%",dangerEvents:"Число опасных исходов"};
+const pctFields=FRACTION_METRICS;
+const metricNames={correctUnconditional:"Правильные решения / все опыты",accuracy:"Точность среди выданных решений",coverage:"Доля выданных решений",errorRate:"Доля неправильных решений",dangerProbability:"Вероятность опасного состояния",expectedFraction:"Средняя доля поражённых",p95Fraction:"95-й процентиль поражения",expectedDamage:"Средний ущерб",excessDamage:"Каскадный ущерб",es95:"ES95",es95CI95Low:"ES95 нижняя граница",es95CI95High:"ES95 верхняя граница",tailSamples:"Эквивалентный объём хвоста",tailWarning:"Предупреждение о хвостовой оценке",wrongProbability:"Вероятность неверного решения",meanDeviation:"Среднее смещение",abstentionProbability:"Доля отказов",risk:"Нормированный риск",costWrong:"Цена неправильного решения",costRefuse:"Цена отказа",dangerCI95Low:"P опасности: нижняя 95%",dangerCI95High:"P опасности: верхняя 95%",dangerEvents:"Число опасных исходов",reductionDanger:"Снижение вероятности опасности",reductionDamage:"Снижение ожидаемого ущерба"};
 function download(name,text,type){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);}
 function ScientificGraph({result,metric}) {
  const rows=result.rows||[];const methods=[...new Set(rows.map(x=>x.method).filter(Boolean))],scenarios=[...new Set(rows.map(x=>x.scenario))];
@@ -91,9 +90,9 @@ function ScientificGraph({result,metric}) {
  return <div className="r27-chart" role="img" aria-label={"Сравнение по показателю "+(metricNames[metric]||metric)}>
   <ResponsiveContainer width="100%" height={Math.max(310,scenarios.length*66+120)}>
    <BarChart layout="vertical" data={chart} margin={{top:10,right:30,bottom:18,left:12}} barGap={2}>
-    <CartesianGrid stroke="#e3eaf2" strokeDasharray="3 3"/><XAxis type="number" domain={[0,"auto"]} tickFormatter={v=>isProbability?(v*100).toFixed(0)+"%":fmt(v)}/>
+    <CartesianGrid stroke="#e3eaf2" strokeDasharray="3 3"/><XAxis type="number" domain={[0,"auto"]} tickFormatter={v=>formatStudyValue(metric,v)}/>
     <YAxis dataKey="scenario" type="category" width={208} tick={{fontSize:11}}/>
-    <Tooltip formatter={(v,n)=>[isProbability?(v*100).toFixed(2)+"%":fmt(v),n]}/><Legend wrapperStyle={{fontSize:12}}/>
+    <Tooltip formatter={(v,n)=>[formatStudyValue(metric,v),n]}/><Legend wrapperStyle={{fontSize:12}}/>
     {methods.map((name,i)=><Bar key={name} dataKey={name} fill={METHOD_COLORS[i%METHOD_COLORS.length]} maxBarSize={15}/>)}
    </BarChart>
   </ResponsiveContainer>
@@ -106,7 +105,7 @@ function PetriGraph({result}) {
   {coords.map(({x,y},i)=><g key={i}><circle cx={x} cy={y} r="22" fill={i===0?"#f2c1b6":"#d8e8fa"} stroke={i===0?"#c34d39":"#346caa"} strokeWidth="2"/><text x={x} y={y+5} textAnchor="middle" fontSize="13" fontWeight="600" fill="#1d3c5b">A{i+1}</text></g>)}
  </svg>;
 }
-function ResultTable({rows}){if(!rows?.length)return null;const cols=Object.keys(rows[0]);return <div className="r27-table-scroll"><table className="r27-table"><thead><tr>{cols.map(col=><th key={col}>{metricNames[col]||col}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i}>{cols.map(col=><td key={col}>{pctFields.has(col)&&typeof row[col]==="number"?(row[col]*100).toFixed(2)+"%":fmt(row[col])}</td>)}</tr>)}</tbody></table></div>;}
+function ResultTable({rows}){if(!rows?.length)return null;const cols=Object.keys(rows[0]);return <div className="r27-table-scroll"><table className="r27-table"><thead><tr>{cols.map(col=><th key={col}>{metricNames[col]||col}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i}>{cols.map(col=><td key={col}>{formatStudyValue(col,row[col])}</td>)}</tr>)}</tbody></table></div>;}
 const KEY_STATS={
  uncertainty:[["correctUnconditional","Правильных решений"],["coverage","Покрытие"],["errorRate","Ошибочных решений"]],
  probgraph:[["dangerProbability","Опасных состояний"],["expectedFraction","Доля поражённых"],["p95Fraction","95-й процентиль"]],
@@ -165,7 +164,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      </ExperimentPanel>
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
-   {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки снижения риска (95% bootstrap)" subtitle="Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события">
+   {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки снижения риска (95% bootstrap)" subtitle={studyId==="cascade"?"Эффект = базовый ущерб/риск минус защищённый, при общей таблице случайных событий":"Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события"}>
       <ResultTable rows={result.pairedEffects}/>
       <p className="r27-note">Интервал отражает только неопределённость Монте-Карло. Если он включает нуль, знак эффекта не установлен; при малом R и редких событиях необходимо увеличить выборку.</p>
     </ExperimentPanel>:null}
