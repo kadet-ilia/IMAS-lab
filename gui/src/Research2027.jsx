@@ -164,6 +164,10 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      </ExperimentPanel>
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
+   {result?.metricPassport?.length?<ExperimentPanel title="Паспорта ключевых показателей" subtitle={"Реализованная формула, знаменатель, единица измерения и правило для отсутствующих значений · "+result.metricPassportVersion}>
+     <ResultTable rows={result.metricPassport}/>
+     <p className="r27-note">Автоматический контроль арифметических инвариантов: {result.metricIntegrity?.valid?"пройден":"не пройден"}. Паспорта фиксируют реализованные оценщики, не являются независимой научной экспертизой.</p>
+   </ExperimentPanel>:null}
    {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки эффектов (95% bootstrap)" subtitle={studyId==="cascade"?"Эффект = базовый ущерб/риск минус защищённый, при общей таблице случайных событий":"Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события"}>
       <ResultTable rows={result.pairedEffects}/>
       <p className="r27-note">
