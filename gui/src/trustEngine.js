@@ -43,7 +43,7 @@ export function createRng(...parts){let s=rngSeed(...parts),spare=null;const ran
 const normal=()=>{if(spare!==null){const v=spare;spare=null;return v;}const r=Math.sqrt(-2*Math.log(Math.max(random(),1e-12))),t=2*Math.PI*random();spare=r*Math.sin(t);return r*Math.cos(t);};
 const integer=(a,b)=>a+Math.floor(random()*(b-a+1));const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=integer(0,i);[b[i],b[j]]=[b[j],b[i]];}return b;};
 return{random,normal,integer,shuffle,choice:(a,n)=>shuffle(a).slice(0,n)};}
-export const TRUST_MODEL_VERSION="trust-js-2.1.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.2.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
