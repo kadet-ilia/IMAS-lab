@@ -234,3 +234,57 @@ test("UP-10 explicitly labels nominal error-band hits as diagnostic, not a confi
  assert.ok(p.summary.every(row=>Object.hasOwn(row,"nominal_band_rate_mean")));
  assert.ok(p.runs.every(row=>!Object.hasOwn(row,"coverage95")));
 });
+
+
+test("UP-07 on-off schedule retains its declared active / inactive phases",()=>{
+ const c={...cfg,n_steps:14,attack_start_step:3,on_off_period:4,on_off_attack_steps:2,
+  isolation_enabled:false,minimum_evidence_steps:14};
+ const r=simulateRun(c,"on_off",0,0,true);
+ assert.deepEqual(r.result.series.map(x=>x.attack_active),[0,0,1,1,0,0,1,1,0,0,1,1,0,0]);
+ const persistent=simulateRun(c,"static_bias",0,0,true);
+ assert.deepEqual(persistent.result.series.map(x=>x.attack_active),[0,0,...Array(12).fill(1)]);
+});
+test("UP-09 disabled isolation never emits events nor secretly reactivates isolated agent",()=>{
+ const c={...cfg,isolation_threshold:.99,isolation_patience:1,minimum_evidence_steps:1,n_steps:18};
+ const passive=simulateRun({...c,isolation_enabled:false},"static_bias",0,0,true);
+ const active=simulateRun({...c,isolation_enabled:true},"static_bias",0,0,true);
+ assert.equal(passive.result.events.length,0);
+ assert.ok(passive.result.states.every(x=>x.state!=="isolated"));
+ assert.ok(active.result.events.length>0);
+ const firstIsolated=active.result.states.filter(x=>x.step===1&&x.state==="isolated").length;
+ assert.ok(firstIsolated>0);
+ // When all agents are isolated, no emergency override may re-enable an agent.
+ for(let t=1;t<18;t++){
+  const previous=active.result.states.filter(x=>x.step===t);
+  const next=active.result.states.filter(x=>x.step===t+1);
+  if(previous.every(x=>x.state==="isolated")&&t<c.isolation_cooldown_steps){
+   assert.ok(next.every(x=>x.state==="isolated"));
+  }
+ }
+});
+test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>{
+ const payload={action:"sensitivity",sensitivity_mode:"ablation",scenario:"collusion",
+  config:{...cfg,n_sensitivity_runs:10,n_steps:18,on_off_period:5,on_off_attack_steps:2}};
+ const plan=makePlan(payload);
+ assert.equal(plan.total,40);
+ assert.equal(new Set(plan.tasks.map(x=>x.arm.id)).size,4);
+ const pairs=plan.tasks.filter(x=>x.run===0);
+ assert.equal(pairs.length,4);
+ assert.ok(pairs.every(x=>x.c.seed===cfg.seed));
+ assert.ok(pairs.some(x=>x.c.isolation_enabled===false));
+ assert.ok(pairs.some(x=>x.c.isolation_enabled===true));
+ const full=runActionSync(payload);
+ assert.equal(full.ablation_rows.length,12);
+ assert.equal(full.ablation_contrasts.length,26);
+ assert.equal(full.design.strictCommonRandomNumbers,false);
+ assert.equal(full.partial,false);
+ assert.equal(full.completed_tasks,40);
+ assert.ok(full.ablation_rows.every(x=>x.runs===10));
+ assert.ok(full.ablation_contrasts.every(x=>x.n_pairs===10));
+ assert.ok(full.ablation_contrasts.every(x=>x.ci95_low!==null));
+ assert.deepEqual(full.ablation_rows,runActionSync(payload).ablation_rows);
+ const partial=assembleResult(plan,plan.tasks.slice(0,2).map(x=>runTask(plan,x)));
+ assert.equal(partial.partial,true);
+ assert.equal(partial.completed_tasks,2);
+ assert.ok(partial.ablation_contrasts.some(x=>x.n_pairs===0));
+});
