@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,propagate,RESEARCH_MODEL_VERSION} from "./research2027.js";
+import {executeStudy,STUDY_DEFS,toCsv,validateStudy,rng,chooseUniqueNodes,spreadOneTick,expectedShortfall,propagate,estimateReliabilityFromObservations,RESEARCH_MODEL_VERSION} from "./research2027.js";
 
 const small={
  uncertainty:{runs:20,agents:21},
@@ -138,4 +138,28 @@ test("UP-18/19 each paired graph run keeps unique initial agents and common cond
   propagate(3,edges,[0],rng(1),1,2,0,tape).history,
   propagate(3,edges,[0],rng(999),1,2,0,tape).history
  );
+});
+
+
+test("UP-16/28 applied method weights do not depend on hidden attacker labels",()=>{
+ const visible=[{x:-.2,d:1},{x:1.3,d:2},{x:.8,d:3},{x:1,d:1}];
+ const before=estimateReliabilityFromObservations(visible,.2);
+ const hidden=visible.map((x,i)=>({...x,attacked:i%2===0,stale:i%3===0,groundTruth:-1,oracleWeight:1000}));
+ const after=estimateReliabilityFromObservations(hidden,.2);
+ assert.deepEqual(after,before);
+ assert.ok(after.every(x=>Number.isFinite(x)&&x>=.01&&x<=1));
+});
+test("UP-16 benchmark with true labels is excluded from three applied E2 methods",()=>{
+ const result=executeStudy("uncertainty",{runs:25});
+ assert.equal(result.oracleBenchmark.length,4);
+ assert.equal(result.rows.length,12);
+ assert.ok(result.rows.every(row=>!row.method.toLowerCase().includes("оракул")));
+ assert.ok(result.oracleBenchmark.every(row=>row.oracle===true));
+});
+test("UP-28 predefined trim for seven agents withstands three extreme outliers in no-spread case",()=>{
+ const run=executeStudy("misinformation",{runs:80,spread:0,noise:0,attackBias:10});
+ const robust=run.rows.find(row=>row.compromised===3&&row.method.includes("fmax=3"));
+ assert.ok(robust);
+ assert.equal(robust.wrongProbability,0);
+ assert.equal(robust.abstentionProbability,0);
 });
