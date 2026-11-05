@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
- simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES
+ simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES,transport
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
@@ -340,5 +340,25 @@ test("UP-07 keyed observation evidence stays invariant for shared witnesses desp
  const second=observations(5,"on_off",c,bad,reduced,labels,createRng(1000),999,7);
  for(let i=0;i<c.n_agents;i++)for(let j=0;j<c.n_agents;j++){
   if(i!==8&&j!==8)assert.equal(first.matrix[i][j],second.matrix[i][j],"common witness "+i+","+j);
+ }
+});
+
+
+test("UP-07 keyed transport preserves each agent's loss and delay when unrelated agents deactivate",()=>{
+ const c=validateConfig({...cfg,paired_exogenous_events:true,network_enabled:true,
+  message_loss_probability:.37,message_delay_min_steps:0,message_delay_max_steps:3,
+  max_message_staleness_steps:4,bandwidth_messages_per_step:50});
+ const qA=[],qB=[],lastA=Array(3).fill(NaN),lastB=Array(3).fill(NaN),stepsA=Array(3).fill(-1e9),stepsB=Array(3).fill(-1e9);
+ for(let t=0;t<25;t++){
+  const proposals=[10*t,10*t+1,10*t+2];
+  const a=transport(t,proposals,[true,true,false],[[0,1]],qA,lastA,stepsA,c,createRng(77+t),9);
+  const b=transport(t,proposals,[true,true,true],[[0,1,2]],qB,lastB,stepsB,c,createRng(800+t),9);
+  for(const i of [0,1]){
+   assert.equal(lastA[i],lastB[i],"source "+i+" transport payload at tick "+t);
+   assert.equal(stepsA[i],stepsB[i],"source "+i+" delivery timestamp at tick "+t);
+   assert.equal(a.available[i],b.available[i]);
+  }
+  assert.deepEqual(qA.filter(x=>x.source!==2),qB.filter(x=>x.source!==2),
+   "pending exogenous delays for shared sources at tick "+t);
  }
 });
