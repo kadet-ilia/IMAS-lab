@@ -333,13 +333,20 @@ export function buildResearchReplay(id,c,result={}){
    const status=()=>Array.from({length:n},(_,i)=>isolated.has(i)?"isolated":compromised.has(i)?"compromised":"normal");
    snap(0,status(),[],"Начальная маркировка: токен компрометации агента А1",1);
    for(let t=1;t<=c.steps;t++){
-     const line=witness[t]||"t="+t+": ожидание", transmitted=line.match(/передача A(\d+) → A(\d+)/),blocked=line.match(/изоляция A(\d+)/),active=[];
+     const idealWait=!witness.length&&c.isolationPolicy===1&&t>=c.detectionDelay;
+     const line=witness[t]||(idealWait?"t="+t+": обязательная изоляция "+[...compromised].filter(i=>!isolated.has(i)).map(i=>"A"+(i+1)).join(", "):"t="+t+": ожидание");
+     const transmitted=line.match(/передача A(\d+) → A(\d+)/),active=[];
      if(transmitted){compromised.add(Number(transmitted[2])-1);active.push([Number(transmitted[1])-1,Number(transmitted[2])-1]);}
-     if(blocked)isolated.add(Number(blocked[1])-1);
+     if(line.includes("обязательная изоляция")){
+      for(const m of line.matchAll(/A(\d+)/g))isolated.add(Number(m[1])-1);
+     }else{
+      const blocked=line.match(/изоляция A(\d+)/);
+      if(blocked)isolated.add(Number(blocked[1])-1);
+     }
      snap(t,status(),active,line,compromised.size);
      if(witness.length&&t>=witness.length-1)break;
    }
-   return {title:"Последовательность маркировок и переходов сети Петри",vertices,edges,frames,notes:result.witness?.length?"Воспроизводится найденная трасса-контрпример, содержащая достижение опасной маркировки.":"Контрпример не найден; показана траектория ожидания. Отсутствие контрпримера не доказывает безопасность при неполном поиске.",valueLabel:"Число компрометированных"};
+   return {title:"Последовательность маркировок и переходов сети Петри",vertices,edges,frames,notes:result.witness?.length?"Воспроизводится найденная трасса-контрпример, содержащая достижение опасной маркировки.":result.verdict==="unreachable_within_bound"?"Фронт BFS исчерпан; показана отдельная допустимая траектория для выбранной политики.":result.verdict==="inconclusive"?"Поиск прерван до исчерпания фронта; показана иллюстративная траектория, безопасность не доказана.":"До расчёта показана иллюстративная траектория.",valueLabel:"Число компрометированных"};
  }
  if(id==="cascade"){
    const edges=fixedEdges8,infected=new Set([0]),available=new Set([0]),impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
