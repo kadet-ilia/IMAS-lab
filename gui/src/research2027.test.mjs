@@ -266,3 +266,27 @@ test("UP-17 displayed observation age is not mislabeled end-to-end latency",()=>
  const none=executeStudy("uncertainty",{runs:30,loss:0,signalNoise:0,corruption:0,threshold:2});
  assert.ok(none.rows.every(row=>row.meanObservationAge===null));
 });
+
+
+test("UP-22 optional isolation cannot guarantee EF safety simply by decreasing τ",()=>{
+ const settings={steps:1,criticalCount:2,detectionDelay:0,isolationPolicy:0};
+ const optional=executeStudy("petri",settings);
+ assert.equal(optional.verdict,"reachable");
+ assert.ok(optional.witness.some(s=>s.includes("передача")));
+ assert.equal(optional.policyName,"optional_nondeterministic");
+ const delayed=executeStudy("petri",{...settings,detectionDelay:2});
+ assert.equal(delayed.verdict,"reachable");
+});
+test("UP-22 declared ideal priority controller prevents propagation from known infected agents",()=>{
+ const base={steps:1,criticalCount:2,isolationPolicy:1};
+ const early=executeStudy("petri",{...base,detectionDelay:1});
+ assert.equal(early.verdict,"unreachable_within_bound");
+ assert.equal(early.policyName,"ideal_mandatory_priority");
+ assert.equal(early.witness.length,0);
+ const late=executeStudy("petri",{...base,detectionDelay:2});
+ assert.equal(late.verdict,"reachable");
+ assert.ok(late.witness.some(s=>s.includes("передача")));
+ assert.ok(early.rows.some(r=>r.criterion==="Стратегия изоляции"));
+ assert.throws(()=>validateStudy("petri",{isolationPolicy:2}),/isolationPolicy/);
+ assert.throws(()=>validateStudy("petri",{isolationPolicy:.5}),/isolationPolicy/);
+});
