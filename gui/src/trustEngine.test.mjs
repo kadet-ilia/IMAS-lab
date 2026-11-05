@@ -295,11 +295,20 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  }
  assert.ok(full.ablation_contrasts.every(x=>x.n_pairs===10));
  assert.ok(full.ablation_contrasts.every(x=>x.ci95_low!==null));
+ assert.equal(full.multipleTesting.tested,26);
+ assert.equal(full.multipleTesting.planned,26);
+ assert.equal(full.multipleTesting.correction,"Holm-FWER-0.05");
+ assert.ok(full.ablation_contrasts.every(x=>Number.isFinite(x.pRaw)&&Number.isFinite(x.pHolm)));
+ assert.ok(full.ablation_contrasts.every(x=>x.pHolm>=x.pRaw&&x.pHolm<=1));
+ assert.ok(full.ablation_contrasts.every(x=>x.holmReject05===(x.pHolm<.05)));
+ assert.ok(full.ablation_contrasts.every(x=>x.pMethod==="exact-paired-sign-flip"));
  assert.deepEqual(full.ablation_rows,runActionSync(payload).ablation_rows);
  const partial=assembleResult(plan,plan.tasks.slice(0,2).map(x=>runTask(plan,x)));
  assert.equal(partial.partial,true);
  assert.equal(partial.completed_tasks,2);
  assert.ok(partial.ablation_contrasts.some(x=>x.n_pairs===0));
+ assert.equal(partial.multipleTesting.tested,0);
+ assert.ok(partial.ablation_contrasts.every(row=>row.pRaw===null&&row.pHolm===null&&row.holmReject05===null));
 });
 
 
