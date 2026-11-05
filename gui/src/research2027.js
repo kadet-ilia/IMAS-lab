@@ -63,20 +63,49 @@ export function runUncertainty(c){
  acc.forEach((m,j)=>{const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,correctUnconditional:m.correct/c.runs,accuracy:m.accepted?m.correct/m.accepted:null,errorRate:m.wrong/c.runs,latency:m.accepted?m.delay/m.accepted:0};rows.push(row);samples.push(row);});}
  return {rows,summary:"Оценка качества коллективного решения при четырёх видах информационной неопределённости. Точность среди принятых решений следует анализировать совместно с долей отказов.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Оценка достоверности имитируется условными весами, известными генератору; это оптимистичный контрольный вариант, а не доказательство реализуемости идеального детектора."};
 }
-function propagate(n,edges,initial,r,p,steps,defense=0){
- const infected=new Set(initial), history=[infected.size];let available=new Set(initial);
- for(let t=1;t<=steps;t++){const newly=new Set();for(const [a,b] of edges)if(available.has(a)&&!infected.has(b)&&r.random()<clamp(p*(1-defense),0,1))newly.add(b);
-  for(const v of newly)infected.add(v);available=new Set([...available,...newly]);history.push(infected.size);}
+export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
+ const infected=new Set(initial),history=[infected.size];let available=new Set(initial);
+ for(let t=1;t<=steps;t++){
+  const newly=new Set();
+  for(let i=0;i<edges.length;i++){
+   const [a,b]=edges[i],u=tape?tape[t-1][i]:r.random();
+   if(available.has(a)&&!infected.has(b)&&u<clamp(p*(1-defense),0,1))newly.add(b);
+  }
+  for(const v of newly)infected.add(v);available=new Set([...available,...newly]);
+  history.push(infected.size);
+ }
  return {infected,history};
 }
 export function runProbGraph(c){
- const r=rng(c.seed);const rows=[];const modes=[["Без дополнительной защиты",0],["Фильтрация сообщений",.38],["Фильтрация и робастная координация",.68]];
+ const modes=[["Без дополнительного снижения",0],["Снижение вероятности распространения (η=0,38)",.38],["Снижение вероятности распространения (η=0,68)",.68]];
  const scenarios=[["Компрометация источника",.8,1],["Подмена межагентных сообщений",1.2,1],["Компрометация координатора",1.35,2],["Согласованная атака",1.25,3]];
- for(const [scenario,mult,start] of scenarios){for(const [method,defense] of modes){const loss=[],events=[],trajectories=Array(c.steps+1).fill(0);
-  for(let k=0;k<c.runs;k++){const ed=graph(c.agents,c.edgeProbability,r);const init=chooseUniqueNodes(r,c.agents,start);const p=propagate(c.agents,ed,init,r,c.spread*mult,c.steps,defense);const fraction=p.infected.size/c.agents;loss.push(fraction);events.push(fraction>=c.criticalFraction?1:0);p.history.forEach((v,j)=>trajectories[j]+=v/c.agents);}
-  rows.push({scenario,method,runs:c.runs,expectedFraction:avg(loss),dangerProbability:avg(events),p95Fraction:pct(loss,.95),...Object.fromEntries(trajectories.map((v,j)=>["t"+j,v/c.runs]))});
- }}
- return {rows,summary:"Монте-Карло на ориентированных графах взаимодействий. Вероятность опасного состояния определяется как доля прогонов с превышением порога поражённых агентов.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Вероятности распространения и степени защиты заданы синтетически; независимые попытки по рёбрам не учитывают коррелированные уязвимости и особенности реальных протоколов."};
+ const rows=[],pairedRuns=[];
+ scenarios.forEach(([scenario,mult,start],scenarioIndex)=>{
+  const statistics=modes.map(()=>({losses:[],events:[],trajectories:Array(c.steps+1).fill(0)}));
+  for(let run=0;run<c.runs;run++){
+   // Exactly the same topology, initial compromised vertices and stochastic transmission
+   // events are passed to every protection level within this paired run.
+   const eventSeed=((c.seed>>>0)^Math.imul(scenarioIndex+1,0x9e3779b9)^Math.imul(run+1,0x85ebca6b))>>>0;
+   const random=rng(eventSeed),edges=graph(c.agents,c.edgeProbability,random);
+   const initialNodes=chooseUniqueNodes(random,c.agents,start);
+   const tape=Array.from({length:c.steps},()=>edges.map(()=>random.random()));
+   const outcome={scenario,run,initialNodes,initialCount:initialNodes.length,eventSeed,edgeCount:edges.length,methods:[]};
+   modes.forEach(([method,defense],index)=>{
+    const result=propagate(c.agents,edges,initialNodes,random,c.spread*mult,c.steps,defense,tape);
+    const fraction=result.infected.size/c.agents;
+    statistics[index].losses.push(fraction);
+    statistics[index].events.push(fraction>=c.criticalFraction?1:0);
+    result.history.forEach((v,t)=>statistics[index].trajectories[t]+=v/c.agents);
+    outcome.methods.push({method,defense,infectedCount:result.infected.size,finalFraction:fraction,danger:Number(fraction>=c.criticalFraction)});
+   });
+   pairedRuns.push(outcome);
+  }
+  modes.forEach(([method,defense],index)=>{
+   const {losses,events,trajectories}=statistics[index];
+   rows.push({scenario,method,defense,runs:c.runs,initialCount:start,expectedFraction:avg(losses),dangerProbability:avg(events),p95Fraction:pct(losses,.95),...Object.fromEntries(trajectories.map((v,t)=>["t"+t,v/c.runs]))});
+  });
+ });
+ return {rows,pairedRuns,comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
 export function runPetri(c){
  const n=c.agents,T=c.steps,critical=c.criticalCount;
