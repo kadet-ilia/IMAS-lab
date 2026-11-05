@@ -43,6 +43,18 @@ jobs:
           npm run preview > /tmp/imas-preview.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173 >/dev/null && break || sleep 1; done
           npm run verify
+      - name: Upload browser verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-remediation-browser-evidence
+          path: |
+            gui/verification.json
+            gui/dashboard.png
+            gui/help.png
+            gui/research2027.png
+          if-no-files-found: warn
+          retention-days: 14
   existing-python:
     runs-on: ubuntu-latest
     steps:
