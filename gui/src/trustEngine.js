@@ -1,3 +1,4 @@
+import {pairedDifference95} from "./statistics2027.js";
 /**
  * IMAS_LaB_test — browser-only JavaScript port of experiment.py.
  *
@@ -383,6 +384,72 @@ function factorialDesign(c,rawRanges){
    "Главные эффекты смешаны с пятикратными, двухфакторные — с четырёхфакторными взаимодействиями; интерпретация предполагает пренебрежение эффектами высших порядков."
  }};
 }
+/**
+ * Exploratory 2x2 isolation / attack-schedule design. The same run index and
+ * generator seed preserve initial Byzantine identities and starting graph.
+ * Dynamic streams can diverge after policy-dependent branches: NOT a strict
+ * common-random-numbers experiment.
+ */
+export const ABLATION_ARMS=[
+ {id:"on_off_no_isolation",schedule:"on_off",scenario:"on_off",isolation_enabled:false},
+ {id:"on_off_with_isolation",schedule:"on_off",scenario:"on_off",isolation_enabled:true},
+ {id:"persistent_no_isolation",schedule:"persistent",scenario:"static_bias",isolation_enabled:false},
+ {id:"persistent_with_isolation",schedule:"persistent",scenario:"static_bias",isolation_enabled:true}
+];
+function summarizeAblation(plan,rows,partial,completed){
+ const ablation_rows=[];
+ for(const arm of ABLATION_ARMS)for(const method of METHODS){
+  const group=rows.filter(x=>x.arm_id===arm.id&&x.method===method);
+  if(!group.length)continue;
+  const possible=group.map(x=>x.rmse_to_truth).filter(good);
+  ablation_rows.push({
+   arm_id:arm.id,attack_schedule:arm.schedule,isolation_enabled:arm.isolation_enabled,
+   method,runs:group.length,unconditional_correct:finiteMean(group.map(x=>x.probability_correct)),
+   decision_coverage:finiteMean(group.map(x=>x.decision_coverage)),
+   conditional_rmse:possible.length?mean(possible):null,conditional_rmse_n:possible.length,
+   detection_rate:finiteMean(group.map(x=>x.detection_rate)),
+   false_isolations:finiteMean(group.map(x=>x.false_isolations)),
+   attack_active_steps:finiteMean(group.map(x=>x.attack_active_steps))
+  });
+ }
+ const key=(a,m,r)=>a+"/"+m+"/"+r;
+ const lookup=new Map(rows.map(x=>[key(x.arm_id,x.method,x.run),x]));
+ const contrasts=[];
+ const add=(category,armA,methodA,armB,methodB,metric,definition)=>{
+  const aa=[],bb=[];
+  for(let run=0;run<plan.c.n_sensitivity_runs;run++){
+   const first=lookup.get(key(armA,methodA,run)),second=lookup.get(key(armB,methodB,run));
+   if(first&&second&&good(first[metric])&&good(second[metric])){aa.push(first[metric]);bb.push(second[metric]);}
+  }
+  const delta=aa.length?mean(aa.map((v,i)=>v-bb[i])):null;
+  const confidence=aa.length>=10?pairedDifference95(aa,bb,plan.c.seed+category.length+methodA.length+armA.length,300):null;
+  contrasts.push({category,armA,methodA,armB,methodB,metric,definition,n_pairs:aa.length,
+    difference_mean:delta,ci95_low:confidence?.lower??null,ci95_high:confidence?.upper??null,
+    intervalMethod:confidence?"seed-matched percentile-bootstrap, unadjusted 95%":null});
+ };
+ for(const schedule of ["on_off","persistent"]){
+  const a=schedule+"_with_isolation",b=schedule+"_no_isolation";
+  for(const method of METHODS){
+   add("isolation",a,method,b,method,"probability_correct","Изоляция включена минус выключена, при фиксированном агрегаторе");
+   add("isolation",a,method,b,method,"decision_coverage","Покрытие: изоляция включена минус выключена");
+  }
+ }
+ for(const schedule of ["on_off","persistent"])for(const iso of ["with_isolation","no_isolation"]){
+  const a=schedule+"_"+iso;
+  for(const method of ["arithmetic_mean","trust_weighted_mean"])
+   add("aggregation",a,"proposed_robust",a,method,"probability_correct","Робастный агрегатор минус базовый при фиксированной политике изоляции");
+ }
+ for(const iso of ["with_isolation","no_isolation"])for(const method of METHODS)
+  add("attack_schedule","on_off_"+iso,method,"persistent_"+iso,method,
+   "probability_correct","On–off минус постоянное смещение при равном максимальном сдвиге");
+ return {mode:"ablation",ablation_rows,ablation_contrasts:contrasts,raw_runs:rows,
+  modelVersion:TRUST_MODEL_VERSION,configuration:configDetail(plan.c),partial,
+  completed_tasks:completed,requested_tasks:plan.total,parallel_workers_used:1,
+  design:{controller:["isolation_enabled=false","isolation_enabled=true"],
+   schedule:["on_off (cyclic)","persistent (static_bias)"],methods:METHODS,
+   sameSeed:true,sameInitialBadAgents:true,strictCommonRandomNumbers:false,
+   disclaimer:"Отдельные действия контроллера меняют активность агентов и потребление генератора. Парные индексы и начальные идентичности совпадают, но случайные события после расхождения траекторий не идентичны. Интервалы не скорректированы на множественные сравнения; результат носит поисковый характер."}};
+}
 export function makePlan(payload){
  const c=validateConfig(payload.config),scenario=payload.scenario||"collusion";
  if(!SCENARIOS.includes(scenario))throw Error("Неизвестный сценарий "+scenario);
@@ -395,6 +462,13 @@ export function makePlan(payload){
    const fValues=[...new Set((payload.f_values||[0,2,4,6,8,10]).map(Number).filter(x=>Number.isInteger(x)&&x>=0&&x<c.n_agents/2))].sort((a,b)=>a-b);
    const tasks=fValues.flatMap(f=>all(c.n_sensitivity_runs).map(run=>({index:f,c:{...c,n_byzantine:f,trim_each_side:f},run})));
    return{action,c,scenario,mode,tasks,total:tasks.length};
+  }
+  if(mode==="ablation"){
+    const tasks=ABLATION_ARMS.flatMap((arm,armIndex)=>all(c.n_sensitivity_runs).map(run=>({
+      index:armIndex*c.n_sensitivity_runs+run,c:{...c,isolation_enabled:arm.isolation_enabled},
+      scenario:arm.scenario,run,arm
+    })));
+    return {action,c,scenario,mode,tasks,total:tasks.length};
   }
   if(mode==="factorial"){
     const {factors,ranges,designs,designMetadata}=factorialDesign(c,payload.factor_ranges);
@@ -413,6 +487,8 @@ export function assembleResult(plan,completed){
   trajectory_statistics_definition:{center:"sample_mean_and_median",dispersion:"sample_standard_deviation",ddof:1,run_count:completed.length,requested_run_count:c.n_runs,bands:["mean ± 1s","mean ± 2s","P25–P75","P5–P95"],quantiles:[.05,.25,.5,.75,.95]},
   bootstrap_comparisons:bootstrapComparisons(rows,c),distributions:distributionPayload(rows),configuration:configDetail(c),scenario,partial,completed_runs:completed.length,requested_runs:c.n_runs,resumed_runs:0,parallel_workers_used:1};
  }
+ if(mode==="ablation")
+  return summarizeAblation(plan,rows,partial,completed.length);
  if(mode==="one_factor"){
   const result=[];for(const f of [...new Set(tasks.map(x=>x.index))])for(const method of METHODS){const rr=rows.filter(x=>x.n_byzantine===f&&x.method===method);if(!rr.length)continue;
    result.push({n_byzantine:f,method,probability_correct:finiteMean(rr.map(x=>x.probability_correct)),rmse:rr.some(x=>good(x.rmse_to_truth))?finiteMean(rr.map(x=>x.rmse_to_truth)):null,detection_rate:finiteMean(rr.map(x=>x.detection_rate)),delivery_ratio:finiteMean(rr.map(x=>x.delivery_ratio))});}
@@ -443,9 +519,13 @@ export function assembleResult(plan,completed){
 }
 export function runTask(plan,task){
  const scenarioIndex=plan.action==="sensitivity"&&plan.mode==="factorial"?task.index:0;
- const value=simulateRun(task.c,plan.scenario,task.run,scenarioIndex,plan.action==="trace");
+ const value=simulateRun(task.c,task.scenario||plan.scenario,task.run,scenarioIndex,plan.action==="trace");
  if(plan.action==="trace")return{detail:value.result,rows:value.rows,trajectory:value.trajectory};
  const rows=value.rows.map(row=>{
+  if(plan.action==="sensitivity"&&plan.mode==="ablation")
+   return {...row,arm_id:task.arm.id,attack_schedule:task.arm.schedule,
+     isolation_enabled:task.arm.isolation_enabled,
+     attack_active_steps:value.trajectory.filter(step=>step.attack_active).length};
   if(plan.action==="sensitivity"&&plan.mode==="one_factor")return{...row,n_byzantine:task.index};
   if(plan.action==="sensitivity"&&plan.mode==="factorial"){
    const out={...row,design_index:task.index};for(const [f,v]of Object.entries(task.design.values))out["factor_"+f]=v;
