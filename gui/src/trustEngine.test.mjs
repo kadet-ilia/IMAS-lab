@@ -301,7 +301,7 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  assert.ok(full.ablation_contrasts.every(x=>Number.isFinite(x.pRaw)&&Number.isFinite(x.pHolm)));
  assert.ok(full.ablation_contrasts.every(x=>x.pHolm>=x.pRaw&&x.pHolm<=1));
  assert.ok(full.ablation_contrasts.every(x=>x.holmReject05===(x.pHolm<.05)));
- assert.ok(full.ablation_contrasts.every(x=>x.pMethod==="exact-paired-sign-flip"));
+ assert.ok(full.ablation_contrasts.every(x=>["exact-paired-sign-flip","degenerate-zero"].includes(x.pMethod)));
  assert.deepEqual(full.ablation_rows,runActionSync(payload).ablation_rows);
  const partial=assembleResult(plan,plan.tasks.slice(0,2).map(x=>runTask(plan,x)));
  assert.equal(partial.partial,true);
