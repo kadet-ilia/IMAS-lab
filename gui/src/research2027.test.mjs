@@ -176,3 +176,61 @@ test("UP-23 Petri BFS exact exhaustion is complete, unfinished frontier is incon
  assert.equal(limited.verdict,"inconclusive");
  assert.ok(limited.enqueued>limited.processed);
 });
+
+
+test("UP-30 Monte-Carlo research probabilities carry Wilson intervals and event denominators",()=>{
+ const p=executeStudy("probgraph",{agents:6,runs:40,spread:0,criticalFraction:1});
+ for(const row of p.rows){
+  assert.equal(row.dangerProbability,0);
+  assert.equal(row.dangerEvents,0);
+  assert.ok(row.dangerCI95High>0,"Zero observed events cannot establish zero probability");
+  assert.equal(row.dangerCI95Low,0);
+  assert.ok(row.expectedFractionCI95Low<=row.expectedFraction&&row.expectedFractionCI95High>=row.expectedFraction);
+ }
+ assert.equal(p.pairedEffects.length,8);
+ for(const effect of p.pairedEffects){
+  assert.equal(effect.reductionDanger,0);
+  assert.equal(effect.reductionCI95Low,0);
+  assert.equal(effect.reductionCI95High,0);
+  assert.equal(effect.runs,40);
+  assert.equal(effect.paired,true);
+ }
+});
+test("UP-30 ES95 is an exact upper-tail point estimate with finite bootstrap bounds",()=>{
+ const x=executeStudy("cascade",{runs:35,spread:0});
+ for(const row of x.rows){
+  assert.equal(row.es95,row.directDamage);
+  assert.equal(row.excessDamage,0);
+  assert.ok(Math.abs(row.es95CI95Low-row.directDamage)<1e-10);
+  assert.ok(Math.abs(row.es95CI95High-row.directDamage)<1e-10);
+  assert.ok(row.dangerCI95Low<=row.dangerProbability);
+  assert.ok(row.dangerCI95High>=row.dangerProbability);
+  assert.equal(row.tailSamples,1.75);
+  assert.match(row.tailWarning,/Менее 10/);
+  assert.equal(Object.hasOwn(row,"cvar95"),false);
+ }
+});
+test("UP-29 wrong-decision and refusal costs are independent and avoid duplicated exposure",()=>{
+ const baseline=executeStudy("misinformation",{runs:40,noise:0,spread:0,attackBias:0,threshold:2,costWrong:1,costRefuse:0});
+ const penalty=executeStudy("misinformation",{runs:40,noise:0,spread:0,attackBias:0,threshold:2,costWrong:1,costRefuse:7});
+ assert.equal(baseline.scenarioMetrics.length,4);
+ for(let i=0;i<baseline.rows.length;i++){
+  assert.equal(baseline.rows[i].wrongProbability,0);
+  assert.equal(baseline.rows[i].abstentionProbability,1);
+  assert.equal(baseline.rows[i].risk,0);
+  assert.equal(penalty.rows[i].risk,7);
+  assert.ok(!Object.hasOwn(baseline.rows[i],"meanExposedFraction"),"Exposure belongs to scenario, not algorithm");
+ }
+ assert.deepEqual(baseline.scenarioMetrics,penalty.scenarioMetrics);
+ assert.throws(()=>validateStudy("misinformation",{costRefuse:-1}),/costRefuse/);
+});
+test("UP-30 E2 selective accuracy uses accepted sample size, null if no accepted decisions",()=>{
+ const x=executeStudy("uncertainty",{runs:30,threshold:2,loss:0,signalNoise:0,corruption:0});
+ for(const row of x.rows){
+  assert.equal(row.accuracy,null);
+  assert.equal(row.accuracyCI95Low,null);
+  assert.equal(row.accuracyCI95High,null);
+  assert.ok(row.coverageCI95High>0);
+  assert.ok(row.coverageCI95High<1);
+ }
+});
