@@ -1,3 +1,4 @@
+import {wilson95,mean95,pairedDifference95,bootstrap95,STATISTICS_VERSION} from "./statistics2027.js";
 /* IMAS-lab 2027: independent, seeded, synthetic research kernels.
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
@@ -10,7 +11,7 @@ export const STUDY_DEFS = [
   { id:"cascade", short:"Каскадные риски", title:"Метод оценки рисков нарушения функционирования интеллектуальной мультиагентной системы поддержки принятия решений на основе сценарного моделирования каскадных последствий кибератак",
     origin:"Статья 3 2027", defaults:{agents:8,runs:3000,seed:20270301,spread:0.34,lossScale:1,defenseFactor:0.45} },
   { id:"misinformation", short:"Коллективное решение", title:"Метод оценки рисков нарушения процессов коллективного принятия решений в интеллектуальной мультиагентной системе при компрометации агентов и распространении недостоверной информации",
-    origin:"Статья 3 2027", defaults:{agents:7,runs:3000,seed:20270302,spread:0.40,noise:0.24,attackBias:2.5,threshold:0.16} }
+    origin:"Статья 3 2027", defaults:{agents:7,runs:3000,seed:20270302,spread:0.40,noise:0.24,attackBias:2.5,threshold:0.16,costWrong:1,costRefuse:0.2} }
 ];
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const avg=x=>x.length?x.reduce((a,b)=>a+b,0)/x.length:0;
@@ -80,7 +81,16 @@ export function runUncertainty(c){
    if(ready){acc[j].accepted++;if(Math.sign(v)===truth)acc[j].correct++;else acc[j].wrong++;acc[j].delay+=avg(obs.map(o=>o.d));}
   });
  }
- acc.forEach((m,j)=>{const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,correctUnconditional:m.correct/c.runs,accuracy:m.accepted?m.correct/m.accepted:null,errorRate:m.wrong/c.runs,latency:m.accepted?m.delay/m.accepted:null};rows.push(row);samples.push(row);});
+ acc.forEach((m,j)=>{
+  const acceptedCI=wilson95(m.accepted,c.runs),correctCI=wilson95(m.correct,c.runs),wrongCI=wilson95(m.wrong,c.runs);
+  const conditionalCI=m.accepted?wilson95(m.correct,m.accepted):null;
+  const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,coverageCI95Low:acceptedCI.lower,coverageCI95High:acceptedCI.upper,
+   correctUnconditional:m.correct/c.runs,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
+   accuracy:m.accepted?m.correct/m.accepted:null,accuracyCI95Low:conditionalCI?.lower??null,accuracyCI95High:conditionalCI?.upper??null,
+   errorRate:m.wrong/c.runs,errorCI95Low:wrongCI.lower,errorCI95High:wrongCI.upper,
+   latency:m.accepted?m.delay/m.accepted:null};
+  rows.push(row);samples.push(row);
+ });
  oracleBenchmark.push({scenario:s.name,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});}
  return {rows,oracleBenchmark,summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
@@ -100,7 +110,7 @@ export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
 export function runProbGraph(c){
  const modes=[["Без дополнительного снижения",0],["Снижение вероятности распространения (η=0,38)",.38],["Снижение вероятности распространения (η=0,68)",.68]];
  const scenarios=[["Компрометация источника",.8,1],["Подмена межагентных сообщений",1.2,1],["Компрометация координатора",1.35,2],["Согласованная атака",1.25,3]];
- const rows=[],pairedRuns=[];
+ const rows=[],pairedRuns=[],pairedEffects=[];
  scenarios.forEach(([scenario,mult,start],scenarioIndex)=>{
   const statistics=modes.map(()=>({losses:[],events:[],trajectories:Array(c.steps+1).fill(0)}));
   for(let run=0;run<c.runs;run++){
@@ -123,10 +133,20 @@ export function runProbGraph(c){
   }
   modes.forEach(([method,defense],index)=>{
    const {losses,events,trajectories}=statistics[index];
-   rows.push({scenario,method,defense,runs:c.runs,initialCount:start,expectedFraction:avg(losses),dangerProbability:avg(events),p95Fraction:pct(losses,.95),...Object.fromEntries(trajectories.map((v,t)=>["t"+t,v/c.runs]))});
+   const ci=wilson95(events.reduce((a,b)=>a+b,0),c.runs),meanCI=mean95(losses);
+   rows.push({scenario,method,defense,runs:c.runs,initialCount:start,expectedFraction:meanCI.estimate,
+    expectedFractionCI95Low:meanCI.lower,expectedFractionCI95High:meanCI.upper,
+    dangerProbability:ci.estimate,dangerCI95Low:ci.lower,dangerCI95High:ci.upper,dangerEvents:ci.events,
+    p95Fraction:pct(losses,.95),...Object.fromEntries(trajectories.map((v,t)=>["t"+t,v/c.runs]))});
   });
+  for(let mode=1;mode<modes.length;mode++){
+   const ci=pairedDifference95(statistics[0].events,statistics[mode].events,c.seed+scenarioIndex*101+mode,300);
+   pairedEffects.push({scenario,baseline:modes[0][0],method:modes[mode][0],runs:c.runs,
+    reductionDanger:ci.estimate,reductionCI95Low:ci.lower,reductionCI95High:ci.upper,
+    paired:true,intervalMethod:ci.method,warning:"Интервал учитывает лишь Monte-Carlo-вариацию и не является доказательством защитного механизма"});
+  }
  });
- return {rows,pairedRuns,comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
+ return {rows,pairedRuns,pairedEffects,statisticsVersion:STATISTICS_VERSION,comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
 export function runPetri(c){
  const n=c.agents,T=c.steps,critical=c.criticalCount;
@@ -155,14 +175,23 @@ export function runCascade(c){
   const p=propagate(8,fixedEdges8,[start],r,c.spread,8,defense);const cost=[...p.infected].reduce((s,i)=>s+impacts[i],0);
   losses.push(cost);affected.push(p.infected.size);critical.push(cost>=impacts.reduce((a,b)=>a+b,0)*.45?1:0);}
   const es95=expectedShortfall(losses,.95);
-  rows.push({scenario:"Начальная компрометация A"+(start+1),method,runs:c.runs,directDamage:impacts[start],expectedDamage:avg(losses),excessDamage:avg(losses.map(v=>Math.max(0,v-impacts[start]))),dangerProbability:avg(critical),p95Damage:pct(losses,.95),cvar95:es95,affectedAgents:avg(affected)});
+  const meanCI=mean95(losses),dangerCI=wilson95(critical.reduce((a,b)=>a+b,0),c.runs);
+  const tail=bootstrap95(losses,a=>expectedShortfall(a,.95),c.seed+start*109+Math.round(defense*100),200);
+  rows.push({scenario:"Начальная компрометация A"+(start+1),method,runs:c.runs,directDamage:impacts[start],expectedDamage:meanCI.estimate,
+   expectedDamageCI95Low:meanCI.lower,expectedDamageCI95High:meanCI.upper,
+   excessDamage:avg(losses.map(v=>Math.max(0,v-impacts[start]))),dangerProbability:dangerCI.estimate,
+   dangerCI95Low:dangerCI.lower,dangerCI95High:dangerCI.upper,dangerEvents:dangerCI.events,
+   p95Damage:pct(losses,.95),es95,es95CI95Low:tail.lower,es95CI95High:tail.upper,tailSamples:.05*c.runs,
+   tailWarning:.05*c.runs<10?"Менее 10 эквивалентных наблюдений верхних 5%; хвостовая оценка нестабильна":null,
+   affectedAgents:avg(affected)});
  }}
- return {rows,summary:"Оценка прямого и каскадного ущерба при поражении каждого из восьми функционально зависимых агентов (11 ориентированных связей). CVaR95 — средняя потеря в верхнем хвосте распределения.",chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",limits:"Условные коэффициенты критичности и интенсивности распространения не являются оценками денежных потерь или эксплуатационных вероятностей."};
+ return {rows,summary:"Оценка прямого и каскадного ущерба при поражении каждого из восьми функционально зависимых агентов (11 ориентированных связей). ES95 — средняя потеря худших 5% вероятностной массы, включая дробную массу на границе.",chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",limits:"Условные коэффициенты критичности и интенсивности распространения не являются оценками денежных потерь или эксплуатационных вероятностей."};
 }
 function tmean(x,trimEachSide=3){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(trimEachSide,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
 export function runMisinformation(c){
- const r=rng(c.seed),rows=[],methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
- for(let bad=0;bad<=Math.min(3,c.agents-1);bad++){const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0,exposed:0}));
+ const r=rng(c.seed),rows=[],scenarioMetrics=[],methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
+ for(let bad=0;bad<=Math.min(3,c.agents-1);bad++){
+  const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
   for(let k=0;k<c.runs;k++){
    const truth=r.random()<.5?1:-1;const seeds=new Set();while(seeds.size<bad)seeds.add(sample(r,c.agents));const exposed=new Set(seeds);
    for(let t=0;t<3;t++){const eventTape=fixedEdges7.map(()=>r.random());const tick=spreadOneTick(exposed,fixedEdges7,eventTape,c.spread);exposed.clear();for(const v of tick.next)exposed.add(v);}
@@ -170,14 +199,24 @@ export function runMisinformation(c){
     const x=truth+r.normal()*c.noise+(compromised?-truth*c.attackBias:misled?-truth*c.attackBias*.7:0);
     points.push({x});
    }
+   exposedSum+=exposed.size/c.agents;
    const weights=estimateReliabilityFromObservations(points,c.noise);
    const votes=[avg(points.map(x=>x.x)),points.reduce((a,x,i)=>a+x.x*weights[i],0)/weights.reduce((a,b)=>a+b,0),tmean(points.map(x=>x.x),3)];
    votes.forEach((v,j)=>{const m=stats[j];if(Math.abs(v)<c.threshold)m.abstain++;else if(Math.sign(v)===truth)m.correct++;else m.wrong++;
-     m.deviation+=Math.abs(v-truth);m.exposed+=exposed.size/c.agents;});
+     m.deviation+=Math.abs(v-truth);});
   }
-  stats.forEach((s,j)=>rows.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,method:methods[j],runs:c.runs,wrongProbability:s.wrong/c.runs,correctProbability:s.correct/c.runs,abstentionProbability:s.abstain/c.runs,meanDeviation:s.deviation/c.runs,meanExposedFraction:s.exposed/c.runs,risk:s.wrong/c.runs*1}));
+  scenarioMetrics.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,runs:c.runs,meanExposedFraction:exposedSum/c.runs,appliesTo:"scenario-not-method"});
+  stats.forEach((m,j)=>{
+   const wrongCI=wilson95(m.wrong,c.runs),refuseCI=wilson95(m.abstain,c.runs),correctCI=wilson95(m.correct,c.runs);
+   const risk=c.costWrong*wrongCI.estimate+c.costRefuse*refuseCI.estimate;
+   rows.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,method:methods[j],runs:c.runs,
+    wrongProbability:wrongCI.estimate,wrongCI95Low:wrongCI.lower,wrongCI95High:wrongCI.upper,
+    correctProbability:correctCI.estimate,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
+    abstentionProbability:refuseCI.estimate,abstentionCI95Low:refuseCI.lower,abstentionCI95High:refuseCI.upper,
+    meanDeviation:m.deviation/c.runs,risk,costWrong:c.costWrong,costRefuse:c.costRefuse});
+  });
  }
- return {rows,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки."};
+ return {rows,scenarioMetrics,statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
 }
 export function validateStudy(id,raw={}){
  const def=STUDY_DEFS.find(s=>s.id===id);if(!def)throw Error("Неизвестный эксперимент");
@@ -190,7 +229,7 @@ export function validateStudy(id,raw={}){
  integer("agents",3,100);integer("runs",1,10000);integer("seed",-2147483648,2147483647);
  for(const key of ["loss","corruption","edgeProbability","spread","criticalFraction","defenseFactor"])
   if(key in c)bounded(key,0,1);
- for(const key of ["noise","signalNoise","attackBias","threshold"])
+ for(const key of ["noise","signalNoise","attackBias","threshold","costWrong","costRefuse"])
   if(key in c)bounded(key,0,100);
  if("steps" in c)integer("steps",1,20);
  if("criticalCount" in c)integer("criticalCount",1,c.agents);
@@ -205,7 +244,7 @@ export function validateStudy(id,raw={}){
  if(id==="misinformation"&&c.agents!==7)throw Error("Параметр agents: для информационного графа требуется N=7");
  return c;
 }
-export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
+export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
 export function statisticalIndicators(values){return quantileInfo(values);}
 
