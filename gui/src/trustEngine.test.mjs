@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
- simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION
+ simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
@@ -135,4 +135,40 @@ test("UP-05 every isolation is justified by the archived controller score at tha
   assert.ok(row.isolationScore<event.threshold);
   assert.equal(row.isolationThreshold,event.threshold);
  }
+});
+
+
+test("UP-12 Erdős–Rényi graph has no forced ring backbone",()=>{
+ const config=validateConfig({...cfg,n_byzantine:0,network_enabled:true,network_topology:"random",network_edge_probability:0});
+ const disconnected=buildAdjacency(config,createRng(123),Array(config.n_agents).fill(false));
+ assert.ok(disconnected.every(row=>row.every(edge=>edge===false)));
+ const complete=buildAdjacency({...config,network_edge_probability:1},createRng(123),Array(config.n_agents).fill(false));
+ assert.ok(complete.every((row,i)=>row.every((edge,j)=>edge===(i!==j))));
+ const ring=buildAdjacency({...config,network_topology:"ring"},createRng(123),Array(config.n_agents).fill(false));
+ assert.ok(ring.every((row,i)=>row[(i+1)%config.n_agents]===true));
+});
+test("UP-12 queue is not dropped due to bandwidth, and attempts balance",()=>{
+ const run=simulateRun({...cfg,network_enabled:true,network_topology:"ring",
+  message_loss_probability:0,message_delay_min_steps:0,message_delay_max_steps:0,
+  max_message_staleness_steps:1,bandwidth_messages_per_step:0,
+  minimum_evidence_steps:18}, "collusion",0,0,true);
+ const result=run.result;
+ assert.ok(result.network_series.some(x=>x.messages_backlogged>0));
+ assert.ok(result.network_series.some(x=>x.messages_expired>0));
+ assert.ok(result.network_series.every(x=>x.message_balance===0));
+ assert.equal(result.summary.message_balance,0);
+ assert.equal(result.summary.communication_attempted,
+   result.summary.communication_delivered+result.summary.communication_lost+
+   result.summary.communication_bandwidth_dropped+result.summary.communication_expired+
+   result.summary.communication_queued);
+ assert.ok(result.network_series.every(x=>x.delivery_ratio>=0&&x.delivery_ratio<=1));
+});
+test("UP-12 delayed and expired messages cannot silently become fresh observations",()=>{
+ const x=simulateRun({...cfg,network_enabled:true,network_topology:"ring",
+  message_loss_probability:0,message_delay_min_steps:2,message_delay_max_steps:2,
+  max_message_staleness_steps:1,bandwidth_messages_per_step:1000,
+  minimum_evidence_steps:18}, "static_bias",0,0,true);
+ assert.ok(x.result.network_series.every(row=>row.available_agents===0));
+ assert.ok(x.result.summary.communication_expired>0);
+ assert.ok(x.result.series.every(row=>row.proposed_robust===null));
 });
