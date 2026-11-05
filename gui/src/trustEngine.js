@@ -313,7 +313,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
 const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","coverage95","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
  const out=[];for(const method of METHODS){const group=rows.filter(x=>x.method===method);if(!group.length)continue;
- const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):0;row[m+"_ci95"]=v.length?1.96*(v.length>1?stdev(v):0)/Math.sqrt(v.length):null;}out.push(row);}
+ const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):null;row[m+"_ci95"]=v.length>1?1.96*stdev(v)/Math.sqrt(v.length):null;row[m+"_n"]=v.length;}out.push(row);}
  return out;
 }
 export function trajectoryStats(paths,c){
@@ -321,9 +321,17 @@ export function trajectoryStats(paths,c){
  for(let t=0;t<length;t++){
   const values=k=>paths.map(x=>x[t][k]),v=values("active_agents");
   const row={step:t+1,truth:c.desired_action,run_count:paths.length,active_agents_mean:mean(v),active_agents_std:stdev(v),available_agents_mean:mean(values("available_agents")),largest_component_mean:mean(values("largest_component")),tolerance_band:[c.desired_action-c.correctness_tolerance,c.desired_action+c.correctness_tolerance]};
-  for(const method of METHODS){const a=values(method),mu=mean(a),sd=stdev(a),q=(p)=>quantile(a,p);
-   Object.assign(row,{[method+"_mean"]:mu,[method+"_std"]:sd,[method+"_band1"]:[mu-sd,mu+sd],[method+"_band2"]:[mu-2*sd,mu+2*sd],
-     [method+"_q05"]:q(.05),[method+"_q25"]:q(.25),[method+"_median"]:q(.5),[method+"_q75"]:q(.75),[method+"_q95"]:q(.95),[method+"_band50"]:[q(.25),q(.75)],[method+"_band90"]:[q(.05),q(.95)]});}
+  for(const method of METHODS){
+   const a=valid(values(method)),mu=a.length?mean(a):null,sd=a.length>1?stdev(a):a.length?0:null;
+   const q=p=>a.length?quantile(a,p):null;
+   const band=k=>a.length?[mu-k*sd,mu+k*sd]:null;
+   Object.assign(row,{[method+"_mean"]:mu,[method+"_std"]:sd,[method+"_available_runs"]:a.length,
+     [method+"_band1"]:band(1),[method+"_band2"]:band(2),
+     [method+"_q05"]:q(.05),[method+"_q25"]:q(.25),[method+"_median"]:q(.5),
+     [method+"_q75"]:q(.75),[method+"_q95"]:q(.95),
+     [method+"_band50"]:a.length?[q(.25),q(.75)]:null,
+     [method+"_band90"]:a.length?[q(.05),q(.95)]:null});
+  }
   out.push(row);
  }return out;
 }
@@ -408,12 +416,12 @@ export function assembleResult(plan,completed){
  }
  if(mode==="one_factor"){
   const result=[];for(const f of [...new Set(tasks.map(x=>x.index))])for(const method of METHODS){const rr=rows.filter(x=>x.n_byzantine===f&&x.method===method);if(!rr.length)continue;
-   result.push({n_byzantine:f,method,probability_correct:mean(rr.map(x=>x.probability_correct)),rmse:mean(rr.map(x=>x.rmse_to_truth)),detection_rate:mean(rr.map(x=>x.detection_rate)),delivery_ratio:mean(rr.map(x=>x.delivery_ratio))});}
+   result.push({n_byzantine:f,method,probability_correct:finiteMean(rr.map(x=>x.probability_correct)),rmse:rr.some(x=>good(x.rmse_to_truth))?finiteMean(rr.map(x=>x.rmse_to_truth)):null,detection_rate:finiteMean(rr.map(x=>x.detection_rate)),delivery_ratio:finiteMean(rr.map(x=>x.delivery_ratio))});}
   return {mode,sensitivity:result,raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
  }
  const results=[];for(const d of plan.designs)for(const method of METHODS){
   const rr=rows.filter(x=>x.design_index===d.index&&x.method===method);if(!rr.length)continue;
-  const x={design_index:d.index,method,probability_correct:mean(rr.map(x=>x.probability_correct)),rmse_to_truth:mean(rr.map(x=>x.rmse_to_truth)),detection_rate:mean(rr.map(x=>x.detection_rate)),delivery_ratio:mean(rr.map(x=>x.delivery_ratio))};
+  const x={design_index:d.index,method,probability_correct:mean(rr.map(x=>x.probability_correct)),rmse_to_truth:rr.some(x=>good(x.rmse_to_truth))?finiteMean(rr.map(x=>x.rmse_to_truth)):null,detection_rate:mean(rr.map(x=>x.detection_rate)),delivery_ratio:mean(rr.map(x=>x.delivery_ratio))};
   for(let i=0;i<plan.factors.length;i++){x["factor_"+plan.factors[i]]=d.values[plan.factors[i]];x["coded_"+plan.factors[i]]=d.coded[i];}
   results.push(x);
  }
@@ -422,12 +430,14 @@ export function assembleResult(plan,completed){
   for(const factor of plan.factors){
    const high=proposed.filter(x=>x["coded_"+factor]>0),low=proposed.filter(x=>x["coded_"+factor]<0);
    if(!high.length||!low.length)continue;
-   const effect=mean(high.map(x=>x[metric]))-mean(low.map(x=>x[metric]));
+   const highValues=valid(high.map(x=>x[metric])),lowValues=valid(low.map(x=>x[metric]));
+   if(!highValues.length||!lowValues.length)continue;
+   const effect=mean(highValues)-mean(lowValues);
    effects.push({metric,factor,effect_high_minus_low:effect,benefit_effect:metric==="rmse_to_truth"?-effect:effect,low_value:plan.ranges[factor][0],high_value:plan.ranges[factor][1]});
   }
   for(let i=0;i<plan.factors.length;i++)for(let j=i+1;j<plan.factors.length;j++){
    const one=plan.factors[i],two=plan.factors[j],high=proposed.filter(x=>x["coded_"+one]*x["coded_"+two]>0),low=proposed.filter(x=>x["coded_"+one]*x["coded_"+two]<0);
-   if(high.length&&low.length){const e=mean(high.map(x=>x[metric]))-mean(low.map(x=>x[metric]));interactions.push({metric,factors:[one,two],effect:e,absolute_effect:Math.abs(e)});}
+   if(high.length&&low.length){const u=valid(high.map(x=>x[metric])),v=valid(low.map(x=>x[metric]));if(!u.length||!v.length)continue;const e=mean(u)-mean(v);interactions.push({metric,factors:[one,two],effect:e,absolute_effect:Math.abs(e)});}
   }
  }
  return {mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>b.absolute_effect-a.absolute_effect).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1};
