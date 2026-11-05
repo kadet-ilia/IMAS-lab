@@ -108,10 +108,17 @@ export function baselineReplay(data,config){
  const frames=series.filter((x,i)=>i%stride===0||i===series.length-1).map(row=>{
   const step=row.step,status=Array.from({length:n},(_,i)=>{
    const agent=byAgent.get(i+1)||agents[i]||{}, raw=byState.get(step+":"+(i+1));
+   // The timestamped state is authoritative: first isolation is a historical event,
+   // not proof that the agent remains isolated after its cooldown.
+   if(raw==="isolated")return "isolated";
+   if(raw==="dormant")return "normal";
+   if(raw==="byzantine")return "compromised";
+   if(raw==="sybil")return "misled";
+   if(raw==="honest")return "normal";
    const isolated=agent.isolated_at!==null&&agent.isolated_at!==undefined&&agent.isolated_at<=step;
-   if(isolated||raw==="isolated")return "isolated";
-   if(raw==="byzantine"||agent.byzantine&&step>=config.attack_start_step)return "compromised";
-   if(raw==="sybil"||agent.sybil)return "misled";
+   if(isolated)return "isolated"; // Legacy traces without state snapshots only.
+   if(agent.byzantine&&step>=config.attack_start_step)return "compromised";
+   if(agent.sybil)return "misled";
    return "normal";
   });
   const meanTrust=reps.filter(x=>x.step===step).map(x=>x.reputation).filter(Number.isFinite);
