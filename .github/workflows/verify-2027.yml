@@ -64,4 +64,4 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: pip install -r requirements.txt
-      - run: python -m unittest -v test_experiment test_encoding test_repository_hygiene
+      - run: python -m unittest -v test_experiment test_encoding test_repository_hygiene test_primitive_parity
