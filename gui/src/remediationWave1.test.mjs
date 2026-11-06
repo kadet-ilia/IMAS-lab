@@ -108,3 +108,20 @@ test("NZ-09: fixed f by trim grid uses the same observations as main E6 trim=3",
   assert.equal(fixed.meanDeviation,main.meanDeviation);
  }
 });
+
+test("NZ-06: Sybil augmentation is explicitly distinct from pure G(N,p)",()=>{
+ const c=validateConfig({...DEFAULTS,n_agents:7,n_byzantine:1,n_sybil_agents:2,
+  trim_each_side:1,n_steps:20,attack_start_step:4,network_enabled:true,
+  network_topology:"random",network_edge_probability:0});
+ const g=buildAdjacency(c,createRng(331),Array(9).fill(false));
+ for(let i=0;i<7;i++)for(let j=0;j<7;j++)
+  if(i!==j)assert.equal(g[i][j],false,"legitimate G(N,0) must have no edges");
+ assert.equal(g[7][8],true);
+ assert.equal(g[8][7],true);
+ for(const sybil of [7,8])for(const anchor of [0,1,2]){
+  assert.equal(g[sybil][anchor],true);
+  assert.equal(g[anchor][sybil],true);
+ }
+ const data=simulateRun(c,"static_bias",0,0,true);
+ assert.match(data.result.configuration.topology_semantics,/forced_sybil_clique/);
+});
