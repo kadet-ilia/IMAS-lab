@@ -68,11 +68,20 @@ const scenarioSettings=[
 ];
 export function runUncertainty(c,checkpoint=null){
  const r=rng(c.seed);if(checkpoint?.randomState!==undefined)r.restore(checkpoint.randomState);
- const rows=checkpoint?.rows?[...checkpoint.rows]:[],samples=[],oracleBenchmark=checkpoint?.oracleBenchmark?[...checkpoint.oracleBenchmark]:[];
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],samples=[],oracleBenchmark=checkpoint?.oracleBenchmark?[...checkpoint.oracleBenchmark]:[],
+ sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
  const names=["Знак среднего","Робастное согласование","Оценка по наблюдаемым признакам"];
  for(let scenarioIndex=checkpoint?.nextScenario??0;scenarioIndex<scenarioSettings.length;scenarioIndex++){const s=scenarioSettings[scenarioIndex];const missingProbability=clamp(c.loss*s.missing,0,1);const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
-  const truth=r.random()<.5?-1:1;const obs=[];
-  for(let i=0;i<c.agents;i++){if(r.random()<missingProbability)continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,oracleWeight:reliability,d:stale?3:1});}
+  const truth=r.random()<.5?-1:1;const obs=[],rawMessages=c.record_source_runs?[]:null;
+  for(let i=0;i<c.agents;i++){
+   const missing=r.random()<missingProbability;
+   if(missing){if(rawMessages)rawMessages.push({agent:i+1,missing:true});continue;}
+   const sigma=c.signalNoise*s.noise,attacked=r.random()<c.corruption,stale=r.random()<s.delay;
+   const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);
+   const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);
+   obs.push({x,oracleWeight:reliability,d:stale?3:1});
+   if(rawMessages)rawMessages.push({agent:i+1,missing:false,x,age:stale?3:1,attacked,stale,oracleWeight:reliability});
+  }
   const values=obs.map(o=>o.x).sort((a,b)=>a-b);const trim=Math.min(Math.floor(values.length*.16),Math.floor((values.length-1)/2));
   const trimmed=values.slice(trim,values.length-trim);
   const weights=estimateReliabilityFromObservations(obs.map(({x,d})=>({x,d})),c.signalNoise*s.noise);
@@ -84,6 +93,9 @@ export function runUncertainty(c,checkpoint=null){
   decisions.forEach((v,j)=>{const ready=obs.length>=Math.ceil(c.agents*.3)&&Math.abs(v)>=c.threshold;
    if(ready){acc[j].accepted++;if(Math.sign(v)===truth)acc[j].correct++;else acc[j].wrong++;acc[j].delay+=avg(obs.map(o=>o.d));}
   });
+  if(rawMessages)sourceRuns.push({scenario:s.name,scenarioIndex,run:k,truth,
+   messages:rawMessages,methodEstimates:[...decisions],oracleEstimate,
+   observedCount:obs.length,estimatorUsesHiddenFlags:false});
  }
  acc.forEach((m,j)=>{
   const acceptedCI=wilson95(m.accepted,c.runs),correctCI=wilson95(m.correct,c.runs),wrongCI=wilson95(m.wrong,c.runs);
@@ -97,9 +109,12 @@ export function runUncertainty(c,checkpoint=null){
  });
  oracleBenchmark.push({scenario:s.name,effectiveMissingProbability:missingProbability,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});
   if(checkpoint&&scenarioIndex<scenarioSettings.length-1)
-   return {__checkpoint:{nextScenario:scenarioIndex+1,randomState:r.getState(),rows,oracleBenchmark}};
+   return {__checkpoint:{nextScenario:scenarioIndex+1,randomState:r.getState(),rows,oracleBenchmark,sourceRuns}};
  }
- return {rows,oracleBenchmark,summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
+ return {rows,oracleBenchmark,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"uncertainty",complete:true,
+   runsPerScenario:c.runs,scenarios:4,entries:sourceRuns}}:{}),
+  summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
 export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
  const infected=new Set(initial),history=[infected.size];let available=new Set(initial);
@@ -395,7 +410,7 @@ export function validateResearchCheckpoint(id,c,state){
    bfs.queue.length<bfs.index)
    throw Error("Повреждена очередь контрольной точки BFS");
  }
- const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n}:
+ const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n}:
   id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
   id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n}:{};
