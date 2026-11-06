@@ -63,9 +63,9 @@ test("NZ-15: source events preserve numerical results and reproduce exactly by s
  assert.ok(a.source_event_log.events.some(x=>x.kind==="proposal_attempt"));
  assert.ok(a.source_event_log.events.some(x=>x.kind==="evidence"));
  const changed=a.source_event_log.events.map(x=>({...x}));
- const item=changed.find(x=>x.kind==="evidence"&&x.status==="delivered");
+ const item=changed.find(x=>x.kind==="evidence"&&["delivered","lost","dropped"].includes(x.status));
  assert.ok(item);
- item.status="lost";
+ item.status=item.status==="delivered"?"lost":"delivered";
  const bad=auditSourceEventJournal(changed,a.message_ledger);
  assert.equal(bad.valid,false);
  assert.ok(bad.issues.includes("evidence_outcomes"));
