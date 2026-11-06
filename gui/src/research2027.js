@@ -1,128 +1,556 @@
+import {wilson95,mean95,pairedDifference95,bootstrap95,pairedSignFlipP,holmAdjusted,STATISTICS_VERSION} from "./statistics2027.js";
+import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./metricPassport.js";
+import {auditResearchInference} from "./researchStatisticalAudit.js";
 /* IMAS-lab 2027: independent, seeded, synthetic research kernels.
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
   { id:"uncertainty", short:"Неопределённость", title:"Модель распределённой поддержки принятия решений интеллектуальными агентами по обеспечению кибербезопасности объектов информационной инфраструктуры в условиях информационной неопределённости",
-    origin:"Статья 1 2027", defaults:{agents:21,runs:500,seed:20270101,signalNoise:0.30,loss:0.12,corruption:0.12,threshold:0.22} },
+    origin:"Статья 1 2027", defaults:{agents:21,runs:500,seed:20270101,signalNoise:0.30,loss:0.12,corruption:0.12,threshold:0.22,record_source_runs:0,source_run_limit:100} },
   { id:"probgraph", short:"Граф угроз", title:"Графо-вероятностное моделирование сценариев реализации угроз безопасности информации в интеллектуальной мультиагентной системе поддержки принятия решений с учётом межагентных взаимодействий",
-    origin:"Статья 2 2027", defaults:{agents:30,runs:2500,seed:20270201,edgeProbability:0.16,spread:0.24,steps:6,criticalFraction:0.33} },
+    origin:"Статья 2 2027", defaults:{agents:30,runs:2500,seed:20270201,edgeProbability:0.16,spread:0.24,steps:6,criticalFraction:0.33,record_source_runs:0,source_run_limit:100,source_event_limit:250000} },
   { id:"petri", short:"Сети Петри", title:"Формальное моделирование сценариев реализации угроз безопасности информации и верификация достижимости опасных состояний интеллектуальной мультиагентной системы на основе временных раскрашенных сетей Петри",
-    origin:"Статья 2 2027", defaults:{agents:7,runs:1,seed:20270202,steps:6,detectionDelay:3,criticalCount:3,stateLimit:30000} },
+    origin:"Статья 2 2027", defaults:{agents:7,runs:1,seed:20270202,steps:6,detectionDelay:3,isolationPolicy:0,criticalCount:3,stateLimit:30000,record_marking_log:0,marking_log_limit:50000} },
   { id:"cascade", short:"Каскадные риски", title:"Метод оценки рисков нарушения функционирования интеллектуальной мультиагентной системы поддержки принятия решений на основе сценарного моделирования каскадных последствий кибератак",
-    origin:"Статья 3 2027", defaults:{agents:8,runs:3000,seed:20270301,spread:0.34,lossScale:1,defenseFactor:0.45} },
+    origin:"Статья 3 2027", defaults:{agents:8,runs:3000,seed:20270301,spread:0.34,lossScale:1,defenseFactor:0.45,record_source_runs:0,source_run_limit:100,source_event_limit:250000} },
   { id:"misinformation", short:"Коллективное решение", title:"Метод оценки рисков нарушения процессов коллективного принятия решений в интеллектуальной мультиагентной системе при компрометации агентов и распространении недостоверной информации",
-    origin:"Статья 3 2027", defaults:{agents:7,runs:3000,seed:20270302,spread:0.40,noise:0.24,attackBias:2.5,threshold:0.16} }
+    origin:"Статья 3 2027", defaults:{agents:7,runs:3000,seed:20270302,spread:0.40,noise:0.24,attackBias:2.5,threshold:0.16,costWrong:1,costRefuse:0.2,record_source_runs:0,source_run_limit:100} }
 ];
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const avg=x=>x.length?x.reduce((a,b)=>a+b,0)/x.length:0;
 const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=(z.length-1)*q;const lo=Math.floor(h);return z[lo]+(z[Math.min(z.length-1,lo+1)]-z[lo])*(h-lo);};
-export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}};}
+export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
+ getState:()=>state>>>0,restore:old=>{if(!Number.isInteger(old)||old<1||old>4294967295)throw Error("Некорректная контрольная точка ГПСЧ");state=old>>>0;}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
+export const RESEARCH_MODEL_VERSION="research-2027-2.12.0-remediation";
+export function chooseUniqueNodes(rand,n,k){
+ if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
+ const nodes=Array.from({length:n},(_,i)=>i);
+ for(let i=0;i<k;i++){const j=i+Math.floor(rand.random()*(n-i));[nodes[i],nodes[j]]=[nodes[j],nodes[i]];}
+ return nodes.slice(0,k);
+}
+export function expectedShortfall(values,alpha=.95){
+ if(!Array.isArray(values)||!values.length||values.some(x=>!Number.isFinite(x)))throw Error("ES: необходимы конечные наблюдения");
+ if(!(alpha>=0&&alpha<1))throw Error("ES: alpha должно быть в [0,1)");
+ const descending=[...values].sort((a,b)=>b-a),tailMass=(1-alpha)*values.length;
+ const whole=Math.floor(tailMass),fraction=tailMass-whole;
+ const total=descending.slice(0,whole).reduce((a,b)=>a+b,0)+(fraction>0?fraction*descending[whole]:0);
+ return total/tailMass;
+}
+export function spreadOneTick(current,edges,uniforms,p){
+ if(!Array.isArray(edges)||!Array.isArray(uniforms)||edges.length!==uniforms.length)throw Error("Ожидается одно случайное событие на ребро");
+ const snapshot=new Set(current),newly=new Set(),activeEdges=[];
+ edges.forEach(([a,b],i)=>{if(snapshot.has(a)&&!snapshot.has(b)&&uniforms[i]<p){newly.add(b);activeEdges.push([a,b]);}});
+ return {next:new Set([...snapshot,...newly]),newly,activeEdges};
+}
+/**
+ * Uses only observation values, their observed age and known noise scale.
+ * Hidden malicious/stale flags and the true state are deliberately ignored.
+ * This is a synthetic, not externally calibrated, reliability estimator.
+ */
+export function estimateReliabilityFromObservations(observations,noiseScale=.2){
+ const values=observations.map(o=>o.x),center=pct(values,.5);
+ const mad=pct(values.map(x=>Math.abs(x-center)),.5);
+ const scale=Math.max(.15,1.4826*mad,noiseScale);
+ return observations.map(o=>{
+  const residual=Math.abs(o.x-center);
+  const observableAge=Math.max(1,Number.isFinite(o.d)?o.d:1);
+  return Math.max(.01,1/(1+residual/scale)/(1+.25*(observableAge-1)));
+ });
+}
 const quantileInfo=x=>({mean:avg(x),p05:pct(x,.05),p50:pct(x,.5),p95:pct(x,.95)});
 function graph(n,p,r){const edges=[];for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j&&r.random()<p)edges.push([i,j]);return edges;}
 const fixedEdges8=[[0,1],[0,2],[1,3],[1,4],[2,4],[2,5],[3,6],[4,6],[4,7],[5,7],[6,7]];
 const fixedEdges7=[[0,1],[0,2],[1,3],[2,3],[2,4],[3,5],[4,5],[5,6],[1,6]];
 const scenarioSettings=[
- {name:"Полные наблюдения",noise:0.7,missing:0.2,delay:0},
+ {name:"Базовый сценарий (с допустимыми потерями)",noise:0.7,missing:0.2,delay:0},
  {name:"Неполнота данных",noise:1,missing:1.7,delay:0},
  {name:"Противоречивые данные",noise:1.8,missing:0.7,delay:0.2},
  {name:"Несвоевременные сообщения",noise:1.2,missing:0.9,delay:0.55}
 ];
-export function runUncertainty(c){
- const r=rng(c.seed);const rows=[],samples=[];const names=["Обычное голосование","Робастное согласование","С учётом достоверности и времени"];
- for(const s of scenarioSettings){const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0}));for(let k=0;k<c.runs;k++){
-  const truth=r.random()<.5?-1:1;const obs=[];
-  for(let i=0;i<c.agents;i++){if(r.random()<clamp(c.loss*s.missing,0,.9))continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,w:reliability,d:stale?3:1});}
+export function runUncertainty(c,checkpoint=null){
+ const r=rng(c.seed);if(checkpoint?.randomState!==undefined)r.restore(checkpoint.randomState);
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],samples=[],oracleBenchmark=checkpoint?.oracleBenchmark?[...checkpoint.oracleBenchmark]:[],
+ sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
+ const names=["Знак среднего","Робастное согласование","Оценка по наблюдаемым признакам"];
+ for(let scenarioIndex=checkpoint?.nextScenario??0;scenarioIndex<scenarioSettings.length;scenarioIndex++){const s=scenarioSettings[scenarioIndex];const missingProbability=clamp(c.loss*s.missing,0,1);const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
+  const truth=r.random()<.5?-1:1;const obs=[],rawMessages=c.record_source_runs?[]:null;
+  for(let i=0;i<c.agents;i++){
+   const missing=r.random()<missingProbability;
+   if(missing){if(rawMessages)rawMessages.push({agent:i+1,missing:true});continue;}
+   const sigma=c.signalNoise*s.noise,attacked=r.random()<c.corruption,stale=r.random()<s.delay;
+   const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);
+   const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);
+   obs.push({x,oracleWeight:reliability,d:stale?3:1});
+   if(rawMessages)rawMessages.push({agent:i+1,missing:false,x,age:stale?3:1,attacked,stale,oracleWeight:reliability});
+  }
   const values=obs.map(o=>o.x).sort((a,b)=>a-b);const trim=Math.min(Math.floor(values.length*.16),Math.floor((values.length-1)/2));
   const trimmed=values.slice(trim,values.length-trim);
-  const decisions=[avg(values),avg(trimmed),obs.length?obs.reduce((a,o)=>a+o.x*o.w,0)/obs.reduce((a,o)=>a+o.w,0):0];
-  decisions.forEach((v,j)=>{const ready=obs.length>=Math.ceil(c.agents*.3)&&Math.abs(v)>=Number(c.threshold)*(j===1?.75:1);
+  const weights=estimateReliabilityFromObservations(obs.map(({x,d})=>({x,d})),c.signalNoise*s.noise);
+  const decisions=[avg(values),avg(trimmed),obs.length?obs.reduce((a,o,i)=>a+o.x*weights[i],0)/weights.reduce((a,b)=>a+b,0):0];
+  const oracleEstimate=obs.length?obs.reduce((a,o)=>a+o.x*o.oracleWeight,0)/obs.reduce((a,o)=>a+o.oracleWeight,0):0;
+  if(obs.length>=Math.ceil(c.agents*.3)&&Math.abs(oracleEstimate)>=c.threshold){
+   oracle.accepted++;if(Math.sign(oracleEstimate)===truth)oracle.correct++;
+  }
+  decisions.forEach((v,j)=>{const ready=obs.length>=Math.ceil(c.agents*.3)&&Math.abs(v)>=c.threshold;
    if(ready){acc[j].accepted++;if(Math.sign(v)===truth)acc[j].correct++;else acc[j].wrong++;acc[j].delay+=avg(obs.map(o=>o.d));}
   });
+  if(rawMessages)sourceRuns.push({scenario:s.name,scenarioIndex,run:k,truth,
+   messages:rawMessages,methodEstimates:[...decisions],oracleEstimate,
+   observedCount:obs.length,estimatorUsesHiddenFlags:false});
  }
- acc.forEach((m,j)=>{const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,correctUnconditional:m.correct/c.runs,accuracy:m.accepted?m.correct/m.accepted:0,errorRate:m.wrong/c.runs,latency:m.accepted?m.delay/m.accepted:0};rows.push(row);samples.push(row);});}
- return {rows,summary:"Оценка качества коллективного решения при четырёх видах информационной неопределённости. Точность среди принятых решений следует анализировать совместно с долей отказов.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Оценка достоверности имитируется условными весами, известными генератору; это оптимистичный контрольный вариант, а не доказательство реализуемости идеального детектора."};
+ acc.forEach((m,j)=>{
+  const acceptedCI=wilson95(m.accepted,c.runs),correctCI=wilson95(m.correct,c.runs),wrongCI=wilson95(m.wrong,c.runs);
+  const conditionalCI=m.accepted?wilson95(m.correct,m.accepted):null;
+  const row={scenario:s.name,method:names[j],runs:c.runs,effectiveMissingProbability:missingProbability,coverage:m.accepted/c.runs,coverageCI95Low:acceptedCI.lower,coverageCI95High:acceptedCI.upper,
+   correctUnconditional:m.correct/c.runs,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
+   accuracy:m.accepted?m.correct/m.accepted:null,accuracyCI95Low:conditionalCI?.lower??null,accuracyCI95High:conditionalCI?.upper??null,
+   errorRate:m.wrong/c.runs,errorCI95Low:wrongCI.lower,errorCI95High:wrongCI.upper,
+   meanObservationAge:m.accepted?m.delay/m.accepted:null};
+  rows.push(row);samples.push(row);
+ });
+ oracleBenchmark.push({scenario:s.name,effectiveMissingProbability:missingProbability,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});
+  if(checkpoint&&scenarioIndex<scenarioSettings.length-1)
+   return {__checkpoint:{nextScenario:scenarioIndex+1,randomState:r.getState(),rows,oracleBenchmark,sourceRuns}};
+ }
+ return {rows,oracleBenchmark,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"uncertainty",complete:true,
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,threshold:c.threshold,entries:sourceRuns}}:{}),
+  summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
-function propagate(n,edges,initial,r,p,steps,defense=0){
- const infected=new Set(initial), history=[infected.size];let available=new Set(initial);
- for(let t=1;t<=steps;t++){const newly=new Set();for(const [a,b] of edges)if(available.has(a)&&!infected.has(b)&&r.random()<clamp(p*(1-defense),0,1))newly.add(b);
-  for(const v of newly)infected.add(v);available=new Set([...available,...newly]);history.push(infected.size);}
+export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
+ const infected=new Set(initial),history=[infected.size];let available=new Set(initial);
+ for(let t=1;t<=steps;t++){
+  const newly=new Set();
+  for(let i=0;i<edges.length;i++){
+   const [a,b]=edges[i],u=tape?tape[t-1][i]:r.random();
+   if(available.has(a)&&!infected.has(b)&&u<clamp(p*(1-defense),0,1))newly.add(b);
+  }
+  for(const v of newly)infected.add(v);available=new Set([...available,...newly]);
+  history.push(infected.size);
+ }
  return {infected,history};
 }
-export function runProbGraph(c){
- const r=rng(c.seed);const rows=[];const modes=[["Без дополнительной защиты",0],["Фильтрация сообщений",.38],["Фильтрация и робастная координация",.68]];
+export function runProbGraph(c,checkpoint=null){
+ const modes=[["Без дополнительного снижения",0],["Снижение вероятности распространения (η=0,38)",.38],["Снижение вероятности распространения (η=0,68)",.68]];
  const scenarios=[["Компрометация источника",.8,1],["Подмена межагентных сообщений",1.2,1],["Компрометация координатора",1.35,2],["Согласованная атака",1.25,3]];
- for(const [scenario,mult,start] of scenarios){for(const [method,defense] of modes){const loss=[],events=[],trajectories=Array(c.steps+1).fill(0);
-  for(let k=0;k<c.runs;k++){const ed=graph(c.agents,c.edgeProbability,r);const init=Array.from({length:start},()=>sample(r,c.agents));const p=propagate(c.agents,ed,init,r,c.spread*mult,c.steps,defense);const fraction=p.infected.size/c.agents;loss.push(fraction);events.push(fraction>=c.criticalFraction?1:0);p.history.forEach((v,j)=>trajectories[j]+=v/c.agents);}
-  rows.push({scenario,method,runs:c.runs,expectedFraction:avg(loss),dangerProbability:avg(events),p95Fraction:pct(loss,.95),...Object.fromEntries(trajectories.map((v,j)=>["t"+j,v/c.runs]))});
- }}
- return {rows,summary:"Монте-Карло на ориентированных графах взаимодействий. Вероятность опасного состояния определяется как доля прогонов с превышением порога поражённых агентов.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Вероятности распространения и степени защиты заданы синтетически; независимые попытки по рёбрам не учитывают коррелированные уязвимости и особенности реальных протоколов."};
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],
+ pairedRuns=checkpoint?.pairedRuns?[...checkpoint.pairedRuns]:[],
+ pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[],
+  sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
+ let replaySample=checkpoint?.replaySample||null;
+ for(let scenarioIndex=checkpoint?.nextScenario??0;scenarioIndex<scenarios.length;scenarioIndex++){
+ const [scenario,mult,start]=scenarios[scenarioIndex];
+  const statistics=modes.map(()=>({losses:[],events:[],trajectories:Array(c.steps+1).fill(0)}));
+  for(let run=0;run<c.runs;run++){
+   // Exactly the same topology, initial compromised vertices and stochastic transmission
+   // events are passed to every protection level within this paired run.
+   const eventSeed=((c.seed>>>0)^Math.imul(scenarioIndex+1,0x9e3779b9)^Math.imul(run+1,0x85ebca6b))>>>0;
+   const random=rng(eventSeed),edges=graph(c.agents,c.edgeProbability,random);
+   const initialNodes=chooseUniqueNodes(random,c.agents,start);
+   const tape=Array.from({length:c.steps},()=>edges.map(()=>random.random()));
+   if(c.record_source_runs){
+    const eventCount=tape.length*edges.length;
+    const currentEvents=sourceRuns.reduce((total,item)=>total+item.eventTape.length*item.edges.length,0);
+    if(currentEvents+eventCount>c.source_event_limit)
+     throw Error("Архив E3: лимит исходных событий исчерпан; полный результат не публикуется");
+    sourceRuns.push({scenario,scenarioIndex,run,eventSeed,initialNodes:[...initialNodes],
+     edges:edges.map(e=>[...e]),eventTape:tape.map(events=>[...events]),
+     scenarioMultiplier:mult,methodDefenses:modes.map(([method,defense])=>({method,defense}))});
+   }
+   if(scenarioIndex===0&&run===0)replaySample={runId:"E3/scenario-0/run-0/baseline",scenario,run,eventSeed,
+    initialNodes:[...initialNodes],edges:edges.map(e=>[...e]),eventTape:tape.map(t=>[...t]),
+    scenarioMultiplier:mult,defenseFactor:0};
+   const outcome={scenario,run,initialNodes,initialCount:initialNodes.length,eventSeed,edgeCount:edges.length,methods:[]};
+   modes.forEach(([method,defense],index)=>{
+    const result=propagate(c.agents,edges,initialNodes,random,c.spread*mult,c.steps,defense,tape);
+    const fraction=result.infected.size/c.agents;
+    statistics[index].losses.push(fraction);
+    statistics[index].events.push(fraction>=c.criticalFraction?1:0);
+    result.history.forEach((v,t)=>statistics[index].trajectories[t]+=v/c.agents);
+    outcome.methods.push({method,defense,infectedCount:result.infected.size,finalFraction:fraction,danger:Number(fraction>=c.criticalFraction)});
+   });
+   pairedRuns.push(outcome);
+  }
+  modes.forEach(([method,defense],index)=>{
+   const {losses,events,trajectories}=statistics[index];
+   const ci=wilson95(events.reduce((a,b)=>a+b,0),c.runs),meanCI=mean95(losses);
+   rows.push({scenario,method,defense,runs:c.runs,initialCount:start,expectedFraction:meanCI.estimate,
+    expectedFractionCI95Low:meanCI.lower,expectedFractionCI95High:meanCI.upper,
+    dangerProbability:ci.estimate,dangerCI95Low:ci.lower,dangerCI95High:ci.upper,dangerEvents:ci.events,
+    p95Fraction:pct(losses,.95),...Object.fromEntries(trajectories.map((v,t)=>["t"+t,v/c.runs]))});
+  });
+  for(let mode=1;mode<modes.length;mode++){
+   const ci=pairedDifference95(statistics[0].events,statistics[mode].events,c.seed+scenarioIndex*101+mode,300);
+   const differences=statistics[0].events.map((v,i)=>v-statistics[mode].events[i]);
+   const p=c.runs>=2?pairedSignFlipP(differences,c.seed+scenarioIndex*101+mode,4095):null;
+   pairedEffects.push({scenario,baseline:modes[0][0],method:modes[mode][0],runs:c.runs,
+    reductionDanger:ci.estimate,reductionCI95Low:ci.lower,reductionCI95High:ci.upper,
+    pRaw:p?.p??null,pHolm:null,holmReject05:null,pMethod:p?.method??null,
+    paired:true,intervalMethod:ci.method,warning:"Интервал учитывает вариацию Монте-Карло и не скорректирован на множественные сравнения. p-значения корректируются Холмом."});
+  }
+  if(checkpoint&&scenarioIndex<scenarios.length-1)
+   return {__checkpoint:{nextScenario:scenarioIndex+1,rows,pairedRuns,pairedEffects,replaySample,sourceRuns}};
+ }
+ const tested=pairedEffects.filter(row=>row.pRaw!==null);
+ const adjusted=holmAdjusted(tested.map(row=>row.pRaw));
+ tested.forEach((row,i)=>{row.pHolm=adjusted[i];row.holmReject05=adjusted[i]<.05;});
+ return {rows,pairedRuns,pairedEffects,replaySample,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:2,studyId:"probgraph",complete:true,
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,
+   config:{steps:c.steps,spread:c.spread,criticalFraction:c.criticalFraction},edgeEventCount:sourceRuns.reduce((n,item)=>n+item.edges.length*item.eventTape.length,0),
+   eventLimit:c.source_event_limit,entries:sourceRuns}}:{}),
+  statisticsVersion:STATISTICS_VERSION,
+  multipleTesting:{family:"E3-protection-vs-baseline",tested:tested.length,planned:pairedEffects.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
+  comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
-export function runPetri(c){
- const n=clamp(Math.floor(c.agents),3,12),T=Math.floor(c.steps),critical=clamp(Math.floor(c.criticalCount),1,n);
+export const PETRI_CHECKPOINT_BATCH=8192;
+export function runPetri(c,checkpoint=null){
+ const n=c.agents,T=c.steps,critical=c.criticalCount;
  const edges=fixedEdges7.filter(([a,b])=>a<n&&b<n);
- const start={mask:1,isolated:0,t:0,trace:["t=0: скомпрометирован A1"]};let q=[start],index=0,seen=new Set(["1:0:0"]),reachable=false,witness=[],statesByTime=Array(T+1).fill(0),truncated=false;
- const add=(mask,isolated,t,trace)=>{const key=[mask,isolated,t].join(":");if(!seen.has(key)){seen.add(key);q.push({mask,isolated,t,trace});}};
+ const start={mask:1,isolated:0,t:0,trace:["t=0: скомпрометирован A1"]};
+ const saved=checkpoint?.bfs;
+ let q=saved?[...saved.queue]:[start],index=saved?.index??0,
+  seen=new Set(saved?.seen||["1:0:0"]),reachable=false,witness=[],
+  statesByTime=saved?[...saved.statesByTime]:Array(T+1).fill(0),truncated=false;
+ const markingLog=checkpoint?.markingLog?[...checkpoint.markingLog]:[];
+ let currentMarking=null;
+ const stageEnd=checkpoint?Math.min(c.stateLimit,(checkpoint.nextScenario+1)*PETRI_CHECKPOINT_BATCH):c.stateLimit;
+ const add=(mask,isolated,t,trace)=>{
+  const key=[mask,isolated,t].join(":"),enqueued=!seen.has(key);
+  if(currentMarking)currentMarking.successors.push({mask,isolated,t,transition:trace.at(-1),enqueued});
+  if(enqueued){seen.add(key);q.push({mask,isolated,t,trace});}
+ };
  const popcount=mask=>{let n=0;while(mask){n+=mask&1;mask>>>=1;}return n;};
- while(index<q.length){const state=q[index++];statesByTime[state.t]++;if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
-  if(index>=c.stateLimit){truncated=true;break;}if(state.t>=T)continue;
+ while(index<q.length&&index<c.stateLimit&&index<stageEnd){
+  const state=q[index++];
+  if(c.record_marking_log){
+   if(markingLog.length>=c.marking_log_limit)
+    throw Error("Архив E4: лимит обработанных маркировок исчерпан; неполный журнал не публикуется");
+   currentMarking={index:index-1,t:state.t,mask:state.mask,isolated:state.isolated,
+    transition:state.trace.at(-1),critical:popcount(state.mask)>=critical,successors:[]};
+   markingLog.push(currentMarking);
+  }
+  statesByTime[state.t]++;
+  if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
+  if(state.t>=T)continue;
   // Timed transitions: transmission and isolation each consume one simulated tick.
   const next=state.t+1;
+  if(c.isolationPolicy===1&&next>=c.detectionDelay){
+   // Idealised PRIORITY controller. Detection is assumed perfect: all currently
+   // compromised and non-isolated agents are isolated together in this tick.
+   // Waiting/transmission are disabled whenever this mandatory rule is enabled.
+   const newly=state.mask&~state.isolated;
+   const names=Array.from({length:n},(_,i)=>newly&(1<<i)?"A"+(i+1):null).filter(Boolean);
+   add(state.mask,state.isolated|newly,next,[...state.trace,
+    "t="+next+": обязательная изоляция "+(names.join(", ")||"нет новых агентов")]);
+   continue;
+  }
   add(state.mask,state.isolated,next,[...state.trace,"t="+next+": ожидание"]);
   for(const [a,b] of edges)if(state.mask&(1<<a)&&!(state.isolated&(1<<a))&&!(state.mask&(1<<b))&&!(state.isolated&(1<<b)))
    add(state.mask|(1<<b),state.isolated,next,[...state.trace,"t="+next+": передача A"+(a+1)+" → A"+(b+1)]);
-  if(next>=c.detectionDelay){for(let v=0;v<n;v++)if((state.mask&(1<<v))&&!(state.isolated&(1<<v)))
+  if(c.isolationPolicy===0&&next>=c.detectionDelay){for(let v=0;v<n;v++)if((state.mask&(1<<v))&&!(state.isolated&(1<<v)))
    add(state.mask,state.isolated|(1<<v),next,[...state.trace,"t="+next+": изоляция A"+(v+1)]);}
  }
- const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
- return {rows,witness,statesByTime,edges,summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости."};
+ if(checkpoint&&!reachable&&index<q.length&&index<c.stateLimit&&index>=stageEnd)
+  return {__checkpoint:{nextScenario:checkpoint.nextScenario+1,
+   bfs:{queue:q,index,seen:[...seen],statesByTime},...(c.record_marking_log?{markingLog}:{})}};
+ if(!reachable&&index<q.length)truncated=true;
+ const verdict=reachable?"reachable":truncated?"inconclusive":"unreachable_within_bound";
+ const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Стратегия изоляции",value:c.isolationPolicy===0?"Необязательная":"Приоритетная, идеализированная"},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
+ return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,
+  ...(c.record_marking_log?{markingJournal:{schemaVersion:1,studyId:"petri",complete:true,
+   boundedByStateLimit:true,processed:index,enqueued:seen.size,stateLimit:c.stateLimit,
+   horizon:T,criticalCount:critical,isolationPolicy:c.isolationPolicy,detectionDelay:c.detectionDelay,
+   initialMarking:{mask:1,isolated:0,t:0},
+   records:markingLog,frontier:q.slice(index).map(state=>({
+    mask:state.mask,isolated:state.isolated,t:state.t,transition:state.trace.at(-1)})),
+   verdict}}:{}),
+  isolationPolicy:c.isolationPolicy,policyName:c.isolationPolicy===0?"optional_nondeterministic":"ideal_mandatory_priority",summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости. Необязательная изоляция не обязана менять EF при варьировании τ. Приоритетная политика предполагает мгновенное безошибочное обнаружение всех ранее компрометированных агентов, одновременно изолирует их и запрещает ожидание и передачу на таком такте. Она является идеализированной верхней границей управляемой защиты, а не реалистичным детектором."};
 }
-export function runCascade(c){
- const r=rng(c.seed),rows=[],impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3.0].map(x=>x*c.lossScale),conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
- for(let start=0;start<c.agents;start++){for(const [method,defense] of conditions){const losses=[],affected=[],critical=[];for(let k=0;k<c.runs;k++){
-  const p=propagate(8,fixedEdges8,[start],r,c.spread,8,defense);const cost=[...p.infected].reduce((s,i)=>s+impacts[i],0);
-  losses.push(cost);affected.push(p.infected.size);critical.push(cost>=impacts.reduce((a,b)=>a+b,0)*.45?1:0);}
-  const tail=losses.filter(v=>v>=pct(losses,.95));
-  rows.push({scenario:"Начальная компрометация A"+(start+1),method,runs:c.runs,directDamage:impacts[start],expectedDamage:avg(losses),excessDamage:avg(losses)-impacts[start],dangerProbability:avg(critical),p95Damage:pct(losses,.95),cvar95:avg(tail),affectedAgents:avg(affected)});
- }}
- return {rows,summary:"Оценка прямого и каскадного ущерба при поражении каждого из восьми функционально зависимых агентов (11 ориентированных связей). CVaR95 — средняя потеря в верхнем хвосте распределения.",chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",limits:"Условные коэффициенты критичности и интенсивности распространения не являются оценками денежных потерь или эксплуатационных вероятностей."};
+export function runCascade(c,checkpoint=null){
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],
+ pairedRuns=checkpoint?.pairedRuns?[...checkpoint.pairedRuns]:[],
+ pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[],
+  sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
+ let replaySample=checkpoint?.replaySample||null;
+ const impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
+ const criticalDamage=.45*impacts.reduce((a,b)=>a+b,0);
+ const conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
+ for(let start=checkpoint?.nextScenario??0;start<c.agents;start++){
+  const scenario="Начальная компрометация A"+(start+1);
+  const stats=conditions.map(()=>({losses:[],affected:[],critical:[]}));
+  for(let run=0;run<c.runs;run++){
+   const eventSeed=((c.seed>>>0)^Math.imul(start+1,0x9e3779b9)^Math.imul(run+1,0x85ebca6b))>>>0;
+   const random=rng(eventSeed);
+   const tape=Array.from({length:8},()=>fixedEdges8.map(()=>random.random()));
+   if(c.record_source_runs){
+    const eventCount=tape.length*fixedEdges8.length;
+    if((sourceRuns.length+1)*eventCount>c.source_event_limit)
+     throw Error("Архив E5: превышен лимит исходных событий; полный результат не публикуется");
+    sourceRuns.push({scenario,source:start,run,eventSeed,initialNode:start,
+     edges:fixedEdges8.map(e=>[...e]),eventTape:tape.map(events=>[...events]),
+     impactWeights:[...impacts],criticalDamage,
+     methodDefenses:conditions.map(([method,defense])=>({method,defense}))});
+   }
+   if(start===0&&run===0)replaySample={runId:"E5/source-0/run-0/baseline",scenario,run,eventSeed,
+    initialNode:start,edges:fixedEdges8.map(e=>[...e]),eventTape:tape.map(t=>[...t]),
+    impactWeights:[...impacts],defenseFactor:0};
+   const pair={scenario,run,eventSeed,initialNode:start,methods:[]};
+   conditions.forEach(([method,defense],index)=>{
+    const p=propagate(8,fixedEdges8,[start],random,c.spread,8,defense,tape);
+    const cost=[...p.infected].reduce((sum,i)=>sum+impacts[i],0);
+    const danger=Number(cost>=criticalDamage);
+    stats[index].losses.push(cost);stats[index].affected.push(p.infected.size);
+    stats[index].critical.push(danger);
+    pair.methods.push({method,defense,loss:cost,danger,affectedCount:p.infected.size});
+   });
+   pairedRuns.push(pair);
+  }
+  conditions.forEach(([method,defense],index)=>{
+   const {losses,affected,critical}=stats[index];
+   const meanCI=mean95(losses),dangerCI=wilson95(critical.reduce((u,v)=>u+v,0),c.runs);
+   const tail=bootstrap95(losses,values=>expectedShortfall(values,.95),c.seed+start*109+Math.round(defense*100),200);
+   rows.push({scenario,method,runs:c.runs,directDamage:impacts[start],expectedDamage:meanCI.estimate,
+    expectedDamageCI95Low:meanCI.lower,expectedDamageCI95High:meanCI.upper,
+    excessDamage:avg(losses.map(v=>Math.max(0,v-impacts[start]))),
+    dangerProbability:dangerCI.estimate,dangerCI95Low:dangerCI.lower,dangerCI95High:dangerCI.upper,
+    dangerEvents:dangerCI.events,p95Damage:pct(losses,.95),
+    es95:expectedShortfall(losses,.95),es95CI95Low:tail.lower,es95CI95High:tail.upper,
+    tailSamples:.05*c.runs,
+    tailWarning:.05*c.runs<10?"Менее 10 эквивалентных наблюдений верхних 5%; хвостовая оценка нестабильна":null,
+    affectedAgents:avg(affected)});
+  });
+  const damage=pairedDifference95(stats[0].losses,stats[1].losses,c.seed+start*107+1,300);
+  const danger=pairedDifference95(stats[0].critical,stats[1].critical,c.seed+start*107+2,300);
+  const damageP=c.runs>=2?pairedSignFlipP(stats[0].losses.map((v,i)=>v-stats[1].losses[i]),c.seed+start*107+1,4095):null;
+  const dangerP=c.runs>=2?pairedSignFlipP(stats[0].critical.map((v,i)=>v-stats[1].critical[i]),c.seed+start*107+2,4095):null;
+  pairedEffects.push({scenario,runs:c.runs,baseline:conditions[0][0],method:conditions[1][0],
+   reductionDamage:damage.estimate,reductionDamageCI95Low:damage.lower,reductionDamageCI95High:damage.upper,
+   reductionDanger:danger.estimate,reductionDangerCI95Low:danger.lower,reductionDangerCI95High:danger.upper,
+   pRawDamage:damageP?.p??null,pRawDanger:dangerP?.p??null,
+   pHolmDamage:null,pHolmDanger:null,holmRejectDamage05:null,holmRejectDanger05:null,
+   intervalMethod:damage.method,paired:true});
+  if(checkpoint&&start<c.agents-1)
+   return {__checkpoint:{nextScenario:start+1,rows,pairedRuns,pairedEffects,replaySample,sourceRuns}};
+ }
+ const allTests=pairedEffects.flatMap(row=>[
+  ...(row.pRawDamage===null?[]:[{row,metric:"Damage",p:row.pRawDamage}]),
+  ...(row.pRawDanger===null?[]:[{row,metric:"Danger",p:row.pRawDanger}])
+ ]);
+ const corrected=holmAdjusted(allTests.map(x=>x.p));
+ allTests.forEach((test,i)=>{
+  test.row["pHolm"+test.metric]=corrected[i];
+  test.row["holmReject"+test.metric+"05"]=corrected[i]<.05;
+ });
+ return {rows,pairedRuns,pairedEffects,replaySample,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:2,studyId:"cascade",complete:true,
+   runsPerScenario:c.runs,scenarios:c.agents,agents:c.agents,
+   config:{steps:8,spread:c.spread},edgeEventCount:sourceRuns.length*8*fixedEdges8.length,eventLimit:c.source_event_limit,
+   entries:sourceRuns}}:{}),
+  multipleTesting:{
+   family:"E5-eight-sources-times-two-outcomes",tested:allTests.length,
+   planned:pairedEffects.length*2,correction:"Holm-FWER-0.05",unadjustedCI:true},
+  comparisonDesign:"paired-common-random-numbers",
+  summary:"Сравнение режимов каскадного распространения выполняется на общих таблицах случайных событий. ES95 — средняя потеря худших 5% вероятностной массы, включая дробную массу на границе квантиля.",
+  chartKey:"expectedDamage",chartLabel:"Математическое ожидание ущерба",series:"method",
+  limits:"Коэффициенты критичности и распространения синтетические. Интервалы описывают только вариацию Монте-Карло; при малом числе хвостовых наблюдений оценки ES95 ненадёжны."};
 }
-function tmean(x){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(1,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
-export function runMisinformation(c){
- const r=rng(c.seed),rows=[],methods=["Обычное среднее","Взвешивание по доверию","Усечённое среднее"];
- for(let bad=0;bad<=Math.min(3,c.agents-1);bad++){const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0,exposed:0}));
+function tmean(x,trimEachSide=3){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(trimEachSide,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
+export function runMisinformation(c,checkpoint=null){
+ const r=rng(c.seed);if(checkpoint?.randomState!==undefined)r.restore(checkpoint.randomState);
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],
+  scenarioMetrics=checkpoint?.scenarioMetrics?[...checkpoint.scenarioMetrics]:[],
+  robustnessSensitivity=checkpoint?.robustnessSensitivity?[...checkpoint.robustnessSensitivity]:[],
+  pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[],
+  sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
+ const methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
+ for(let bad=checkpoint?.nextScenario??0;bad<=Math.min(3,c.agents-1);bad++){
+  const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0,riskSamples:[]}));
+  const trimStats=Array.from({length:4},()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
   for(let k=0;k<c.runs;k++){
    const truth=r.random()<.5?1:-1;const seeds=new Set();while(seeds.size<bad)seeds.add(sample(r,c.agents));const exposed=new Set(seeds);
-   for(let t=0;t<3;t++)for(const [a,b] of fixedEdges7)if(exposed.has(a)&&r.random()<c.spread)exposed.add(b);
+   const rawTapes=c.record_source_runs?[]:null;
+   for(let t=0;t<3;t++){const eventTape=fixedEdges7.map(()=>r.random());
+    if(rawTapes)rawTapes.push([...eventTape]);
+    const tick=spreadOneTick(exposed,fixedEdges7,eventTape,c.spread);exposed.clear();for(const v of tick.next)exposed.add(v);}
    const points=[];for(let i=0;i<c.agents;i++){const compromised=seeds.has(i),misled=exposed.has(i);
     const x=truth+r.normal()*c.noise+(compromised?-truth*c.attackBias:misled?-truth*c.attackBias*.7:0);
-    const trust=compromised?.08:misled?.55:.94;points.push({x,trust});
+    points.push({x});
    }
-   const votes=[avg(points.map(x=>x.x)),points.reduce((a,x)=>a+x.x*x.trust,0)/points.reduce((a,x)=>a+x.trust,0),tmean(points.map(x=>x.x))];
-   votes.forEach((v,j)=>{const m=stats[j];if(Math.abs(v)<c.threshold)m.abstain++;else if(Math.sign(v)===truth)m.correct++;else m.wrong++;
-     m.deviation+=Math.abs(v-truth);m.exposed+=exposed.size/c.agents;});
+   exposedSum+=exposed.size/c.agents;
+   const weights=estimateReliabilityFromObservations(points,c.noise);
+   const observed=points.map(x=>x.x);
+   const votes=[avg(observed),points.reduce((a,x,i)=>a+x.x*weights[i],0)/weights.reduce((a,b)=>a+b,0),tmean(observed,3)];
+   if(rawTapes)sourceRuns.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,
+    compromised:bad,run:k,truth,initialCompromised:[...seeds].sort((a,b)=>a-b),
+    exposed:[...exposed].sort((a,b)=>a-b),edges:fixedEdges7.map(e=>[...e]),
+    eventTapes:rawTapes,observations:observed.map((x,i)=>({agent:i+1,value:x})),
+    methodEstimates:[...votes],trimEstimates:Array.from({length:4},(_,trim)=>tmean(observed,trim)),
+    estimatorUsesHiddenFlags:false});
+   votes.forEach((v,j)=>{const m=stats[j];let cost=0;
+     if(Math.abs(v)<c.threshold){m.abstain++;cost=c.costRefuse;}
+     else if(Math.sign(v)===truth)m.correct++;
+     else{m.wrong++;cost=c.costWrong;}
+     m.riskSamples.push(cost);
+     m.deviation+=Math.abs(v-truth);});
+   for(let trim=0;trim<=3;trim++){
+    const estimate=tmean(observed,trim),m=trimStats[trim];
+    if(Math.abs(estimate)<c.threshold)m.abstain++;
+    else if(Math.sign(estimate)===truth)m.correct++;
+    else m.wrong++;
+    m.deviation+=Math.abs(estimate-truth);
+   }
   }
-  stats.forEach((s,j)=>rows.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,method:methods[j],runs:c.runs,wrongProbability:s.wrong/c.runs,correctProbability:s.correct/c.runs,abstentionProbability:s.abstain/c.runs,meanDeviation:s.deviation/c.runs,meanExposedFraction:s.exposed/c.runs,risk:s.wrong/c.runs*1}));
+  scenarioMetrics.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,runs:c.runs,meanExposedFraction:exposedSum/c.runs,appliesTo:"scenario-not-method"});
+  stats.forEach((m,j)=>{
+   const wrongCI=wilson95(m.wrong,c.runs),refuseCI=wilson95(m.abstain,c.runs),correctCI=wilson95(m.correct,c.runs);
+   const risk=c.costWrong*wrongCI.estimate+c.costRefuse*refuseCI.estimate;
+   const riskCI=mean95(m.riskSamples);
+   rows.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,method:methods[j],runs:c.runs,
+    wrongProbability:wrongCI.estimate,wrongCI95Low:wrongCI.lower,wrongCI95High:wrongCI.upper,
+    correctProbability:correctCI.estimate,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
+    abstentionProbability:refuseCI.estimate,abstentionCI95Low:refuseCI.lower,abstentionCI95High:refuseCI.upper,
+    meanDeviation:m.deviation/c.runs,risk,riskCI95Low:riskCI.lower,riskCI95High:riskCI.upper,
+    riskCIMethod:riskCI.method,costWrong:c.costWrong,costRefuse:c.costRefuse});
+  });
+  trimStats.forEach((m,trim)=>{
+   const correct=m.correct/c.runs,wrong=m.wrong/c.runs,abstain=m.abstain/c.runs;
+   robustnessSensitivity.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,
+    compromised:bad,trim_each_side:trim,runs:c.runs,
+    correctProbability:correct,wrongProbability:wrong,abstentionProbability:abstain,
+    meanDeviation:m.deviation/c.runs,risk:c.costWrong*wrong+c.costRefuse*abstain,
+    costWrong:c.costWrong,costRefuse:c.costRefuse});
+  });
+  for(const baselineIndex of [0,1]){
+   const differences=stats[baselineIndex].riskSamples.map((cost,i)=>cost-stats[2].riskSamples[i]);
+   const interval=c.runs>=2?pairedDifference95(stats[baselineIndex].riskSamples,stats[2].riskSamples,c.seed+bad*100+baselineIndex,300):null;
+   const p=c.runs>=2?pairedSignFlipP(differences,c.seed+bad*100+baselineIndex,4095):null;
+   pairedEffects.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,
+    baseline:methods[baselineIndex],method:methods[2],metric:"risk",runs:c.runs,
+    riskReduction:interval?.estimate??null,riskReductionCI95Low:interval?.lower??null,
+    riskReductionCI95High:interval?.upper??null,pRaw:p?.p??null,pHolm:null,
+    holmReject05:null,paired:true,intervalMethod:interval?.method??null});
+  }
+  if(checkpoint&&bad<Math.min(3,c.agents-1))
+   return {__checkpoint:{nextScenario:bad+1,randomState:r.getState(),rows,scenarioMetrics,robustnessSensitivity,pairedEffects,sourceRuns}};
  }
- return {rows,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Истинность и качество сообщений известны генератору; оценка доверия задана условно. Результат нельзя переносить на реальные ИМАС без независимой калибровки."};
+ const tested=pairedEffects.filter(effect=>effect.pRaw!==null);
+ const adjusted=holmAdjusted(tested.map(effect=>effect.pRaw));
+ tested.forEach((effect,i)=>{effect.pHolm=adjusted[i];effect.holmReject05=adjusted[i]<.05;});
+ return {rows,scenarioMetrics,robustnessSensitivity,pairedEffects,
+  multipleTesting:{family:"E6-risk-trimmed-vs-two-baselines-across-four-attack-levels",
+   planned:8,tested:tested.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"misinformation",complete:true,
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,threshold:c.threshold,entries:sourceRuns}}:{}),
+  statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
 }
-export function validateStudy(id,raw){
- const def=STUDY_DEFS.find(s=>s.id===id);if(!def)throw new Error("Неизвестный эксперимент");
+export function validateStudy(id,raw={}){
+ const def=STUDY_DEFS.find(s=>s.id===id);if(!def)throw Error("Неизвестный эксперимент");
+ if(!raw||typeof raw!=="object"||Array.isArray(raw))throw Error("Конфигурация должна быть объектом");
  const c={...def.defaults,...raw};
- for(const [k,v] of Object.entries(c)){if(!Number.isFinite(Number(v)))throw new Error("Параметр "+k+" должен быть числом");c[k]=Number(v);}
- if(c.agents<3||c.agents>100||!Number.isInteger(c.agents))throw new Error("Число агентов должно быть целым от 3 до 100");
- if(c.runs<1||c.runs>10000||!Number.isInteger(c.runs))throw new Error("Число прогонов должно быть целым от 1 до 10000");
- if(!Number.isInteger(c.seed))throw new Error("Начальное зерно должно быть целым");
- for(const k of ["loss","corruption","edgeProbability","spread","criticalFraction","defenseFactor"]){if(k in c&&(c[k]<0||c[k]>1))throw new Error(k+": требуется диапазон [0;1]");}
- for(const k of ["noise","signalNoise","attackBias","threshold","lossScale"]){if(k in c&&c[k]<0)throw new Error(k+": значение не может быть отрицательным");}
- if("steps" in c&&(!Number.isInteger(c.steps)||c.steps<1||c.steps>20))throw new Error("Горизонт: от 1 до 20 тактов");
- if("criticalCount" in c&&(c.criticalCount<1||c.criticalCount>c.agents))throw new Error("Некорректный порог");
- if("detectionDelay" in c&&c.detectionDelay<0)throw new Error("Некорректная задержка");
- if("stateLimit" in c&&(c.stateLimit<100||c.stateLimit>200000))throw new Error("Предел маркировок: 100–200000");
- if(id==="cascade"&&c.agents!==8)throw new Error("Для экспериментального графа каскадов предусмотрено ровно 8 агентов");
- if(id==="misinformation"&&c.agents!==7)throw new Error("Для модели информационных зависимостей предусмотрено ровно 7 агентов");
+ for(const [key,value] of Object.entries(c))
+  if(typeof value!=="number"||!Number.isFinite(value))throw Error("Параметр "+key+": требуется конечное число");
+ const integer=(key,min,max)=>{const x=c[key];if(!Number.isInteger(x)||x<min||x>max)throw Error("Параметр "+key+": целое число от "+min+" до "+max);};
+ const bounded=(key,min,max)=>{const x=c[key];if(x<min||x>max)throw Error("Параметр "+key+": диапазон ["+min+"; "+max+"]");};
+ integer("agents",3,100);integer("runs",1,10000);integer("seed",-2147483648,2147483647);
+  if("record_source_runs" in c){
+   integer("record_source_runs",0,1);integer("source_run_limit",1,1000);
+   if(c.record_source_runs){
+    if(c.runs>c.source_run_limit)throw Error("Архив исходных прогонов: R превышает лимит полного архива");
+    if(c.agents*c.runs*4>50000)throw Error("Архив исходных прогонов: превышен предел 50000 агентных наблюдений");
+   }
+  }
+  if("source_event_limit" in c)integer("source_event_limit",100,250000);
+  if("record_marking_log" in c){integer("record_marking_log",0,1);integer("marking_log_limit",100,200000);}
+ for(const key of ["loss","corruption","edgeProbability","spread","criticalFraction","defenseFactor"])
+  if(key in c)bounded(key,0,1);
+ for(const key of ["noise","signalNoise","attackBias","threshold","costWrong","costRefuse"])
+  if(key in c)bounded(key,0,100);
+ if("steps" in c)integer("steps",1,20);
+ if("criticalCount" in c)integer("criticalCount",1,c.agents);
+ if("detectionDelay" in c)integer("detectionDelay",0,20);
+ if("isolationPolicy" in c)integer("isolationPolicy",0,1);
+ if("stateLimit" in c)integer("stateLimit",100,200000);
+ if("lossScale" in c)bounded("lossScale",Number.MIN_VALUE,100);
+ if(id==="petri"){
+  if(c.agents!==7)throw Error("Параметр agents: фиксированная сеть Петри требует N=7");
+  if(c.runs!==1)throw Error("Параметр runs: формальный поиск является единственным запуском (R=1)");
+ }
+ if(id==="cascade"&&c.agents!==8)throw Error("Параметр agents: для каскадов требуется N=8");
+ if(id==="misinformation"&&c.agents!==7)throw Error("Параметр agents: для информационного графа требуется N=7");
  return c;
 }
-export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);return {id,config:c,model:"synthetic-experimental",...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
+export const RESEARCH_CHECKPOINT_SCHEMA=1;
+export const researchCheckpointUnits=(id,c)=>id==="cascade"?c.agents:
+ id==="petri"?Math.ceil(c.stateLimit/PETRI_CHECKPOINT_BATCH):4;
+export function validateResearchCheckpoint(id,c,state){
+ const total=researchCheckpointUnits(id,c);
+ if(!state||typeof state!=="object"||Array.isArray(state)||!Number.isInteger(state.nextScenario)||
+    state.nextScenario<0||state.nextScenario>=total)throw Error("Некорректный индекс контрольной точки исследования");
+ const n=state.nextScenario;
+ if(state.accumulatedExecutionMs!==undefined&&
+  (!Number.isFinite(state.accumulatedExecutionMs)||state.accumulatedExecutionMs<0))
+  throw Error("Некорректное накопленное время вычисления");
+ if(n>0&&(state.schemaVersion!==RESEARCH_CHECKPOINT_SCHEMA||state.studyId!==id||
+   state.modelVersion!==RESEARCH_MODEL_VERSION||state.configSignature!==JSON.stringify(c)))
+  throw Error("Контрольная точка относится к иной модели или конфигурации");
+ if(id==="petri"&&n>0){
+  if(c.record_marking_log&&(!Array.isArray(state.markingLog)||state.markingLog.length!==state.bfs?.index))
+   throw Error("Повреждён журнал маркировок E4");
+  const bfs=state.bfs;
+  if(!bfs||!Array.isArray(bfs.queue)||!Array.isArray(bfs.seen)||
+   !Array.isArray(bfs.statesByTime)||bfs.statesByTime.length!==c.steps+1||
+   bfs.index!==n*PETRI_CHECKPOINT_BATCH||bfs.queue.length!==bfs.seen.length||
+   bfs.queue.length<bfs.index)
+   throw Error("Повреждена очередь контрольной точки BFS");
+ }
+ const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
+  id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
+  id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
+  id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n,pairedEffects:2*n,
+   ...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:{};
+ for(const [key,size] of Object.entries(lengths)){
+  if((!Array.isArray(state[key])&&n>0)||(Array.isArray(state[key])&&state[key].length!==size))
+   throw Error("Повреждена контрольная точка "+id+": "+key);
+ }
+ if(n>0&&(id==="uncertainty"||id==="misinformation")&&
+    (!Number.isInteger(state.randomState)||state.randomState<1||state.randomState>4294967295))
+  throw Error("Повреждено состояние ГПСЧ "+id);
+ return true;
+}
+function completeResearchResult(id,c,result,elapsedMs){
+ const metricIntegrity=auditResultMetrics(id,result);
+ if(!metricIntegrity.valid)throw Error("Контроль показателей "+id+": "+metricIntegrity.issues.join("; "));
+ const statisticsAudit=auditResearchInference(id,c,result);
+ if(!statisticsAudit.valid)throw Error("Контроль статистического вывода "+id+": "+statisticsAudit.issues.join("; "));
+ return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,
+  statisticsAudit,
+  metricPassportVersion:METRIC_PASSPORT_VERSION,metricPassport:passportForStudy(id),metricIntegrity,
+  ...result,replay:buildResearchReplay(id,c,result),elapsedMs};
+}
+const researchHandlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,
+ cascade:runCascade,misinformation:runMisinformation};
+export function executeStudy(id,params={}){
+ const c=validateStudy(id,params),start=Date.now();
+ return completeResearchResult(id,c,researchHandlers[id](c),Date.now()-start);
+}
+/** One complete scenario/source per call, preserving the original RNG sequence. */
+export function executeStudyChunk(id,params={},checkpoint=null){
+ const c=validateStudy(id,params),start=Date.now(),totalUnits=researchCheckpointUnits(id,c);
+ const state=checkpoint||{nextScenario:0};
+ validateResearchCheckpoint(id,c,state);
+ const raw=researchHandlers[id](c,state);
+ if(raw.__checkpoint){
+  const next={...raw.__checkpoint,schemaVersion:RESEARCH_CHECKPOINT_SCHEMA,studyId:id,
+   modelVersion:RESEARCH_MODEL_VERSION,configSignature:JSON.stringify(c),
+   accumulatedExecutionMs:(state.accumulatedExecutionMs||0)+(Date.now()-start)};
+  validateResearchCheckpoint(id,c,next);
+  if(next.nextScenario!==state.nextScenario+1)throw Error("Невалидный переход контрольной точки");
+  return {done:false,completedUnits:next.nextScenario,totalUnits,state:next,elapsedMs:Date.now()-start};
+ }
+ return {done:true,completedUnits:id==="petri"?state.nextScenario+1:totalUnits,totalUnits,
+  result:completeResearchResult(id,c,raw,(state.accumulatedExecutionMs||0)+(Date.now()-start))};
+}
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
 export function statisticalIndicators(values){return quantileInfo(values);}
 
@@ -152,6 +580,19 @@ export function buildResearchReplay(id,c,result={}){
    }
    return {title:"Маршрут сообщений и автоматическая выработка решения",vertices,edges,frames,notes:"Иллюстративная отдельная трасса для фиксированного зерна; статистические показатели вычисляются по независимым прогонам.",valueLabel:"Оценка состояния"};
  }
+ if(id==="probgraph"&&result?.replaySample){
+   const sample=result.replaySample,edges=sample.edges;
+   let infected=new Set(sample.initialNodes);
+   const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"compromised":"normal");
+   snap(0,status(),[],"Исходная компрометация: "+sample.initialNodes.map(i=>"А"+(i+1)).join(", "),infected.size/n);
+   for(let t=1;t<=c.steps;t++){
+    const tick=spreadOneTick(infected,edges,sample.eventTape[t-1],clamp(c.spread*sample.scenarioMultiplier*(1-sample.defenseFactor),0,1));
+    infected=tick.next;
+    snap(t,status(),tick.activeEdges,"Новые поражённые агенты: "+tick.newly.size+"; всего: "+infected.size+"/"+n,infected.size/n);
+   }
+   return {title:"Фактическая трасса парного прогона графа угроз",vertices,edges,frames,runId:sample.runId,eventSeed:sample.eventSeed,
+    notes:"Фактический run=0 первого сценария без снижения вероятности. События и итог совпадают с pairedRuns[0].",valueLabel:"Доля поражённых"};
+  }
  if(id==="probgraph"){
    const edges=graph(n,c.edgeProbability,r);const seeds=[sample(r,n)];const infected=new Set(seeds),available=new Set(seeds);
    const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"compromised":"normal");
@@ -169,14 +610,35 @@ export function buildResearchReplay(id,c,result={}){
    const status=()=>Array.from({length:n},(_,i)=>isolated.has(i)?"isolated":compromised.has(i)?"compromised":"normal");
    snap(0,status(),[],"Начальная маркировка: токен компрометации агента А1",1);
    for(let t=1;t<=c.steps;t++){
-     const line=witness[t]||"t="+t+": ожидание", transmitted=line.match(/передача A(\d+) → A(\d+)/),blocked=line.match(/изоляция A(\d+)/),active=[];
+     const idealWait=!witness.length&&c.isolationPolicy===1&&t>=c.detectionDelay;
+     const line=witness[t]||(idealWait?"t="+t+": обязательная изоляция "+[...compromised].filter(i=>!isolated.has(i)).map(i=>"A"+(i+1)).join(", "):"t="+t+": ожидание");
+     const transmitted=line.match(/передача A(\d+) → A(\d+)/),active=[];
      if(transmitted){compromised.add(Number(transmitted[2])-1);active.push([Number(transmitted[1])-1,Number(transmitted[2])-1]);}
-     if(blocked)isolated.add(Number(blocked[1])-1);
+     if(line.includes("обязательная изоляция")){
+      for(const m of line.matchAll(/A(\d+)/g))isolated.add(Number(m[1])-1);
+     }else{
+      const blocked=line.match(/изоляция A(\d+)/);
+      if(blocked)isolated.add(Number(blocked[1])-1);
+     }
      snap(t,status(),active,line,compromised.size);
      if(witness.length&&t>=witness.length-1)break;
    }
-   return {title:"Последовательность маркировок и переходов сети Петри",vertices,edges,frames,notes:result.witness?.length?"Воспроизводится найденная трасса-контрпример, содержащая достижение опасной маркировки.":"Контрпример не найден; показана траектория ожидания. Отсутствие контрпримера не доказывает безопасность при неполном поиске.",valueLabel:"Число компрометированных"};
+   return {title:"Последовательность маркировок и переходов сети Петри",vertices,edges,frames,notes:result.witness?.length?"Воспроизводится найденная трасса-контрпример, содержащая достижение опасной маркировки.":result.verdict==="unreachable_within_bound"?"Фронт BFS исчерпан; показана отдельная допустимая траектория для выбранной политики.":result.verdict==="inconclusive"?"Поиск прерван до исчерпания фронта; показана иллюстративная траектория, безопасность не доказана.":"До расчёта показана иллюстративная траектория.",valueLabel:"Число компрометированных"};
  }
+ if(id==="cascade"&&result?.replaySample){
+   const sample=result.replaySample,edges=sample.edges;
+   let infected=new Set([sample.initialNode]);
+   const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"affected":"normal");
+   const cost=()=>[...infected].reduce((acc,i)=>acc+sample.impactWeights[i],0);
+   snap(0,status(),[],"Исходная компрометация: А"+(sample.initialNode+1)+"; прямой ущерб",cost());
+   for(let t=1;t<=sample.eventTape.length;t++){
+    const tick=spreadOneTick(infected,edges,sample.eventTape[t-1],clamp(c.spread*(1-sample.defenseFactor),0,1));
+    infected=tick.next;
+    snap(t,status(),tick.activeEdges,"Каскадные переходы: "+tick.newly.size+"; поражено "+infected.size+"/"+n,cost());
+   }
+   return {title:"Фактическая трасса парного каскадного прогона",vertices,edges,frames,runId:sample.runId,eventSeed:sample.eventSeed,
+    notes:"Фактический run=0 при источнике А1 без сдерживания; события и ущерб совпадают с pairedRuns[0].",valueLabel:"Совокупный ущерб"};
+  }
  if(id==="cascade"){
    const edges=fixedEdges8,infected=new Set([0]),available=new Set([0]),impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
    const cost=()=>[...infected].reduce((a,i)=>a+impacts[i],0);
@@ -197,8 +659,10 @@ export function buildResearchReplay(id,c,result={}){
    snap(0,states(),[],"Начально скомпрометированы А1 и А2; эталонное состояние +1",evaluate());
    for(let t=1;t<=3;t++){
      const newly=new Set(),active=[];
-     for(const [a,b] of edges)if(exposed.has(a)&&!exposed.has(b)&&r.random()<c.spread){newly.add(b);active.push([a,b]);}
-     for(const i of newly)exposed.add(i);
+     const tick=spreadOneTick(exposed,edges,edges.map(()=>r.random()),c.spread);
+     for(const i of tick.newly)newly.add(i);
+     for(const e of tick.activeEdges)active.push(e);
+     for(const i of tick.newly)exposed.add(i);
      snap(t,states(),active,"Недостоверная информация достигла "+exposed.size+"/7 агентов; новых: "+newly.size,evaluate());
    }
    return {title:"Передача недостоверной информации и смещение коллективной оценки",vertices,edges,frames,notes:"Отдельная иллюстративная трасса при двух скомпрометированных агентах (из исследуемого диапазона 0–3).",valueLabel:"Средняя оценка"};

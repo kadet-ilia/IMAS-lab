@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "candidateCommit": "",
+  "evidence": {
+    "originalDefectRegister": null,
+    "externalCalibrationDataset": null,
+    "externalCalibrationReport": null,
+    "independentFormalE4": null,
+    "operationalStress": {
+      "powerInterruption": null,
+      "storageQuota": null,
+      "targetHardware": null,
+      "multiTab": null,
+      "longRunning": null
+    },
+    "publicationRecalculations": [],
+    "independentReviews": []
+  },
+  "_instruction": "Template only. Do not populate with synthetic material. Each artifact is {path: relative to explicit evidence-root, sha256: lowercase 64 hex}; operational records also require passed:true. Every publication re-run must include studyId and candidateCommit. An independent-review entry also includes reviewerId, organization, declaredIndependent, signedDocumentReference and studyCoverage. Supplying hashes never proves authorship or scientific acceptance."
+}
