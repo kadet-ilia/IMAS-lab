@@ -205,14 +205,19 @@ export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,
   if(i===j)v=c.honest_quality;
   e[i][j]=v;
  }
- if(!c.network_enabled)return{matrix:e,stats:{attempted:active.filter(Boolean).length**2,delivered:active.filter(Boolean).length**2,lost:0,bandwidth_dropped:0}};
+ const generatedEvidence=record?e.map(row=>[...row]):null;
+ if(!c.network_enabled){
+  if(record)for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(active[i]&&active[j])
+   record({kind:"evidence",step:t+1,observer:i+1,target:j+1,status:"delivered",generated:e[i][j],value:e[i][j]});
+  return{matrix:e,stats:{attempted:active.filter(Boolean).length**2,delivered:active.filter(Boolean).length**2,lost:0,bandwidth_dropped:0}};
+ }
  let attempted=0,lost=0,dropped=0,delivered=0;
- const candidates=[];
+ const candidates=[],lostPairs=new Set();
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   if(!(active[i]&&active[j]&&labels[i]>=0&&labels[i]===labels[j])){e[i][j]=NaN;continue;}
   attempted++;
   const lossRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"evidenceLoss",t,i,j):r;
-  if(i!==j&&lossRng.random()<c.message_loss_probability){e[i][j]=NaN;lost++;}else candidates.push([i,j]);
+  if(i!==j&&lossRng.random()<c.message_loss_probability){e[i][j]=NaN;lost++;lostPairs.add(i*n+j);}else candidates.push([i,j]);
  }
  let keep=candidates;
  if(candidates.length>budget){
@@ -228,28 +233,52 @@ export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,
   }
   dropped=candidates.length-keep.length;
  }
- const allowed=new Set(keep.map(([i,j])=>i*n+j));for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(!allowed.has(i*n+j))e[i][j]=NaN;
+ const allowed=new Set(keep.map(([i,j])=>i*n+j));
+ if(record)for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+  if(!active[i]||!active[j])continue;
+  const id=i*n+j,connected=labels[i]>=0&&labels[i]===labels[j];
+  const status=!connected?"not_attempted":lostPairs.has(id)?"lost":allowed.has(id)?"delivered":"dropped";
+  record({kind:"evidence",step:t+1,observer:i+1,target:j+1,status,
+   generated:generatedEvidence[i][j],value:status==="delivered"?generatedEvidence[i][j]:null});
+ }
+ for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(!allowed.has(i*n+j))e[i][j]=NaN;
  delivered=keep.length;
  return{matrix:e,stats:{attempted,delivered,lost,bandwidth_dropped:dropped}};
 }
 export function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r,runIndex=0,record=null){
- const n=active.length;if(!c.network_enabled)return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,expired:0,backlogged:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
+ const n=active.length;if(!c.network_enabled){
+  if(record)for(let i=0;i<n;i++)if(active[i]){
+   record({kind:"proposal_attempt",step:t+1,source:i+1,status:"queued",sent:t+1,due:t+1,value:proposals[i]});
+   record({kind:"proposal_final",step:t+1,source:i+1,status:"delivered",sent:t+1,due:t+1,value:proposals[i]});
+  }
+  return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,expired:0,backlogged:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
+ }
  const largest=[...comps].sort((a,b)=>b.length-a.length||a[0]-b[0])[0]||[],set=new Set(largest);
  let lost=0;
  for(const i of largest){
   const eventRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"transport",t,i):r;
-  if(eventRng.random()<c.message_loss_probability){lost++;continue;}
+  if(eventRng.random()<c.message_loss_probability){
+   lost++;
+   if(record)record({kind:"proposal_attempt",step:t+1,source:i+1,status:"lost",sent:t+1,value:proposals[i]});
+   continue;
+  }
   const delay=eventRng.integer(c.message_delay_min_steps,c.message_delay_max_steps);
   queue.push({due:t+delay,sent:t,source:i,value:proposals[i],delay});
+  if(record)record({kind:"proposal_attempt",step:t+1,source:i+1,status:"queued",sent:t+1,due:t+delay+1,value:proposals[i]});
  }
  queue.sort((a,b)=>a.due-b.due);
  let budget=c.bandwidth_messages_per_step,delivered=0,expired=0;const delayList=[],retain=[];
  for(const q of queue){
   // A queued message is not dropped simply because bandwidth is exhausted.
   // Expiration is measured from its original production tick, not delivery tick.
-  if(t-q.sent>c.max_message_staleness_steps){expired++;continue;}
+  if(t-q.sent>c.max_message_staleness_steps){
+   expired++;
+   if(record)record({kind:"proposal_final",step:t+1,source:q.source+1,status:"expired",sent:q.sent+1,due:q.due+1,value:q.value});
+   continue;
+  }
   if(q.due<=t&&budget>0){
    lastValues[q.source]=q.value;lastSteps[q.source]=q.sent;budget--;delivered++;delayList.push(t-q.sent);
+   if(record)record({kind:"proposal_final",step:t+1,source:q.source+1,status:"delivered",sent:q.sent+1,due:q.due+1,value:q.value});
   }else retain.push(q);
  }
  queue.splice(0,queue.length,...retain);
