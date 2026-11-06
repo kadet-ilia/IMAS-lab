@@ -111,7 +111,7 @@ export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
 export function runProbGraph(c){
  const modes=[["Без дополнительного снижения",0],["Снижение вероятности распространения (η=0,38)",.38],["Снижение вероятности распространения (η=0,68)",.68]];
  const scenarios=[["Компрометация источника",.8,1],["Подмена межагентных сообщений",1.2,1],["Компрометация координатора",1.35,2],["Согласованная атака",1.25,3]];
- const rows=[],pairedRuns=[],pairedEffects=[];
+ const rows=[],pairedRuns=[],pairedEffects=[];let replaySample=null;
  scenarios.forEach(([scenario,mult,start],scenarioIndex)=>{
   const statistics=modes.map(()=>({losses:[],events:[],trajectories:Array(c.steps+1).fill(0)}));
   for(let run=0;run<c.runs;run++){
@@ -121,6 +121,9 @@ export function runProbGraph(c){
    const random=rng(eventSeed),edges=graph(c.agents,c.edgeProbability,random);
    const initialNodes=chooseUniqueNodes(random,c.agents,start);
    const tape=Array.from({length:c.steps},()=>edges.map(()=>random.random()));
+   if(scenarioIndex===0&&run===0)replaySample={runId:"E3/scenario-0/run-0/baseline",scenario,run,eventSeed,
+    initialNodes:[...initialNodes],edges:edges.map(e=>[...e]),eventTape:tape.map(t=>[...t]),
+    scenarioMultiplier:mult,defenseFactor:0};
    const outcome={scenario,run,initialNodes,initialCount:initialNodes.length,eventSeed,edgeCount:edges.length,methods:[]};
    modes.forEach(([method,defense],index)=>{
     const result=propagate(c.agents,edges,initialNodes,random,c.spread*mult,c.steps,defense,tape);
@@ -153,7 +156,7 @@ export function runProbGraph(c){
  const tested=pairedEffects.filter(row=>row.pRaw!==null);
  const adjusted=holmAdjusted(tested.map(row=>row.pRaw));
  tested.forEach((row,i)=>{row.pHolm=adjusted[i];row.holmReject05=adjusted[i]<.05;});
- return {rows,pairedRuns,pairedEffects,statisticsVersion:STATISTICS_VERSION,
+ return {rows,pairedRuns,pairedEffects,replaySample,statisticsVersion:STATISTICS_VERSION,
   multipleTesting:{family:"E3-protection-vs-baseline",tested:tested.length,planned:pairedEffects.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
   comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
@@ -189,7 +192,7 @@ export function runPetri(c){
  return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,isolationPolicy:c.isolationPolicy,policyName:c.isolationPolicy===0?"optional_nondeterministic":"ideal_mandatory_priority",summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости. Необязательная изоляция не обязана менять EF при варьировании τ. Приоритетная политика предполагает мгновенное безошибочное обнаружение всех ранее компрометированных агентов, одновременно изолирует их и запрещает ожидание и передачу на таком такте. Она является идеализированной верхней границей управляемой защиты, а не реалистичным детектором."};
 }
 export function runCascade(c){
- const rows=[],pairedRuns=[],pairedEffects=[];
+ const rows=[],pairedRuns=[],pairedEffects=[];let replaySample=null;
  const impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
  const criticalDamage=.45*impacts.reduce((a,b)=>a+b,0);
  const conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
@@ -200,6 +203,9 @@ export function runCascade(c){
    const eventSeed=((c.seed>>>0)^Math.imul(start+1,0x9e3779b9)^Math.imul(run+1,0x85ebca6b))>>>0;
    const random=rng(eventSeed);
    const tape=Array.from({length:8},()=>fixedEdges8.map(()=>random.random()));
+   if(start===0&&run===0)replaySample={runId:"E5/source-0/run-0/baseline",scenario,run,eventSeed,
+    initialNode:start,edges:fixedEdges8.map(e=>[...e]),eventTape:tape.map(t=>[...t]),
+    impactWeights:[...impacts],defenseFactor:0};
    const pair={scenario,run,eventSeed,initialNode:start,methods:[]};
    conditions.forEach(([method,defense],index)=>{
     const p=propagate(8,fixedEdges8,[start],random,c.spread,8,defense,tape);
@@ -245,7 +251,7 @@ export function runCascade(c){
   test.row["pHolm"+test.metric]=corrected[i];
   test.row["holmReject"+test.metric+"05"]=corrected[i]<.05;
  });
- return {rows,pairedRuns,pairedEffects,multipleTesting:{
+ return {rows,pairedRuns,pairedEffects,replaySample,multipleTesting:{
    family:"E5-eight-sources-times-two-outcomes",tested:allTests.length,
    planned:pairedEffects.length*2,correction:"Holm-FWER-0.05",unadjustedCI:true},
   comparisonDesign:"paired-common-random-numbers",
@@ -346,6 +352,19 @@ export function buildResearchReplay(id,c,result={}){
    }
    return {title:"Маршрут сообщений и автоматическая выработка решения",vertices,edges,frames,notes:"Иллюстративная отдельная трасса для фиксированного зерна; статистические показатели вычисляются по независимым прогонам.",valueLabel:"Оценка состояния"};
  }
+ if(id==="probgraph"&&result?.replaySample){
+   const sample=result.replaySample,edges=sample.edges;
+   let infected=new Set(sample.initialNodes);
+   const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"compromised":"normal");
+   snap(0,status(),[],"Исходная компрометация: "+sample.initialNodes.map(i=>"А"+(i+1)).join(", "),infected.size/n);
+   for(let t=1;t<=c.steps;t++){
+    const tick=spreadOneTick(infected,edges,sample.eventTape[t-1],clamp(c.spread*sample.scenarioMultiplier*(1-sample.defenseFactor),0,1));
+    infected=tick.next;
+    snap(t,status(),tick.activeEdges,"Новые поражённые агенты: "+tick.newly.size+"; всего: "+infected.size+"/"+n,infected.size/n);
+   }
+   return {title:"Фактическая трасса парного прогона графа угроз",vertices,edges,frames,runId:sample.runId,eventSeed:sample.eventSeed,
+    notes:"Фактический run=0 первого сценария без снижения вероятности. События и итог совпадают с pairedRuns[0].",valueLabel:"Доля поражённых"};
+  }
  if(id==="probgraph"){
    const edges=graph(n,c.edgeProbability,r);const seeds=[sample(r,n)];const infected=new Set(seeds),available=new Set(seeds);
    const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"compromised":"normal");
@@ -378,6 +397,20 @@ export function buildResearchReplay(id,c,result={}){
    }
    return {title:"Последовательность маркировок и переходов сети Петри",vertices,edges,frames,notes:result.witness?.length?"Воспроизводится найденная трасса-контрпример, содержащая достижение опасной маркировки.":result.verdict==="unreachable_within_bound"?"Фронт BFS исчерпан; показана отдельная допустимая траектория для выбранной политики.":result.verdict==="inconclusive"?"Поиск прерван до исчерпания фронта; показана иллюстративная траектория, безопасность не доказана.":"До расчёта показана иллюстративная траектория.",valueLabel:"Число компрометированных"};
  }
+ if(id==="cascade"&&result?.replaySample){
+   const sample=result.replaySample,edges=sample.edges;
+   let infected=new Set([sample.initialNode]);
+   const status=()=>Array.from({length:n},(_,i)=>infected.has(i)?"affected":"normal");
+   const cost=()=>[...infected].reduce((acc,i)=>acc+sample.impactWeights[i],0);
+   snap(0,status(),[],"Исходная компрометация: А"+(sample.initialNode+1)+"; прямой ущерб",cost());
+   for(let t=1;t<=sample.eventTape.length;t++){
+    const tick=spreadOneTick(infected,edges,sample.eventTape[t-1],clamp(c.spread*(1-sample.defenseFactor),0,1));
+    infected=tick.next;
+    snap(t,status(),tick.activeEdges,"Каскадные переходы: "+tick.newly.size+"; поражено "+infected.size+"/"+n,cost());
+   }
+   return {title:"Фактическая трасса парного каскадного прогона",vertices,edges,frames,runId:sample.runId,eventSeed:sample.eventSeed,
+    notes:"Фактический run=0 при источнике А1 без сдерживания; события и ущерб совпадают с pairedRuns[0].",valueLabel:"Совокупный ущерб"};
+  }
  if(id==="cascade"){
    const edges=fixedEdges8,infected=new Set([0]),available=new Set([0]),impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
    const cost=()=>[...infected].reduce((a,i)=>a+impacts[i],0);
