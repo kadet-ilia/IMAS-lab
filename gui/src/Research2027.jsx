@@ -270,6 +270,6 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
    </>:<div className="empty r27-study-empty">Задайте параметры в боковом меню и запустите эксперимент. Математическая модель и ограничения изложены в единой справке.</div>}
  </ExperimentLayout>;
 });
-export function ResearchHelp({baselineArticle,baselineSections,onBack}){
- return <UnifiedHelp baselineArticle={baselineArticle} baselineSections={baselineSections} researchTheory={THEORY} onBack={onBack}/>;
+export function ResearchHelp({baselineArticle,baselineSections}){
+ return <UnifiedHelp baselineArticle={baselineArticle} baselineSections={baselineSections} researchTheory={THEORY}/>;
 }
