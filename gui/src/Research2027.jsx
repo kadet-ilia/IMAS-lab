@@ -1,6 +1,7 @@
 import React, {forwardRef,useEffect,useImperativeHandle,useMemo,useRef,useState} from "react";
 import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
+import {runResearchBrowser,stopResearchBrowser} from "./researchBrowserClient.js";
 import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
 import {ResearchSettings} from "./ResearchSettings.jsx";
 import {ExperimentLayout,ExperimentPanel,ExperimentKpi,ExperimentProgress} from "./ExperimentLayout.jsx";
@@ -128,22 +129,55 @@ function ResearchKpis({studyId,result}){
 }
 export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation,onRuntimeChange},actionsRef){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
- const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),[running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),[lastCompletedAt,setLastCompletedAt]=useState(null),worker=useRef(null);
- useEffect(()=>{setConfig({...def.defaults});setResult(null);setError("");setMetric("");},[def.id]);
- useEffect(()=>()=>{worker.current?.terminate();worker.current=null;},[]);
+ const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),
+  [running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),
+  [lastCompletedAt,setLastCompletedAt]=useState(null),[studyProgress,setStudyProgress]=useState(null),
+  [cacheHit,setCacheHit]=useState(false),runIdentity=useRef(0);
+ useEffect(()=>{setConfig({...def.defaults});setResult(null);setError("");setMetric("");
+  setStudyProgress(null);setCacheHit(false);},[def.id]);
+ useEffect(()=>()=>{runIdentity.current++;void stopResearchBrowser();},[]);
  const previewReplay=useMemo(()=>{try{return buildResearchReplay(studyId,validateStudy(studyId,config),result||{});}catch{return null;}},[studyId,config,result]);
- const update=(k,v)=>{worker.current?.terminate();worker.current=null;setRunning(false);setResult(null);setMetric("");setConfig(old=>({...old,[k]:v}));};
- const start=()=>{try{const validated=validateStudy(studyId,config);worker.current?.terminate();setError("");setRunning(true);
-  const w=new Worker(new URL("./research2027.worker.js",import.meta.url),{type:"module"});worker.current=w;
-  w.onmessage=({data})=>{setRunning(false);if(data.ok){setResult(data.result);setMetric(data.result.chartKey||"");setLastCompletedAt(new Date());}else setError(data.error||"Ошибка моделирования");w.terminate();if(worker.current===w)worker.current=null;};
-  w.onerror=(event)=>{setRunning(false);setError(event.message||"Ошибка вычислительного процесса");w.terminate();if(worker.current===w)worker.current=null;};
-  w.postMessage({id:studyId,config:validated});
- }catch(e){setError(e.message);}};
- const stop=()=>{worker.current?.terminate();worker.current=null;setRunning(false);};
- const resetStudy=()=>{stop();setConfig({...def.defaults});setResult(null);setError("");setMetric("");setLastCompletedAt(null);};
+ const cancelCurrent=()=>{runIdentity.current++;void stopResearchBrowser().catch(()=>{});};
+ const update=(k,v)=>{cancelCurrent();setRunning(false);setResult(null);setMetric("");setCacheHit(false);
+  setStudyProgress(null);setConfig(old=>({...old,[k]:v}));};
+ const start=()=>{
+  try{
+   const validated=validateStudy(studyId,config);
+   if(running)return;
+   const request=++runIdentity.current;
+   setError("");setRunning(true);setCacheHit(false);
+   setStudyProgress({message:"Проверка контрольной точки и запуск…",completed:0,total:1,percent:0});
+   void runResearchBrowser(studyId,validated,progress=>{
+    if(runIdentity.current===request)setStudyProgress(progress);
+   }).then(terminal=>{
+    if(runIdentity.current!==request)return;
+    if(terminal.state==="stopped"){
+     setError("Расчёт прерван. Подтверждённые контрольные точки сохранены; повторный запуск продолжит исследование.");
+     return;
+    }
+    setResult(terminal.result);setMetric(terminal.result.chartKey||"");
+    setLastCompletedAt(new Date());setCacheHit(Boolean(terminal.cache_hit));
+    setStudyProgress({message:terminal.cache_hit?"Результат восстановлен из IndexedDB":"Все стадии завершены и сохранены",
+     completed:1,total:1,percent:100});
+   }).catch(e=>{if(runIdentity.current===request)setError(e.message||String(e));})
+    .finally(()=>{if(runIdentity.current===request)setRunning(false);});
+  }catch(e){setError(e.message||String(e));}
+ };
+ const stop=()=>{
+  const request=++runIdentity.current;
+  setRunning(false);
+  void stopResearchBrowser().then(stopped=>{
+   if(runIdentity.current===request&&stopped)
+    setError("Расчёт остановлен. Завершённые стадии сохранены; повторный запуск продолжит расчёт.");
+  }).catch(e=>{if(runIdentity.current===request)setError(e.message||String(e));});
+ };
+ const resetStudy=()=>{cancelCurrent();setRunning(false);setConfig({...def.defaults});setResult(null);
+  setError("");setMetric("");setLastCompletedAt(null);setStudyProgress(null);setCacheHit(false);};
  const newStudySeed=()=>update("seed",Math.floor((Date.now()+Math.random()*100000)%2147483647));
  useImperativeHandle(actionsRef,()=>({start,stop,reset:resetStudy,newSeed:newStudySeed}));
- useEffect(()=>{onRuntimeChange?.({studyId,running,seed:config.seed,lastCompletedAt,hasResult:Boolean(result),steps:result?.config?.steps??config.steps??null,elapsedMs:result?.elapsedMs??null,rows:result?.rows?.length??0});},[studyId,running,config.seed,lastCompletedAt,Boolean(result),onRuntimeChange]);
+ useEffect(()=>{onRuntimeChange?.({studyId,running,seed:config.seed,lastCompletedAt,hasResult:Boolean(result),
+  steps:result?.config?.steps??config.steps??null,elapsedMs:result?.elapsedMs??null,
+  rows:result?.rows?.length??0});},[studyId,running,config.seed,lastCompletedAt,Boolean(result),onRuntimeChange]);
  const opts=result?.rows?.length?Object.keys(result.rows[0]).filter(x=>x in metricNames):[];
  const theory=THEORY[studyId];
  const author=studyId==="petri"||studyId==="misinformation"?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
@@ -154,7 +188,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
   authors={author}
   title={def.title}
   description={theory.goal}
-  progress={<ExperimentProgress running={running} progress={running?{message:"Выполняются независимые вычислительные прогоны…",completed:0,total:1,percent:0,indeterminate:true}:result?{message:"Расчёт завершён · "+def.short,completed:1,total:1,percent:100,eta_seconds:0}:{message:"Готов к запуску",completed:0,total:1,percent:0}}/>}
+  progress={<ExperimentProgress running={running} cacheHit={cacheHit} progress={studyProgress||(result?{message:"Расчёт завершён · "+def.short,completed:1,total:1,percent:100,eta_seconds:0}:{message:"Готов к запуску",completed:0,total:1,percent:0})}/>}
   error={error?<div className="error-banner" role="alert">{error}</div>:null}
  >
    <div className="trust-overview-grid">
