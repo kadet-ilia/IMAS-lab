@@ -244,9 +244,10 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      <StudyVisualization result={result} metric={metric}/>
      <section className="panel r27-study-limits">
        <header className="panel-header"><div><h2>Интерпретация и экспорт</h2><p>Границы применимости и результаты воспроизводимых расчётов</p></div>
-         <div className="r27-result-tools"><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button></div>
+         <div className="r27-result-tools"><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button>{result.sourceRunJournal?.complete?<button type="button" onClick={()=>download("imas_"+studyId+"_raw_"+result.config.seed+".json",JSON.stringify({modelVersion:result.modelVersion,config:result.config,journal:result.sourceRunJournal},null,2),"application/json;charset=utf-8")}>Скачать исходные прогоны</button>:null}</div>
        </header>
-       <div className="panel-body"><p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p></div>
+       <div className="panel-body">{result.sourceRunJournal?.complete?<p className="r27-note">Сформирован полный архив исходных прогонов: {result.sourceRunJournal.entries.length} реализаций. В архиве представлены эталонные значения и скрытые метки исключительно для последующей научной проверки, а не как признаки, доступные алгоритму принятия решений.</p>:null}
+        <p className="r27-note"><strong>Граница применимости.</strong> {result.limits}</p></div>
      </section>
    </>:<div className="empty r27-study-empty">Задайте параметры в боковом меню и запустите эксперимент. Математическая модель и ограничения изложены в единой справке.</div>}
  </ExperimentLayout>;
