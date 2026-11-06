@@ -4,7 +4,7 @@ import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./met
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
   { id:"uncertainty", short:"Неопределённость", title:"Модель распределённой поддержки принятия решений интеллектуальными агентами по обеспечению кибербезопасности объектов информационной инфраструктуры в условиях информационной неопределённости",
-    origin:"Статья 1 2027", defaults:{agents:21,runs:500,seed:20270101,signalNoise:0.30,loss:0.12,corruption:0.12,threshold:0.22} },
+    origin:"Статья 1 2027", defaults:{agents:21,runs:500,seed:20270101,signalNoise:0.30,loss:0.12,corruption:0.12,threshold:0.22,record_source_runs:0,source_run_limit:100} },
   { id:"probgraph", short:"Граф угроз", title:"Графо-вероятностное моделирование сценариев реализации угроз безопасности информации в интеллектуальной мультиагентной системе поддержки принятия решений с учётом межагентных взаимодействий",
     origin:"Статья 2 2027", defaults:{agents:30,runs:2500,seed:20270201,edgeProbability:0.16,spread:0.24,steps:6,criticalFraction:0.33} },
   { id:"petri", short:"Сети Петри", title:"Формальное моделирование сценариев реализации угроз безопасности информации и верификация достижимости опасных состояний интеллектуальной мультиагентной системы на основе временных раскрашенных сетей Петри",
@@ -12,7 +12,7 @@ export const STUDY_DEFS = [
   { id:"cascade", short:"Каскадные риски", title:"Метод оценки рисков нарушения функционирования интеллектуальной мультиагентной системы поддержки принятия решений на основе сценарного моделирования каскадных последствий кибератак",
     origin:"Статья 3 2027", defaults:{agents:8,runs:3000,seed:20270301,spread:0.34,lossScale:1,defenseFactor:0.45} },
   { id:"misinformation", short:"Коллективное решение", title:"Метод оценки рисков нарушения процессов коллективного принятия решений в интеллектуальной мультиагентной системе при компрометации агентов и распространении недостоверной информации",
-    origin:"Статья 3 2027", defaults:{agents:7,runs:3000,seed:20270302,spread:0.40,noise:0.24,attackBias:2.5,threshold:0.16,costWrong:1,costRefuse:0.2} }
+    origin:"Статья 3 2027", defaults:{agents:7,runs:3000,seed:20270302,spread:0.40,noise:0.24,attackBias:2.5,threshold:0.16,costWrong:1,costRefuse:0.2,record_source_runs:0,source_run_limit:100} }
 ];
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const avg=x=>x.length?x.reduce((a,b)=>a+b,0)/x.length:0;
@@ -20,7 +20,7 @@ const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=
 export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
  getState:()=>state>>>0,restore:old=>{if(!Number.isInteger(old)||old<1||old>4294967295)throw Error("Некорректная контрольная точка ГПСЧ");state=old>>>0;}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
-export const RESEARCH_MODEL_VERSION="research-2027-2.9.0-remediation";
+export const RESEARCH_MODEL_VERSION="research-2027-2.10.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
  if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
  const nodes=Array.from({length:n},(_,i)=>i);
@@ -348,6 +348,13 @@ export function validateStudy(id,raw={}){
  const integer=(key,min,max)=>{const x=c[key];if(!Number.isInteger(x)||x<min||x>max)throw Error("Параметр "+key+": целое число от "+min+" до "+max);};
  const bounded=(key,min,max)=>{const x=c[key];if(x<min||x>max)throw Error("Параметр "+key+": диапазон ["+min+"; "+max+"]");};
  integer("agents",3,100);integer("runs",1,10000);integer("seed",-2147483648,2147483647);
+  if("record_source_runs" in c){
+   integer("record_source_runs",0,1);integer("source_run_limit",1,1000);
+   if(c.record_source_runs){
+    if(c.runs>c.source_run_limit)throw Error("Архив исходных прогонов: R превышает лимит полного архива");
+    if(c.agents*c.runs*4>50000)throw Error("Архив исходных прогонов: превышен предел 50000 агентных наблюдений");
+   }
+  }
  for(const key of ["loss","corruption","edgeProbability","spread","criticalFraction","defenseFactor"])
   if(key in c)bounded(key,0,1);
  for(const key of ["noise","signalNoise","attackBias","threshold","costWrong","costRefuse"])
