@@ -274,11 +274,11 @@ export function auditResultMetrics(id,result){
    Array.isArray(j.frontier)&&j.frontier.length===result.enqueued-result.processed,
    "E4 journal: incomplete processed frontier");
   if(Array.isArray(j.records)){
-   const times=Array(journal.config.steps+1).fill(0);
+   const times=Array(j.horizon+1).fill(0);
    for(let i=0;i<j.records.length;i++){
     const x=j.records[i];
     assert(x.index===i&&Number.isInteger(x.mask)&&Number.isInteger(x.isolated)&&
-     Number.isInteger(x.t)&&x.t>=0&&x.t<=journal.config.steps&&
+     Number.isInteger(x.t)&&x.t>=0&&x.t<=j.horizon&&
      Array.isArray(x.successors)&&typeof x.critical==="boolean",
      "E4 journal: invalid marking "+i);
     if(Number.isInteger(x.t)&&x.t>=0&&x.t<times.length)times[x.t]++;
