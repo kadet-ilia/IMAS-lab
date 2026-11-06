@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
+import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig} from "./trustEngine.js";
@@ -322,7 +323,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
         <h2>Параметры эксперимента</h2>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
         <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("n_byzantine")} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
-        <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={500} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
+        <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={10000} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
 
         <div className="sidebar-section">
           <h3>Сценарий атаки</h3>
@@ -375,6 +376,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
             <NumberField label="Прогонов на точку чувствительности" value={config.n_sensitivity_runs} min={1} max={100} onChange={set("n_sensitivity_runs")} tooltip={PARAMETER_TOOLTIPS.n_sensitivity_runs} />
             <NumberField label="Прогонов на точку факторного плана" value={config.factorial_runs_per_point} min={1} max={50} onChange={set("factorial_runs_per_point")} tooltip={PARAMETER_TOOLTIPS.factorial_runs_per_point} />
             <NumberField label="Точек факторного плана (32 или 64)" value={config.factorial_max_points} min={32} max={64} step={32} onChange={set("factorial_max_points")} tooltip={PARAMETER_TOOLTIPS.factorial_max_points} />
+             <MonteCarloPlanner studyId="trust" runs={config.n_runs} maxRuns={10000} onChangeRuns={set("n_runs")}/>
           </div>
         </details>
 
