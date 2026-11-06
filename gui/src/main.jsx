@@ -215,6 +215,8 @@ function NumberField({ label, value, min, max, step = 1, onChange, hint, id, too
     if(!Number.isFinite(v)||step===1&&!Number.isInteger(v)||
        min!=null&&v<min||max!=null&&v>max){
       setError("Недопустимое значение "+label+". Диапазон "+(min??"−∞")+"…"+(max??"+∞")+".");
+      // Restore the last committed value synchronously with the validation error.
+      setDraft(Number.isFinite(value)?String(value):"");
       setFocused(false);
       return;
     }
