@@ -20,7 +20,7 @@ const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=
 export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
  getState:()=>state>>>0,restore:old=>{if(!Number.isInteger(old)||old<1||old>4294967295)throw Error("Некорректная контрольная точка ГПСЧ");state=old>>>0;}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
-export const RESEARCH_MODEL_VERSION="research-2027-2.8.0-remediation";
+export const RESEARCH_MODEL_VERSION="research-2027-2.9.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
  if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
  const nodes=Array.from({length:n},(_,i)=>i);
@@ -172,13 +172,19 @@ export function runProbGraph(c,checkpoint=null){
   multipleTesting:{family:"E3-protection-vs-baseline",tested:tested.length,planned:pairedEffects.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
   comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
-export function runPetri(c){
+export const PETRI_CHECKPOINT_BATCH=8192;
+export function runPetri(c,checkpoint=null){
  const n=c.agents,T=c.steps,critical=c.criticalCount;
  const edges=fixedEdges7.filter(([a,b])=>a<n&&b<n);
- const start={mask:1,isolated:0,t:0,trace:["t=0: скомпрометирован A1"]};let q=[start],index=0,seen=new Set(["1:0:0"]),reachable=false,witness=[],statesByTime=Array(T+1).fill(0),truncated=false;
+ const start={mask:1,isolated:0,t:0,trace:["t=0: скомпрометирован A1"]};
+ const saved=checkpoint?.bfs;
+ let q=saved?[...saved.queue]:[start],index=saved?.index??0,
+  seen=new Set(saved?.seen||["1:0:0"]),reachable=false,witness=[],
+  statesByTime=saved?[...saved.statesByTime]:Array(T+1).fill(0),truncated=false;
+ const stageEnd=checkpoint?Math.min(c.stateLimit,(checkpoint.nextScenario+1)*PETRI_CHECKPOINT_BATCH):c.stateLimit;
  const add=(mask,isolated,t,trace)=>{const key=[mask,isolated,t].join(":");if(!seen.has(key)){seen.add(key);q.push({mask,isolated,t,trace});}};
  const popcount=mask=>{let n=0;while(mask){n+=mask&1;mask>>>=1;}return n;};
- while(index<q.length&&index<c.stateLimit){const state=q[index++];statesByTime[state.t]++;if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
+ while(index<q.length&&index<c.stateLimit&&index<stageEnd){const state=q[index++];statesByTime[state.t]++;if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
   if(state.t>=T)continue;
   // Timed transitions: transmission and isolation each consume one simulated tick.
   const next=state.t+1;
@@ -198,6 +204,9 @@ export function runPetri(c){
   if(c.isolationPolicy===0&&next>=c.detectionDelay){for(let v=0;v<n;v++)if((state.mask&(1<<v))&&!(state.isolated&(1<<v)))
    add(state.mask,state.isolated|(1<<v),next,[...state.trace,"t="+next+": изоляция A"+(v+1)]);}
  }
+ if(checkpoint&&!reachable&&index<q.length&&index<c.stateLimit&&index>=stageEnd)
+  return {__checkpoint:{nextScenario:checkpoint.nextScenario+1,
+   bfs:{queue:q,index,seen:[...seen],statesByTime}}};
  if(!reachable&&index<q.length)truncated=true;
  const verdict=reachable?"reachable":truncated?"inconclusive":"unreachable_within_bound";
  const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Стратегия изоляции",value:c.isolationPolicy===0?"Необязательная":"Приоритетная, идеализированная"},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
@@ -358,7 +367,8 @@ export function validateStudy(id,raw={}){
  return c;
 }
 export const RESEARCH_CHECKPOINT_SCHEMA=1;
-export const researchCheckpointUnits=(id,c)=>id==="cascade"?c.agents:id==="petri"?1:4;
+export const researchCheckpointUnits=(id,c)=>id==="cascade"?c.agents:
+ id==="petri"?Math.ceil(c.stateLimit/PETRI_CHECKPOINT_BATCH):4;
 export function validateResearchCheckpoint(id,c,state){
  const total=researchCheckpointUnits(id,c);
  if(!state||typeof state!=="object"||Array.isArray(state)||!Number.isInteger(state.nextScenario)||
@@ -367,6 +377,14 @@ export function validateResearchCheckpoint(id,c,state){
  if(n>0&&(state.schemaVersion!==RESEARCH_CHECKPOINT_SCHEMA||state.studyId!==id||
    state.modelVersion!==RESEARCH_MODEL_VERSION||state.configSignature!==JSON.stringify(c)))
   throw Error("Контрольная точка относится к иной модели или конфигурации");
+ if(id==="petri"&&n>0){
+  const bfs=state.bfs;
+  if(!bfs||!Array.isArray(bfs.queue)||!Array.isArray(bfs.seen)||
+   !Array.isArray(bfs.statesByTime)||bfs.statesByTime.length!==c.steps+1||
+   bfs.index!==n*PETRI_CHECKPOINT_BATCH||bfs.queue.length!==bfs.seen.length||
+   bfs.queue.length<bfs.index)
+   throw Error("Повреждена очередь контрольной точки BFS");
+ }
  const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n}:
   id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n}:
   id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
@@ -398,7 +416,7 @@ export function executeStudyChunk(id,params={},checkpoint=null){
  const c=validateStudy(id,params),start=Date.now(),totalUnits=researchCheckpointUnits(id,c);
  const state=checkpoint||{nextScenario:0};
  validateResearchCheckpoint(id,c,state);
- const raw=researchHandlers[id](c,id==="petri"?null:state);
+ const raw=researchHandlers[id](c,state);
  if(raw.__checkpoint){
   const next={...raw.__checkpoint,schemaVersion:RESEARCH_CHECKPOINT_SCHEMA,studyId:id,
    modelVersion:RESEARCH_MODEL_VERSION,configSignature:JSON.stringify(c)};
@@ -406,7 +424,7 @@ export function executeStudyChunk(id,params={},checkpoint=null){
   if(next.nextScenario!==state.nextScenario+1)throw Error("Невалидный переход контрольной точки");
   return {done:false,completedUnits:next.nextScenario,totalUnits,state:next,elapsedMs:Date.now()-start};
  }
- return {done:true,completedUnits:totalUnits,totalUnits,
+ return {done:true,completedUnits:id==="petri"?state.nextScenario+1:totalUnits,totalUnits,
   result:completeResearchResult(id,c,raw,Date.now()-start)};
 }
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
