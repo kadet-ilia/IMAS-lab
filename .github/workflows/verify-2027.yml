@@ -63,5 +63,9 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - run: pip install -r requirements.txt
-      - run: python -m unittest -v test_experiment test_encoding test_repository_hygiene test_primitive_parity
+      - name: Cross-language independent reference and legacy Python regressions
+        run: python -m unittest -v test_experiment test_encoding test_repository_hygiene test_primitive_parity test_up34_deterministic
