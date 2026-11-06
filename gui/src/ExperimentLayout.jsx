@@ -1,7 +1,7 @@
 import React from "react";
 
 /**
- * Single structural shell for the trust baseline and all five research studies.
+ * Single structural shell for all six equally supported experiments.
  * Workspace must have exactly two adjacent children: aside.sidebar and main.content.
  * Experimental differences belong inside the body, not in the page chrome.
  */
