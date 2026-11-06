@@ -1,5 +1,6 @@
 import {wilson95,mean95,pairedDifference95,bootstrap95,pairedSignFlipP,holmAdjusted,STATISTICS_VERSION} from "./statistics2027.js";
 import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./metricPassport.js";
+import {auditResearchInference} from "./researchStatisticalAudit.js";
 /* IMAS-lab 2027: independent, seeded, synthetic research kernels.
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
@@ -498,7 +499,10 @@ export function validateResearchCheckpoint(id,c,state){
 function completeResearchResult(id,c,result,elapsedMs){
  const metricIntegrity=auditResultMetrics(id,result);
  if(!metricIntegrity.valid)throw Error("Контроль показателей "+id+": "+metricIntegrity.issues.join("; "));
+ const statisticsAudit=auditResearchInference(id,c,result);
+ if(!statisticsAudit.valid)throw Error("Контроль статистического вывода "+id+": "+statisticsAudit.issues.join("; "));
  return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,
+  statisticsAudit,
   metricPassportVersion:METRIC_PASSPORT_VERSION,metricPassport:passportForStudy(id),metricIntegrity,
   ...result,replay:buildResearchReplay(id,c,result),elapsedMs};
 }
