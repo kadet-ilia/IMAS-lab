@@ -357,12 +357,54 @@ export function validateStudy(id,raw={}){
  if(id==="misinformation"&&c.agents!==7)throw Error("Параметр agents: для информационного графа требуется N=7");
  return c;
 }
-export function executeStudy(id,params={}){const c=validateStudy(id,params);const start=Date.now();const handlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,cascade:runCascade,misinformation:runMisinformation};const result=handlers[id](c);
-   const metricIntegrity=auditResultMetrics(id,result);
-   if(!metricIntegrity.valid)throw Error("Контроль показателей "+id+": "+metricIntegrity.issues.join("; "));
-   return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,
-    metricPassportVersion:METRIC_PASSPORT_VERSION,metricPassport:passportForStudy(id),metricIntegrity,
-    ...result,replay:buildResearchReplay(id,c,result),elapsedMs:Date.now()-start};}
+export const RESEARCH_CHECKPOINT_SCHEMA=1;
+export const researchCheckpointUnits=(id,c)=>id==="cascade"?c.agents:id==="petri"?1:4;
+export function validateResearchCheckpoint(id,c,state){
+ const total=researchCheckpointUnits(id,c);
+ if(!state||typeof state!=="object"||Array.isArray(state)||!Number.isInteger(state.nextScenario)||
+    state.nextScenario<0||state.nextScenario>=total)throw Error("Некорректный индекс контрольной точки исследования");
+ const n=state.nextScenario;
+ const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n}:
+  id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n}:
+  id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
+  id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n}:{};
+ for(const [key,size] of Object.entries(lengths)){
+  if((!Array.isArray(state[key])&&n>0)||(Array.isArray(state[key])&&state[key].length!==size))
+   throw Error("Повреждена контрольная точка "+id+": "+key);
+ }
+ if(n>0&&(id==="uncertainty"||id==="misinformation")&&
+    (!Number.isInteger(state.randomState)||state.randomState<1||state.randomState>4294967295))
+  throw Error("Повреждено состояние ГПСЧ "+id);
+ return true;
+}
+function completeResearchResult(id,c,result,elapsedMs){
+ const metricIntegrity=auditResultMetrics(id,result);
+ if(!metricIntegrity.valid)throw Error("Контроль показателей "+id+": "+metricIntegrity.issues.join("; "));
+ return {id,config:c,model:"synthetic-experimental",modelVersion:RESEARCH_MODEL_VERSION,statisticsVersion:STATISTICS_VERSION,
+  metricPassportVersion:METRIC_PASSPORT_VERSION,metricPassport:passportForStudy(id),metricIntegrity,
+  ...result,replay:buildResearchReplay(id,c,result),elapsedMs};
+}
+const researchHandlers={uncertainty:runUncertainty,probgraph:runProbGraph,petri:runPetri,
+ cascade:runCascade,misinformation:runMisinformation};
+export function executeStudy(id,params={}){
+ const c=validateStudy(id,params),start=Date.now();
+ return completeResearchResult(id,c,researchHandlers[id](c),Date.now()-start);
+}
+/** One complete scenario/source per call, preserving the original RNG sequence. */
+export function executeStudyChunk(id,params={},checkpoint=null){
+ const c=validateStudy(id,params),start=Date.now(),totalUnits=researchCheckpointUnits(id,c);
+ const state=checkpoint||{nextScenario:0};
+ validateResearchCheckpoint(id,c,state);
+ const raw=researchHandlers[id](c,id==="petri"?null:state);
+ if(raw.__checkpoint){
+  validateResearchCheckpoint(id,c,raw.__checkpoint);
+  if(raw.__checkpoint.nextScenario!==state.nextScenario+1)throw Error("Невалидный переход контрольной точки");
+  return {done:false,completedUnits:raw.__checkpoint.nextScenario,totalUnits,state:raw.__checkpoint,
+   elapsedMs:Date.now()-start};
+ }
+ return {done:true,completedUnits:totalUnits,totalUnits,
+  result:completeResearchResult(id,c,raw,Date.now()-start)};
+}
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
 export function statisticalIndicators(values){return quantileInfo(values);}
 
