@@ -202,6 +202,11 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      <ResultTable rows={result.metricPassport}/>
      <p className="r27-note">Автоматический контроль арифметических инвариантов: {result.metricIntegrity?.valid?"пройден":"не пройден"}. Паспорта фиксируют реализованные оценщики, не являются независимой научной экспертизой.</p>
    </ExperimentPanel>:null}
+   {result?.statisticsAudit?<ExperimentPanel title="Контроль статистических предпосылок" subtitle="Мощность, интервалы, множественные сравнения и границы научного вывода">
+     <p className="r27-note">Арифметический контроль статистики: <strong>{result.statisticsAudit.valid?"пройден":"не пройден"}</strong>. Проверено сравнений в семье Холма: {result.statisticsAudit.holmFamilyChecked}. Ориентир R={result.statisticsAudit.illustrativeWilsonRunRequirement??"—"} соответствует полуширине 95%-го интервала Уилсона 0,05 при консервативном p≈0,5; это не универсальное требование к мощности конкретного эксперимента.</p>
+     <p className="r27-note">Внешняя калибровка и независимая научная приёмка: <strong>не подтверждены</strong>. Интервалы описывают только вариацию внутри принятой синтетической модели.</p>
+     {result.statisticsAudit.warnings?.length?<ul>{result.statisticsAudit.warnings.map((warning,i)=><li key={i}>{warning}</li>)}</ul>:null}
+    </ExperimentPanel>:null}
    {result?.pairedEffects?.length? <ExperimentPanel title="Парные оценки эффектов (95% bootstrap)" subtitle={studyId==="cascade"?"Эффект = базовый ущерб/риск минус защищённый, при общей таблице случайных событий":"Эффект = риск базового режима − риск режима с η; одинаковые граф, источники и случайные события"}>
       <ResultTable rows={result.pairedEffects}/>
       <p className="r27-note">
