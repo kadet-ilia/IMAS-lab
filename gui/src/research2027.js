@@ -195,7 +195,8 @@ export function runProbGraph(c,checkpoint=null){
  tested.forEach((row,i)=>{row.pHolm=adjusted[i];row.holmReject05=adjusted[i]<.05;});
  return {rows,pairedRuns,pairedEffects,replaySample,
   ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:2,studyId:"probgraph",complete:true,
-   runsPerScenario:c.runs,scenarios:4,agents:c.agents,edgeEventCount:sourceRuns.reduce((n,item)=>n+item.edges.length*item.eventTape.length,0),
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,
+   config:{steps:c.steps,spread:c.spread,criticalFraction:c.criticalFraction},edgeEventCount:sourceRuns.reduce((n,item)=>n+item.edges.length*item.eventTape.length,0),
    eventLimit:c.source_event_limit,entries:sourceRuns}}:{}),
   statisticsVersion:STATISTICS_VERSION,
   multipleTesting:{family:"E3-protection-vs-baseline",tested:tested.length,planned:pairedEffects.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
@@ -343,7 +344,7 @@ export function runCascade(c,checkpoint=null){
  return {rows,pairedRuns,pairedEffects,replaySample,
   ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:2,studyId:"cascade",complete:true,
    runsPerScenario:c.runs,scenarios:c.agents,agents:c.agents,
-   edgeEventCount:sourceRuns.length*8*fixedEdges8.length,eventLimit:c.source_event_limit,
+   config:{steps:8,spread:c.spread},edgeEventCount:sourceRuns.length*8*fixedEdges8.length,eventLimit:c.source_event_limit,
    entries:sourceRuns}}:{}),
   multipleTesting:{
    family:"E5-eight-sources-times-two-outcomes",tested:allTests.length,
