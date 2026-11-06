@@ -70,3 +70,21 @@ test("NZ-02: maximum scenario loss is exactly one, not silently capped at 0.9",(
  assert.ok(baseline.every(row=>row.effectiveMissingProbability===.2));
  assert.equal(x.modelVersion,RESEARCH_MODEL_VERSION);
 });
+
+test("NZ-11: E3/E5 animation matches the actual paired run zero, not another RNG",()=>{
+ const e3=executeStudy("probgraph",{agents:22,runs:9,steps:5,seed:871,spread:.33,edgeProbability:.5});
+ assert.equal(e3.replay.runId,"E3/scenario-0/run-0/baseline");
+ assert.equal(e3.replay.eventSeed,e3.pairedRuns[0].eventSeed);
+ assert.deepEqual(e3.replay.edges,e3.replaySample.edges);
+ assert.deepEqual(e3.replaySample.initialNodes,e3.pairedRuns[0].initialNodes);
+ assert.equal(e3.replay.frames.at(-1).value,e3.pairedRuns[0].methods[0].finalFraction);
+ assert.equal(e3.replay.frames.at(-1).status.filter(x=>x==="compromised").length,
+  e3.pairedRuns[0].methods[0].infectedCount);
+ const e5=executeStudy("cascade",{runs:9,seed:912,spread:.45,lossScale:2.5});
+ assert.equal(e5.replay.runId,"E5/source-0/run-0/baseline");
+ assert.equal(e5.replay.eventSeed,e5.pairedRuns[0].eventSeed);
+ assert.deepEqual(e5.replay.edges,e5.replaySample.edges);
+ assert.equal(e5.replay.frames.at(-1).value,e5.pairedRuns[0].methods[0].loss);
+ assert.equal(e5.replay.frames.at(-1).status.filter(x=>x==="affected").length,
+  e5.pairedRuns[0].methods[0].affectedCount);
+});
