@@ -59,7 +59,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.6.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.7.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
@@ -196,6 +196,8 @@ function samples(t,scenario,c,bad,sybil,r){
 export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0){
  const n=bad.length,attack=activeAttack(t,scenario,c),e=makeMat(n,NaN);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+  // Exclude inactive, isolated and not-yet-activated identities, even offline.
+  if(!active[i]||!active[j])continue;
   const quality=attack&&bad[j]?c.byzantine_quality:c.honest_quality;
   const eventRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"observation",t,i,j):r;
   let v=attack&&bad[i]?(bad[j]?.98:.02):clamp((eventRng.random()<quality?1:0)+eventRng.normal()*c.observer_noise_sigma,0,1);
@@ -263,6 +265,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  const a=buildAdjacency(c,r,bad),groups=Array(n).fill(0);
  r.choice(all(n),clamp(Math.round(n*c.partition_fraction),1,n-1)).forEach(i=>groups[i]=1);
  let active=all(n).map(i=>!sybil[i]),low=Array(n).fill(0),isolatedAt=Array(n).fill(null),until=Array(n).fill(-1);
+ const firstAttackIsolationAt=Array(n).fill(null);
  const hist=[],queue=[],lastValues=Array(n).fill(NaN),lastSteps=Array(n).fill(-1e9);
  let previous=Object.fromEntries(METHODS.map(m=>[m,null]));
  const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
@@ -307,7 +310,9 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
     if(running[i]&&low[i]>=c.isolation_patience){
      if(isolatedAt[i]===null)isolatedAt[i]=t+1;
-     if(detail)events.push({step:t+1,agent:i+1,type:sybil[i]?"sybil":bad[i]?"byzantine":"false_positive",reason:"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold});
+     const postAttack=t+1>=c.attack_start_step;
+     if(bad[i]&&postAttack&&firstAttackIsolationAt[i]===null)firstAttackIsolationAt[i]=t+1;
+     if(detail)events.push({step:t+1,agent:i+1,type:bad[i]&&postAttack?(sybil[i]?"sybil":"byzantine"):"false_positive",prematureByzantineIsolation:Boolean(bad[i]&&!postAttack),reason:"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold});
      active[i]=false;until[i]=t+c.isolation_cooldown_steps;
     }
    }
@@ -324,8 +329,12 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
    }
   }
  }
- const found=all(n).filter(i=>isolatedAt[i]!==null&&bad[i]),allBad=bad.filter(Boolean).length;
- const detectionRate=found.length/Math.max(1,allBad),meanTime=found.length?mean(found.map(i=>isolatedAt[i])):null,fp=all(n).filter(i=>isolatedAt[i]!==null&&!bad[i]).length;
+ // A pre-attack isolation of a latent Byzantine identity is not attack detection.
+ const found=all(n).filter(i=>firstAttackIsolationAt[i]!==null),allBad=bad.filter(Boolean).length;
+ const detectionRate=found.length/Math.max(1,allBad);
+ const meanTime=found.length?mean(found.map(i=>firstAttackIsolationAt[i]-c.attack_start_step)):null;
+ const prematureBad=all(n).filter(i=>bad[i]&&isolatedAt[i]!==null&&isolatedAt[i]<c.attack_start_step).length;
+ const fp=all(n).filter(i=>isolatedAt[i]!==null&&!bad[i]).length+prematureBad;
  const preserved=all(n).filter(i=>active[i]&&!bad[i]).length/Math.max(1,bad.filter(x=>!x).length),ratio=delivered/Math.max(1,attempted);
  const rows=METHODS.map(method=>{
    const e=errors[method],sgn=signed[method];
@@ -336,18 +345,18 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       mae_to_truth:e.length?mean(e):null,rmse_to_truth:e.length?Math.sqrt(mean(e.map(x=>x*x))):null,
       bias:sgn.length?mean(sgn):null,nominal_band_rate:cover[method].length?mean(cover[method]):null,
       consensus_error:consensus[method].length?mean(consensus[method]):null,
-      isolation_enabled:c.isolation_enabled,detection_rate:detectionRate,mean_detection_time_steps:meanTime,false_isolations:fp,preserved_functionality:preserved,
+      isolation_enabled:c.isolation_enabled,detection_rate:detectionRate,mean_detection_time_steps:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,
       communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,
       delivery_ratio:ratio,simulation_wall_ms:performance.now()-startWall,aggregation_bundle_wall_ms:aggregateBundleWallMs,trust_evidence_wall_ms:trustWallMs,transport_wall_ms:transportWallMs,completed_steps:c.n_steps};
  });
  if(!detail)return{rows,trajectory:series};
  return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,reputation:reputationHistory,states,events,
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,nominal_band_rate:rows[i].nominal_band_rate})),
-   agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i]})),
-   summary:{detection_rate:detectionRate,mean_detection_time:meanTime,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:attempted-delivered-lost-dropped-expired-queued,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
+   agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i],first_attack_isolation_at:firstAttackIsolationAt[i]})),
+   summary:{detection_rate:detectionRate,mean_detection_time:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:attempted-delivered-lost-dropped-expired-queued,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
    configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
 }
-const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
+const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","mean_detection_delay_steps","premature_byzantine_isolations","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
  const out=[];for(const method of METHODS){const group=rows.filter(x=>x.method===method);if(!group.length)continue;
  const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):null;row[m+"_ci95"]=v.length>1?1.96*stdev(v)/Math.sqrt(v.length):null;row[m+"_n"]=v.length;}out.push(row);}
@@ -410,7 +419,8 @@ function factorialDesign(c,rawRanges){
  if(selected.length!==c.factorial_max_points)throw Error("Нарушена структура регулярного факторного плана");
  const designs=selected.map((coded,index)=>{
   const settings={...c},values={};factors.forEach((f,j)=>{const v=ranges[f][coded[j]>0?1:0];values[f]=v;if(f==="attack_intensity_multiplier"){settings.static_bias=c.static_bias*v;settings.subtle_bias=c.subtle_bias*v;settings.collusion_bias=c.collusion_bias*v;}else settings[f]=["n_byzantine","trust_window_steps"].includes(f)?Math.round(v):v;});
-  settings.trim_each_side=settings.n_byzantine;return{index,coded,values,settings:validateConfig(settings)};
+  // Keep the aggregation rule fixed when varying f.
+  return{index,coded,values,settings:validateConfig(settings)};
  });
  const audit=auditFactorialDesign(factors,ranges,designs);
  return{factors,ranges,designs,designMetadata:{...audit,methodologyVersion:FACTORIAL_AUDIT_VERSION,
@@ -517,7 +527,7 @@ export function makePlan(payload){
   const mode=payload.sensitivity_mode||"one_factor";
   if(mode==="one_factor"){
    const fValues=[...new Set((payload.f_values||[0,2,4,6,8,10]).map(Number).filter(x=>Number.isInteger(x)&&x>=0&&x<c.n_agents/2))].sort((a,b)=>a-b);
-   const tasks=fValues.flatMap(f=>all(c.n_sensitivity_runs).map(run=>({index:f,c:{...c,n_byzantine:f,trim_each_side:f},run})));
+   const tasks=fValues.flatMap(f=>all(c.n_sensitivity_runs).map(run=>({index:f,c:{...c,n_byzantine:f},run})));
    return{action,c,scenario,mode,tasks,total:tasks.length};
   }
   if(mode==="ablation"){
