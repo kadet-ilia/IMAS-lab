@@ -20,10 +20,10 @@ async function contentDigest(key,payload){
  const data=new TextEncoder().encode(JSON.stringify({key,payload}));
  return hex(await globalThis.crypto.subtle.digest("SHA-256",data));
 }
-async function sealRecord(key,payload){
+export async function sealResearchRecord(key,payload){
  return {schemaVersion:RESEARCH_STORAGE_SCHEMA,key,sha256:await contentDigest(key,payload),payload};
 }
-async function unsealRecord(key,record){
+export async function unsealResearchRecord(key,record){
  if(!record||record.schemaVersion!==RESEARCH_STORAGE_SCHEMA||record.key!==key||
   !/^[a-f0-9]{64}$/.test(record.sha256||""))
   throw Error("Повреждённый либо несовместимый кэш исследования: неверный конверт");
@@ -31,7 +31,7 @@ async function unsealRecord(key,record){
  if(actual!==record.sha256)throw Error("Повреждённый кэш исследования: SHA-256 не совпадает");
  return record.payload;
 }
-function auditCachedResult(id,config,result){
+export function auditCachedResearchResult(id,config,result){
  if(result?.id!==id||result?.modelVersion!==RESEARCH_MODEL_VERSION||
   result?.statisticsVersion!==STATISTICS_VERSION||JSON.stringify(result.config)!==JSON.stringify(config))
   throw Error("Кэш исследования относится к другой версии или конфигурации");
@@ -117,12 +117,12 @@ async function runUnlocked(id,config,key,onProgress,options){
   const completed=await access("complete:"+key);
   if(job.stopRequested)throw cancelled();
   if(completed!==undefined){
-   const verified=auditCachedResult(id,config,await unsealRecord("complete:"+key,completed));
+   const verified=auditCachedResearchResult(id,config,await unsealResearchRecord("complete:"+key,completed));
    return {state:"completed",result:verified,cache_hit:true,resumed_units:0};
   }
   const stored=await access("checkpoint:"+key);
   if(job.stopRequested)throw cancelled();
-  const checkpoint=stored===undefined?null:await unsealRecord("checkpoint:"+key,stored);
+  const checkpoint=stored===undefined?null:await unsealResearchRecord("checkpoint:"+key,stored);
   if(checkpoint)validateResearchCheckpoint(id,config,checkpoint);
   const total=researchCheckpointUnits(id,config);
   let next=checkpoint?.nextScenario||0;
@@ -162,7 +162,7 @@ async function runUnlocked(id,config,key,onProgress,options){
        throw Error("Контрольная точка имеет неверный порядок стадий");
       next=state.nextScenario;
       job.saveChain=job.saveChain.then(async()=>{
-       const sealed=await sealRecord("checkpoint:"+key,state);
+       const sealed=await sealResearchRecord("checkpoint:"+key,state);
        await access("checkpoint:"+key,sealed,true);
       });
       job.saveChain.then(()=>{
@@ -179,8 +179,8 @@ async function runUnlocked(id,config,key,onProgress,options){
      void(async()=>{
       try{
        await job.saveChain;
-       auditCachedResult(id,config,data.result);
-       await access("complete:"+key,await sealRecord("complete:"+key,data.result),true);
+       auditCachedResearchResult(id,config,data.result);
+       await access("complete:"+key,await sealResearchRecord("complete:"+key,data.result),true);
        await access("checkpoint:"+key,null,true);
        job.done=true;
        resolveJob({state:"completed",result:data.result,cache_hit:false,resumed_units:checkpoint?.nextScenario||0});
