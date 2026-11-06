@@ -40,7 +40,7 @@ function HelpBranch({name,nodes,selected,setSelected,search}){
   </details>)}
  </details>;
 }
-export function UnifiedHelp({baselineArticle,baselineSections=[],researchTheory,onBack}){
+export function UnifiedHelp({baselineArticle,baselineSections=[],researchTheory}){
  const [search,setSearch]=useState(""),[selected,setSelected]=useState("guide-purpose");
  const tree=useMemo(()=>{
   const base=baselineSections.map(([id,title])=>({id,title,group:Object.entries(LEGACY_GROUPS).find(([,list])=>list.includes(id))?.[0]||"Прочее"}));
@@ -53,7 +53,6 @@ export function UnifiedHelp({baselineArticle,baselineSections=[],researchTheory,
    <nav aria-label="Дерево разделов справки">{tree.map(module=><HelpBranch key={module.name} {...module} selected={selected} setSelected={setSelected} search={search}/>)}</nav>
   </aside>
   <div className="r27-manual-body">
-   <div className="r27-manual-backbar"><button className="r27-manual-return" type="button" onClick={onBack}>Вернуться к экспериментам</button><p>Документация единого комплекса из шести экспериментов</p></div>
    <article className="help-article r27-overview-article"><h2 className="r27-manual-title">Единая справка по экспериментальному комплексу IMAS-lab</h2><p>Теоретические положения, математические модели, вычислительные алгоритмы, графы взаимодействий и научные ограничения шести экспериментов.</p>{INTRO.map(item=><DocSection key={item.id} {...item}/>)}</article>
    <header className="r27-manual-chapter" id="manual-trust"><h2>1. Расчет доверия</h2><p>Динамическое доверие, репутация, робастная агрегация и оценка защищённости.</p></header>
    <article className="help-article r27-module-article"><DocSection id="simple-trust" {...SIMPLE_GUIDES.trust}/></article>
