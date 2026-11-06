@@ -11,7 +11,7 @@ import {STATISTICS_VERSION} from "./statistics2027.js";
  */
 export const RESEARCH_STORAGE_SCHEMA=1;
 const DATABASE="imas-lab-research-checkpoints-v1",STORE="entries",memory=new Map();
-let active=null;
+let active=null,pendingLease=false,cancelPendingLease=false;
 export function researchKey(id,raw){
  const config=validateStudy(id,raw);
  return JSON.stringify({schema:RESEARCH_STORAGE_SCHEMA,modelVersion:RESEARCH_MODEL_VERSION,
@@ -57,7 +57,7 @@ async function access(key,value,write=false){
  });
 }
 export async function clearResearchCheckpoints(){
- if(active)throw Error("Нельзя очищать результаты исследований во время вычислений");
+ if(active||pendingLease)throw Error("Нельзя очищать результаты исследований во время вычислений");
  return withOriginStorageLock(async()=>{
   if(active)throw Error("Вычисление ещё выполняется");
   const db=await openDb();
@@ -172,11 +172,20 @@ async function runUnlocked(id,config,key,onProgress,options){
 }
 /** Returns completed result or explicitly stopped state, never a fabricated partial result. */
 export async function runResearchBrowser(id,raw,onProgress=()=>{},options={}){
- if(active)throw Error("Другое исследовательское вычисление уже выполняется");
+ if(active||pendingLease)throw Error("Другое исследовательское вычисление уже выполняется");
  const config=validateStudy(id,raw),key=researchKey(id,config);
- return withOriginStorageLock(()=>runUnlocked(id,config,key,onProgress,options));
+ // Reserve the local lease before any asynchronous Web Locks acquisition.
+ pendingLease=true;cancelPendingLease=false;
+ try{
+  return await withOriginStorageLock(()=>{
+   pendingLease=false;
+   if(cancelPendingLease)throw cancelled();
+   return runUnlocked(id,config,key,onProgress,options);
+  });
+ }finally{pendingLease=false;cancelPendingLease=false;}
 }
 export async function stopResearchBrowser(){
+ if(pendingLease&&!active){cancelPendingLease=true;return true;}
  const job=active;
  if(!job||job.done||job.stopRequested||job.finishing)return false;
  if(!job.stop){job.stopRequested=true;return true;}
