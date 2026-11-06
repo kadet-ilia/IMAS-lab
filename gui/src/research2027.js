@@ -19,7 +19,7 @@ const avg=x=>x.length?x.reduce((a,b)=>a+b,0)/x.length:0;
 const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=(z.length-1)*q;const lo=Math.floor(h);return z[lo]+(z[Math.min(z.length-1,lo+1)]-z[lo])*(h-lo);};
 export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
-export const RESEARCH_MODEL_VERSION="research-2027-2.6.0-remediation";
+export const RESEARCH_MODEL_VERSION="research-2027-2.7.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
  if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
  const nodes=Array.from({length:n},(_,i)=>i);
@@ -261,9 +261,10 @@ export function runCascade(c){
 }
 function tmean(x,trimEachSide=3){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(trimEachSide,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
 export function runMisinformation(c){
- const r=rng(c.seed),rows=[],scenarioMetrics=[],methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
+ const r=rng(c.seed),rows=[],scenarioMetrics=[],robustnessSensitivity=[],methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
  for(let bad=0;bad<=Math.min(3,c.agents-1);bad++){
-  const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
+  const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0}));
+  const trimStats=Array.from({length:4},()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
   for(let k=0;k<c.runs;k++){
    const truth=r.random()<.5?1:-1;const seeds=new Set();while(seeds.size<bad)seeds.add(sample(r,c.agents));const exposed=new Set(seeds);
    for(let t=0;t<3;t++){const eventTape=fixedEdges7.map(()=>r.random());const tick=spreadOneTick(exposed,fixedEdges7,eventTape,c.spread);exposed.clear();for(const v of tick.next)exposed.add(v);}
@@ -273,9 +274,17 @@ export function runMisinformation(c){
    }
    exposedSum+=exposed.size/c.agents;
    const weights=estimateReliabilityFromObservations(points,c.noise);
-   const votes=[avg(points.map(x=>x.x)),points.reduce((a,x,i)=>a+x.x*weights[i],0)/weights.reduce((a,b)=>a+b,0),tmean(points.map(x=>x.x),3)];
+   const observed=points.map(x=>x.x);
+   const votes=[avg(observed),points.reduce((a,x,i)=>a+x.x*weights[i],0)/weights.reduce((a,b)=>a+b,0),tmean(observed,3)];
    votes.forEach((v,j)=>{const m=stats[j];if(Math.abs(v)<c.threshold)m.abstain++;else if(Math.sign(v)===truth)m.correct++;else m.wrong++;
      m.deviation+=Math.abs(v-truth);});
+   for(let trim=0;trim<=3;trim++){
+    const estimate=tmean(observed,trim),m=trimStats[trim];
+    if(Math.abs(estimate)<c.threshold)m.abstain++;
+    else if(Math.sign(estimate)===truth)m.correct++;
+    else m.wrong++;
+    m.deviation+=Math.abs(estimate-truth);
+   }
   }
   scenarioMetrics.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,runs:c.runs,meanExposedFraction:exposedSum/c.runs,appliesTo:"scenario-not-method"});
   stats.forEach((m,j)=>{
@@ -287,8 +296,16 @@ export function runMisinformation(c){
     abstentionProbability:refuseCI.estimate,abstentionCI95Low:refuseCI.lower,abstentionCI95High:refuseCI.upper,
     meanDeviation:m.deviation/c.runs,risk,costWrong:c.costWrong,costRefuse:c.costRefuse});
   });
+  trimStats.forEach((m,trim)=>{
+   const correct=m.correct/c.runs,wrong=m.wrong/c.runs,abstain=m.abstain/c.runs;
+   robustnessSensitivity.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,
+    compromised:bad,trim_each_side:trim,runs:c.runs,
+    correctProbability:correct,wrongProbability:wrong,abstentionProbability:abstain,
+    meanDeviation:m.deviation/c.runs,risk:c.costWrong*wrong+c.costRefuse*abstain,
+    costWrong:c.costWrong,costRefuse:c.costRefuse});
+  });
  }
- return {rows,scenarioMetrics,statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
+ return {rows,scenarioMetrics,robustnessSensitivity,statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
 }
 export function validateStudy(id,raw={}){
  const def=STUDY_DEFS.find(s=>s.id===id);if(!def)throw Error("Неизвестный эксперимент");
