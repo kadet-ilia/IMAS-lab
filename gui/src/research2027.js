@@ -210,10 +210,26 @@ export function runPetri(c,checkpoint=null){
  let q=saved?[...saved.queue]:[start],index=saved?.index??0,
   seen=new Set(saved?.seen||["1:0:0"]),reachable=false,witness=[],
   statesByTime=saved?[...saved.statesByTime]:Array(T+1).fill(0),truncated=false;
+ const markingLog=checkpoint?.markingLog?[...checkpoint.markingLog]:[];
+ let currentMarking=null;
  const stageEnd=checkpoint?Math.min(c.stateLimit,(checkpoint.nextScenario+1)*PETRI_CHECKPOINT_BATCH):c.stateLimit;
- const add=(mask,isolated,t,trace)=>{const key=[mask,isolated,t].join(":");if(!seen.has(key)){seen.add(key);q.push({mask,isolated,t,trace});}};
+ const add=(mask,isolated,t,trace)=>{
+  const key=[mask,isolated,t].join(":"),enqueued=!seen.has(key);
+  if(currentMarking)currentMarking.successors.push({mask,isolated,t,transition:trace.at(-1),enqueued});
+  if(enqueued){seen.add(key);q.push({mask,isolated,t,trace});}
+ };
  const popcount=mask=>{let n=0;while(mask){n+=mask&1;mask>>>=1;}return n;};
- while(index<q.length&&index<c.stateLimit&&index<stageEnd){const state=q[index++];statesByTime[state.t]++;if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
+ while(index<q.length&&index<c.stateLimit&&index<stageEnd){
+  const state=q[index++];
+  if(c.record_marking_log){
+   if(markingLog.length>=c.marking_log_limit)
+    throw Error("Архив E4: лимит обработанных маркировок исчерпан; неполный журнал не публикуется");
+   currentMarking={index:index-1,t:state.t,mask:state.mask,isolated:state.isolated,
+    transition:state.trace.at(-1),critical:popcount(state.mask)>=critical,successors:[]};
+   markingLog.push(currentMarking);
+  }
+  statesByTime[state.t]++;
+  if(popcount(state.mask)>=critical){reachable=true;witness=state.trace;break;}
   if(state.t>=T)continue;
   // Timed transitions: transmission and isolation each consume one simulated tick.
   const next=state.t+1;
@@ -235,11 +251,19 @@ export function runPetri(c,checkpoint=null){
  }
  if(checkpoint&&!reachable&&index<q.length&&index<c.stateLimit&&index>=stageEnd)
   return {__checkpoint:{nextScenario:checkpoint.nextScenario+1,
-   bfs:{queue:q,index,seen:[...seen],statesByTime}}};
+   bfs:{queue:q,index,seen:[...seen],statesByTime},...(c.record_marking_log?{markingLog}:{})}};
  if(!reachable&&index<q.length)truncated=true;
  const verdict=reachable?"reachable":truncated?"inconclusive":"unreachable_within_bound";
  const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Стратегия изоляции",value:c.isolationPolicy===0?"Необязательная":"Приоритетная, идеализированная"},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
- return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,isolationPolicy:c.isolationPolicy,policyName:c.isolationPolicy===0?"optional_nondeterministic":"ideal_mandatory_priority",summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости. Необязательная изоляция не обязана менять EF при варьировании τ. Приоритетная политика предполагает мгновенное безошибочное обнаружение всех ранее компрометированных агентов, одновременно изолирует их и запрещает ожидание и передачу на таком такте. Она является идеализированной верхней границей управляемой защиты, а не реалистичным детектором."};
+ return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,
+  ...(c.record_marking_log?{markingJournal:{schemaVersion:1,studyId:"petri",complete:true,
+   boundedByStateLimit:true,processed:index,enqueued:seen.size,stateLimit:c.stateLimit,
+   horizon:T,criticalCount:critical,isolationPolicy:c.isolationPolicy,detectionDelay:c.detectionDelay,
+   initialMarking:{mask:1,isolated:0,t:0},
+   records:markingLog,frontier:q.slice(index).map(state=>({
+    mask:state.mask,isolated:state.isolated,t:state.t,transition:state.trace.at(-1)})),
+   verdict}}:{}),
+  isolationPolicy:c.isolationPolicy,policyName:c.isolationPolicy===0?"optional_nondeterministic":"ideal_mandatory_priority",summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости. Необязательная изоляция не обязана менять EF при варьировании τ. Приоритетная политика предполагает мгновенное безошибочное обнаружение всех ранее компрометированных агентов, одновременно изолирует их и запрещает ожидание и передачу на таком такте. Она является идеализированной верхней границей управляемой защиты, а не реалистичным детектором."};
 }
 export function runCascade(c,checkpoint=null){
  const rows=checkpoint?.rows?[...checkpoint.rows]:[],
@@ -447,6 +471,8 @@ export function validateResearchCheckpoint(id,c,state){
    state.modelVersion!==RESEARCH_MODEL_VERSION||state.configSignature!==JSON.stringify(c)))
   throw Error("Контрольная точка относится к иной модели или конфигурации");
  if(id==="petri"&&n>0){
+  if(c.record_marking_log&&(!Array.isArray(state.markingLog)||state.markingLog.length!==state.bfs?.index))
+   throw Error("Повреждён журнал маркировок E4");
   const bfs=state.bfs;
   if(!bfs||!Array.isArray(bfs.queue)||!Array.isArray(bfs.seen)||
    !Array.isArray(bfs.statesByTime)||bfs.statesByTime.length!==c.steps+1||
