@@ -97,6 +97,12 @@ export function auditResultMetrics(id,result){
   assert(Number.isInteger(result.processed)&&Number.isInteger(result.enqueued)&&result.enqueued>=result.processed,"petri: invalid state count");
   assert([0,1].includes(result.isolationPolicy),"petri: invalid isolation policy");
  }else if(id==="misinformation"){
+  for(const r of result.robustnessSensitivity||[]){
+   assert(Number.isInteger(r.trim_each_side)&&r.trim_each_side>=0&&r.trim_each_side<=3,"E6 trim: invalid trimming count");
+   assert([r.wrongProbability,r.correctProbability,r.abstentionProbability].every(inUnit),"E6 trim: invalid probability");
+   assert(approx(r.wrongProbability+r.correctProbability+r.abstentionProbability,1),"E6 trim: outcome partition");
+   assert(approx(r.risk,r.costWrong*r.wrongProbability+r.costRefuse*r.abstentionProbability),"E6 trim: risk identity");
+  }
   for(const r of rows){
    assert([r.wrongProbability,r.correctProbability,r.abstentionProbability].every(inUnit),"E6: invalid outcome probability");
    assert(approx(r.wrongProbability+r.correctProbability+r.abstentionProbability,1),"E6: outcome partition");
