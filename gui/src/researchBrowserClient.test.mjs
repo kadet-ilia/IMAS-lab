@@ -79,3 +79,15 @@ test("NZ-14 concurrent research jobs are rejected before cache access",async()=>
   {workerFactory:workerFactory()}),/вычисление|вкладке|Другое/);
  assert.equal((await one).state,"completed");
 });
+
+test("NZ-14 immediate cancellation during async cache initialization cannot start a worker",async()=>{
+ await clearResearchCheckpoints();
+ let created=0;
+ const pending=runResearchBrowser("uncertainty",{...configs.uncertainty,seed:907},()=>{},{
+  workerFactory:()=>{created++;throw Error("Early cancellation must prevent Worker creation");}
+ });
+ const stopped=await stopResearchBrowser();
+ assert.equal(stopped,true);
+ await assert.rejects(pending,/остановлено|отменено/);
+ assert.equal(created,0);
+});
