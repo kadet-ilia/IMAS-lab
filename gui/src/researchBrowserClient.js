@@ -147,7 +147,7 @@ async function runUnlocked(id,config,key,onProgress,options){
       }).catch(e=>void fail(e));
      }catch(error){void fail(error);}
     }else if(data?.type==="result"){
-     if(next!==total-1) {void fail(Error("Результат получен без выполнения всех стадий"));return;}
+     if(id!=="petri"&&next!==total-1) {void fail(Error("Результат получен без выполнения всех стадий"));return;}
      if(data.result?.id!==id||data.result.modelVersion!==RESEARCH_MODEL_VERSION||
        !data.result.metricIntegrity?.valid){void fail(Error("Worker вернул недостоверный результат"));return;}
      job.finishing=true;terminate();
