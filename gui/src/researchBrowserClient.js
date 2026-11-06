@@ -2,6 +2,8 @@ import {withOriginStorageLock} from "./trustBrowserClient.js";
 import {validateStudy,validateResearchCheckpoint,researchCheckpointUnits,
  RESEARCH_CHECKPOINT_SCHEMA,RESEARCH_MODEL_VERSION} from "./research2027.js";
 import {STATISTICS_VERSION} from "./statistics2027.js";
+import {auditResultMetrics} from "./metricPassport.js";
+import {auditResearchInference} from "./researchStatisticalAudit.js";
 
 /**
  * Scientific E2-E6 checkpoints. A worker processes exactly one complete
@@ -9,8 +11,36 @@ import {STATISTICS_VERSION} from "./statistics2027.js";
  * A process interruption can lose an unacknowledged stage, but cannot
  * mark that stage saved. E4 is a single bounded formal-search stage.
  */
-export const RESEARCH_STORAGE_SCHEMA=1;
-const DATABASE="imas-lab-research-checkpoints-v1",STORE="entries",memory=new Map();
+export const RESEARCH_STORAGE_SCHEMA=2;
+const DATABASE="imas-lab-research-checkpoints-v2",STORE="entries",memory=new Map();
+const hex=bytes=>Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,"0")).join("");
+async function contentDigest(key,payload){
+ if(!globalThis.crypto?.subtle||typeof TextEncoder==="undefined")
+  throw Error("Криптографический SHA-256 недоступен; результаты нельзя безопасно кешировать");
+ const data=new TextEncoder().encode(JSON.stringify({key,payload}));
+ return hex(await globalThis.crypto.subtle.digest("SHA-256",data));
+}
+async function sealRecord(key,payload){
+ return {schemaVersion:RESEARCH_STORAGE_SCHEMA,key,sha256:await contentDigest(key,payload),payload};
+}
+async function unsealRecord(key,record){
+ if(!record||record.schemaVersion!==RESEARCH_STORAGE_SCHEMA||record.key!==key||
+  !/^[a-f0-9]{64}$/.test(record.sha256||""))
+  throw Error("Повреждённый либо несовместимый кэш исследования: неверный конверт");
+ const actual=await contentDigest(key,record.payload);
+ if(actual!==record.sha256)throw Error("Повреждённый кэш исследования: SHA-256 не совпадает");
+ return record.payload;
+}
+function auditCachedResult(id,config,result){
+ if(result?.id!==id||result?.modelVersion!==RESEARCH_MODEL_VERSION||
+  result?.statisticsVersion!==STATISTICS_VERSION||JSON.stringify(result.config)!==JSON.stringify(config))
+  throw Error("Кэш исследования относится к другой версии или конфигурации");
+ const metrics=auditResultMetrics(id,result),stats=auditResearchInference(id,config,result);
+ if(!metrics.valid||!stats.valid||result.metricIntegrity?.valid!==true||
+  result.statisticsAudit?.valid!==true)
+  throw Error("Контроль сохранённого исследования не пройден: "+[...metrics.issues,...stats.issues].join("; "));
+ return result;
+}
 let active=null,pendingLease=false,cancelPendingLease=false;
 export function researchKey(id,raw){
  const config=validateStudy(id,raw);
@@ -87,20 +117,14 @@ async function runUnlocked(id,config,key,onProgress,options){
   const completed=await access("complete:"+key);
   if(job.stopRequested)throw cancelled();
   if(completed!==undefined){
-   if(completed?.id!==id||completed.modelVersion!==RESEARCH_MODEL_VERSION||
-      !completed.metricIntegrity?.valid)throw Error("Повреждённый завершённый результат в локальном хранилище");
-   return {state:"completed",result:completed,cache_hit:true,resumed_units:0};
+   const verified=auditCachedResult(id,config,await unsealRecord("complete:"+key,completed));
+   return {state:"completed",result:verified,cache_hit:true,resumed_units:0};
   }
   const stored=await access("checkpoint:"+key);
   if(job.stopRequested)throw cancelled();
-  if(stored!==undefined){
-   if(stored?.schemaVersion!==RESEARCH_STORAGE_SCHEMA||stored.key!==key||
-      stored.modelVersion!==RESEARCH_MODEL_VERSION||
-      stored.checkpointSchema!==RESEARCH_CHECKPOINT_SCHEMA)
-    throw Error("Несовместимая контрольная точка исследования; очистите локальные результаты");
-   validateResearchCheckpoint(id,config,stored.state);
-  }
-  const checkpoint=stored?.state||null,total=researchCheckpointUnits(id,config);
+  const checkpoint=stored===undefined?null:await unsealRecord("checkpoint:"+key,stored);
+  if(checkpoint)validateResearchCheckpoint(id,config,checkpoint);
+  const total=researchCheckpointUnits(id,config);
   let next=checkpoint?.nextScenario||0;
   let resolveJob,rejectJob;
   const promise=new Promise((resolve,reject)=>{resolveJob=resolve;rejectJob=reject;});
@@ -137,9 +161,10 @@ async function runUnlocked(id,config,key,onProgress,options){
       if(state.nextScenario!==next+1||state.nextScenario>=total)
        throw Error("Контрольная точка имеет неверный порядок стадий");
       next=state.nextScenario;
-      const snapshot={schemaVersion:RESEARCH_STORAGE_SCHEMA,modelVersion:RESEARCH_MODEL_VERSION,
-       checkpointSchema:RESEARCH_CHECKPOINT_SCHEMA,key,state};
-      job.saveChain=job.saveChain.then(()=>access("checkpoint:"+key,snapshot,true));
+      job.saveChain=job.saveChain.then(async()=>{
+       const sealed=await sealRecord("checkpoint:"+key,state);
+       await access("checkpoint:"+key,sealed,true);
+      });
       job.saveChain.then(()=>{
        if(job.stopRequested||job.done)return;
        try{progress();if(!job.stopRequested&&!job.done)worker.postMessage({type:"continue",nextScenario:state.nextScenario});}
@@ -154,7 +179,8 @@ async function runUnlocked(id,config,key,onProgress,options){
      void(async()=>{
       try{
        await job.saveChain;
-       await access("complete:"+key,data.result,true);
+       auditCachedResult(id,config,data.result);
+       await access("complete:"+key,await sealRecord("complete:"+key,data.result),true);
        await access("checkpoint:"+key,null,true);
        job.done=true;
        resolveJob({state:"completed",result:data.result,cache_hit:false,resumed_units:checkpoint?.nextScenario||0});
