@@ -678,3 +678,15 @@
 @media(max-width:1040px){
  .r27-study-comparison-grid{grid-template-columns:1fr}
 }
+
+/* Prospective Monte Carlo planning: shared transparent statistical controls. */
+.r27-mc-planner{margin:12px 0;border:1px solid #d5e3ef;background:#f7fbfe;padding:12px 11px;border-radius:3px}
+.r27-mc-planner h3{margin:0 0 7px;color:#214969;font-size:13px}
+.r27-mc-planner p{margin:6px 0 10px;font-size:11px;line-height:1.55;color:#435c73}
+.r27-mc-planner label{display:flex;flex-direction:column;gap:4px;margin:7px 0;font-size:11px;color:#3a536c}
+.r27-mc-planner input,.r27-mc-planner select{height:30px;width:100%;border:1px solid #c5d5e2;background:#fff;border-radius:3px;padding:0 6px;color:#213c54}
+.r27-mc-planner-inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.r27-mc-plan-buttons{display:grid;grid-template-columns:1fr;gap:7px;margin:9px 0}
+.r27-mc-plan-buttons button{border:1px solid #a9c2d9;background:#fff;color:#20547f;padding:8px;border-radius:3px;font-size:11px;font-weight:600;text-align:left}
+.r27-mc-plan-buttons button:disabled{opacity:.45}
+.r27-mc-planner .r27-note{font-size:10px;line-height:1.55;margin:7px 0;color:#526a7e}
