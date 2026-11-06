@@ -111,6 +111,19 @@ class ScientificReleaseGateTests(unittest.TestCase):
             self.assertTrue(any("duplicate finding ID" in x for x in report["issues"]))
             self.assertFalse(report["scientificAcceptance"])
 
+    def test_reviewer_identity_reuse_and_malformed_coverage_cannot_fake_independence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=pathlib.Path(tmp)
+            path,manifest=self.fixture(root)
+            reviews=manifest["evidence"]["independentReviews"]
+            reviews[1]["reviewerId"]=reviews[0]["reviewerId"]
+            reviews[1]["studyCoverage"]=[{"malformed":"not a study ID"}]
+            path.write_text(json.dumps(manifest),encoding="utf-8")
+            report=evaluate(path,root)
+            self.assertFalse(report["evidenceCompletenessPassed"])
+            self.assertFalse(report["scientificAcceptance"])
+            self.assertTrue(any("duplicate identity" in issue for issue in report["issues"]))
+
     def test_cli_strict_refuses_missing_external_data_and_writes_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=pathlib.Path(tmp)
