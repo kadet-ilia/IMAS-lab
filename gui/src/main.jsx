@@ -768,7 +768,7 @@ function App() {
   const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
   const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—");
   const experimentNavigation = (
-<nav className="r27-experiment-navigation" aria-label="Выбор эксперимента">
+<nav className={"r27-experiment-navigation"+(activeTab==="help2027"?" r27-help-navigation":"")} aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
 <select id="imas-experiment-select" aria-label="Выбор эксперимента" value={activeTab.startsWith("study-")?activeTab:"trace"} onChange={e=>setActiveTab(e.target.value)}>
 <option value="trace">Расчет доверия</option>
@@ -785,6 +785,7 @@ function App() {
    : <span className="r27-mode-placeholder">Основной режим</span>}
 </div>
 
+{activeTab==="help2027"?<button type="button" className="r27-manual-return" onClick={()=>setActiveTab(lastExperimentRef.current)}>Вернуться к экспериментам</button>:null}
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
 <button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>
@@ -805,7 +806,7 @@ function App() {
       {isResearch
         ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
         : activeTab==="help2027"
-          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS} onBack={()=>setActiveTab(lastExperimentRef.current)}/></main>
+          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
               sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
               navigation={experimentNavigation}
