@@ -161,9 +161,11 @@ async function pageChromeSnapshot(){
   const nav=content?.querySelector(":scope > nav.r27-experiment-navigation");
   const heading=content?.querySelector(":scope > header.imas-experiment-heading");
   const progress=content?.querySelector(":scope > .progress-strip");
-  const overview=content?.querySelector(":scope > .trust-overview-grid");
+  const overview=content?.querySelector(":scope > .trust-overview-grid")||
+    content?.querySelector(":scope > .r27-topology-full");
   const topology=overview?.querySelector(":scope > section.r27-replay");
-  const summary=overview?.querySelector(":scope > section.panel");
+  const summary=overview?.querySelector(":scope > section.panel")||
+    content?.querySelector(":scope > section.r27-summary-panel");
   const kpis=content?.querySelector(":scope > .kpi-grid");
   const controls=sidebar?.querySelector(":scope > button.run-button");
   if(!sidebar||!content||!nav||!heading||!progress||!topology||!summary||!kpis||!controls){
@@ -345,11 +347,13 @@ for (let i=0; i<researchTabs.length; i++) {
    return {...rest,mainParts,overview:{display:structure.overview.display,gap:structure.overview.gap}};
   };
   const base=comparable(baselineChrome),actual=comparable(currentChrome);
+  // Compare the common shell, not the intentionally distinct scientific body.
+  for(const key of ["overview","mainParts"]){delete base[key];delete actual[key];}
   if(JSON.stringify(base)!==JSON.stringify(actual)){
    const differences=Object.keys(base).filter(k=>JSON.stringify(base[k])!==JSON.stringify(actual[k])).map(k=>({component:k,trust:base[k],research:actual[k]}));
    throw Error("Different markup/design tokens for "+researchTabs[i]+": "+JSON.stringify(differences));
   }
-  for(const key of ["sidebar","content","nav","topology","summary","kpis"]){
+  for(const key of ["sidebar","content","nav","kpis"]){
    const a=baselineChrome.geometry[key],b=currentChrome.geometry[key];
    if(Math.abs(a.width-b.width)>3){
     throw Error("Different "+key+" horizontal dimension for "+researchTabs[i]+": "+JSON.stringify({trust:a,research:b}));
@@ -376,10 +380,10 @@ for (let i=0; i<researchTabs.length; i++) {
   if(surface.overflowY!=="auto" || surface.nested!==0 || surface.panelCount<1){
     throw Error(researchTabs[i]+": research layout must share the trust content scroller and independent panels: "+JSON.stringify(surface));
   }
-  const researchOverview=researchMain.locator(":scope > .trust-overview-grid");
+  const researchOverview=researchMain.locator(":scope > .r27-topology-full");
   if((await researchOverview.locator(":scope > .r27-replay-compact").count())!==1||
-     (await researchOverview.locator(":scope > section.panel.r27-summary-panel").count())!==1){
-    throw Error(researchTabs[i]+": missing the unified topology/table layout");
+     (await researchMain.locator(":scope > section.panel.r27-summary-panel").count())!==1){
+    throw Error(researchTabs[i]+": missing topology or relocated full-width summary");
   }
   const topbar=page.locator(".topbar");
   for(const label of ["Новый сид","Запустить","Остановить","Сбросить"]){
