@@ -91,3 +91,55 @@ test("NZ-14 immediate cancellation during async cache initialization cannot star
  await assert.rejects(pending,/остановлено|отменено/);
  assert.equal(created,0);
 });
+
+test("UP-35 worker failure propagates and the storage lease is recoverable",async()=>{
+ await clearResearchCheckpoints();
+ const config={...configs.uncertainty,seed:1501};
+ const broken=()=>({
+  onmessage:null,onerror:null,terminate(){},
+  postMessage(){this.onmessage({data:{type:"error",error:"injected worker failure"}});}
+ });
+ await assert.rejects(runResearchBrowser("uncertainty",config,()=>{},
+  {workerFactory:broken}),/injected worker failure/);
+ const recovered=await runResearchBrowser("uncertainty",config,()=>{},
+  {workerFactory:workerFactory({delayMs:1})});
+ assert.equal(recovered.state,"completed");
+ assert.equal(recovered.result.metricIntegrity.valid,true);
+});
+
+test("UP-35 half-complete scenario archives survive stop/resume exactly",async()=>{
+ await clearResearchCheckpoints();
+ const config={...configs.probgraph,seed:1502,runs:7,
+  record_source_runs:1,source_run_limit:7,source_event_limit:20000};
+ let pendingStop=null;
+ const result=await runResearchBrowser("probgraph",config,progress=>{
+  if(progress.completed===2&&!pendingStop)pendingStop=stopResearchBrowser();
+ },{workerFactory:workerFactory({delayMs:2})});
+ assert.equal(result.state,"stopped");
+ assert.equal(await pendingStop,true);
+ assert.equal(result.saved_units,2);
+ const resumed=await runResearchBrowser("probgraph",config,()=>{},
+  {workerFactory:workerFactory({delayMs:1})});
+ assert.equal(resumed.resumed_units,2);
+ assert.equal(resumed.result.sourceRunJournal.entries.length,4*config.runs);
+ assert.deepEqual(compare(resumed.result),compare(executeStudy("probgraph",config)));
+});
+
+test("UP-35 failed IndexedDB initialization aborts before creating a Worker",async()=>{
+ await clearResearchCheckpoints();
+ const had=Object.hasOwn(globalThis,"indexedDB"),old=globalThis.indexedDB;
+ let created=0;
+ try{
+  globalThis.indexedDB={open(){throw Error("QuotaExceededError: simulated storage failure");}};
+  await assert.rejects(runResearchBrowser("uncertainty",{...configs.uncertainty,seed:1503},
+   ()=>{},{workerFactory:()=>{created++;throw Error("Worker should never start");}}),
+   /QuotaExceededError/);
+  assert.equal(created,0);
+ }finally{
+  if(had)globalThis.indexedDB=old;
+  else delete globalThis.indexedDB;
+ }
+ const clean=await runResearchBrowser("uncertainty",{...configs.uncertainty,seed:1503},
+  ()=>{},{workerFactory:workerFactory({delayMs:1})});
+ assert.equal(clean.state,"completed");
+});
