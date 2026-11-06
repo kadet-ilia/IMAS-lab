@@ -63,7 +63,7 @@ export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
 export const TRUST_MODEL_VERSION="trust-js-2.10.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
- sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
+ sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,10000],n_sensitivity_runs:[1,100],
  factorial_runs_per_point:[1,50],factorial_max_points:[32,64],bootstrap_samples:[100,10000],parallel_workers:[0,32],
  attack_start_step:[1,500],on_off_period:[1,500],on_off_attack_steps:[1,500],trust_window_steps:[2,100],
  isolation_patience:[1,100],minimum_evidence_steps:[1,500],isolation_cooldown_steps:[0,500],trim_each_side:[0,159],
