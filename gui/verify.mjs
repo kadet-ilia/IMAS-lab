@@ -520,6 +520,34 @@ if(!report.workerPoolsEquivalent)throw Error("UP-35: 1-worker and 4-worker scien
 
 
 
+// UP-35: real, same-origin, two-tab exclusion using the browser Web Locks
+// implementation. Tab A acquires the exact application lease, and tab B must
+// be rejected by the application UI, not merely by a hand-written lock probe.
+const lockedInFirstTab=await page.evaluate(async()=>{
+ if(!navigator.locks?.request)return false;
+ let acquired;
+ const promise=new Promise(resolve=>{acquired=resolve;});
+ void navigator.locks.request("imas-lab-test-trust-storage-exclusive-v1",
+  {mode:"exclusive"},async lock=>{
+   if(!lock){acquired(false);return;}
+   window.__imasReleaseTestOriginLock=null;
+   const hold=new Promise(resolve=>{window.__imasReleaseTestOriginLock=resolve;});
+   acquired(true);
+   await hold;
+  });
+ return promise;
+});
+if(!lockedInFirstTab)throw Error("UP-35: real Chromium Web Locks API unavailable");
+const secondTab=await browser.newPage();
+try{
+ await secondTab.goto("http://127.0.0.1:4173",{waitUntil:"domcontentloaded",timeout:30000});
+ await secondTab.getByRole("button",{name:"Запустить эксперимент",exact:true}).click();
+ await secondTab.locator(".error-banner").getByText("Другое вычисление или очистка данных выполняется в другой вкладке.",{exact:false}).waitFor({timeout:15000});
+ report.crossTabExclusiveLock=true;
+}finally{
+ await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
+ await secondTab.close();
+}
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
