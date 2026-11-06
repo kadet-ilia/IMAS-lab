@@ -143,3 +143,54 @@ test("UP-35 failed IndexedDB initialization aborts before creating a Worker",asy
   ()=>{},{workerFactory:workerFactory({delayMs:1})});
  assert.equal(clean.state,"completed");
 });
+
+test("UP-35 quota abort during checkpoint COMMIT cannot claim a saved stage or final result",async()=>{
+ await clearResearchCheckpoints();
+ const exists=Object.hasOwn(globalThis,"indexedDB"),original=globalThis.indexedDB;
+ let writes=0;
+ try{
+  const db={objectStoreNames:{contains:()=>true},close(){},
+   transaction(_name,mode){
+    const tx={oncomplete:null,onabort:null,onerror:null,error:null,
+     objectStore(){
+      return {
+       get(){
+        const request={result:undefined,onsuccess:null,onerror:null};
+        queueMicrotask(()=>{request.onsuccess?.();tx.oncomplete?.();});
+        return request;
+       },
+       put(){
+        writes++;
+        const request={onerror:null};
+        queueMicrotask(()=>{tx.error=Error("QuotaExceededError: injected quota abort");tx.onabort?.();});
+        return request;
+       },
+       delete(){
+        const request={onerror:null};
+        queueMicrotask(()=>tx.oncomplete?.());
+        return request;
+       }
+      };
+     }};
+    return tx;
+   }};
+  globalThis.indexedDB={open(){
+   const req={result:db,onupgradeneeded:null,onsuccess:null,onerror:null,onblocked:null};
+   queueMicrotask(()=>req.onsuccess?.());
+   return req;
+  }};
+  const c={agents:7,runs:5,seed:1551};
+  await assert.rejects(runResearchBrowser("uncertainty",c,()=>{},
+   {workerFactory:workerFactory({delayMs:1})}),/QuotaExceededError/);
+  assert.ok(writes>=1,"first checkpoint was never attempted");
+ }finally{
+  if(exists)globalThis.indexedDB=original;
+  else delete globalThis.indexedDB;
+ }
+ const c={agents:7,runs:5,seed:1551};
+ const next=await runResearchBrowser("uncertainty",c,()=>{},
+  {workerFactory:workerFactory({delayMs:1})});
+ assert.equal(next.cache_hit,false);
+ assert.equal(next.resumed_units,0,"aborted checkpoint was incorrectly claimed durable");
+ assert.deepEqual(compare(next.result),compare(executeStudy("uncertainty",c)));
+});
