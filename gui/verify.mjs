@@ -702,6 +702,31 @@ if(!report.workerPoolsEquivalent)throw Error("UP-35: 1-worker and 4-worker scien
 
 
 
+// E1 regression: run the actual factorial model through the React UI and
+// Workers, not just the mathematical unit oracle. Six main factors and all
+// six confidence intervals must be visible, with nonempty plotted bars.
+await field("Прогонов на точку факторного плана",2);
+await field("Точек факторного плана (32 или 64)",32);
+await page.locator(".sensitivity-action select").selectOption("factorial");
+await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
+await page.locator('[data-factorial-ready="6"]').waitFor({timeout:90000});
+const mainEffectsPanel=page.locator("section.panel").filter({hasText:"Главные эффекты факторов"}).first();
+const intervalsPanel=page.locator("section.panel").filter({hasText:"Интервальные оценки главных эффектов"});
+const effectBars=await mainEffectsPanel.locator(".recharts-bar-rectangle").count();
+const intervalRows=await intervalsPanel.locator("tbody tr").count();
+if(effectBars<6||intervalRows!==6)
+ throw Error("E1 factorial: expected 6 graph bars and 6 effect intervals, got "+effectBars+" / "+intervalRows);
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Данные"}).click();
+const factorRow=page.locator(".data-row").filter({hasText:"Многофакторная чувствительность"});
+const [factorFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),factorRow.getByRole("button",{name:"Скачать JSON"}).click()]);
+const factorData=JSON.parse(fs.readFileSync(await factorFile.path(),"utf8"));
+const planned=factorData.main_effects?.filter(x=>x.metric==="probability_correct")||[];
+if(planned.length!==6||planned.some(x=>!x.estimable||!Number.isFinite(x.effect_high_minus_low)||!Number.isFinite(x.ci95_low)||!Number.isFinite(x.ci95_high)))
+ throw Error("E1 factorial: incomplete numerical factors despite completed UI render");
+report.factorialRendering={bars:effectBars,intervalRows,computed:planned.length,points:factorData.design_points?.length};
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Чувствительность"}).click();
+await page.locator(".sensitivity-action select").selectOption("factorial");
+
 // UP-35: real, same-origin, two-tab exclusion using the browser Web Locks
 // implementation. Tab A acquires the exact application lease, and tab B must
 // be rejected by the application UI, not merely by a hand-written lock probe.
