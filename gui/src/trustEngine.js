@@ -29,7 +29,8 @@ export const DEFAULTS={
  small_world_neighbors:4,small_world_rewire_probability:.1,
  message_loss_probability:0,message_delay_min_steps:0,message_delay_max_steps:0,
  max_message_staleness_steps:5,bandwidth_messages_per_step:100000,
- partition_enabled:false,partition_start_step:70,partition_end_step:110,partition_fraction:.5
+ partition_enabled:false,partition_start_step:70,partition_end_step:110,partition_fraction:.5,
+  record_source_events:false,source_event_limit:50000
 };
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 const sum=a=>a.reduce((p,x)=>p+x,0);
@@ -59,7 +60,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.8.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.9.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
@@ -67,7 +68,7 @@ const integerRanges={
  attack_start_step:[1,500],on_off_period:[1,500],on_off_attack_steps:[1,500],trust_window_steps:[2,100],
  isolation_patience:[1,100],minimum_evidence_steps:[1,500],isolation_cooldown_steps:[0,500],trim_each_side:[0,159],
  small_world_neighbors:[2,160],message_delay_min_steps:[0,500],message_delay_max_steps:[0,500],
- max_message_staleness_steps:[0,500],bandwidth_messages_per_step:[0,1000000],partition_start_step:[1,500],partition_end_step:[1,500]
+ max_message_staleness_steps:[0,500],bandwidth_messages_per_step:[0,1000000],partition_start_step:[1,500],partition_end_step:[1,500],source_event_limit:[1,250000]
 };
 const numericRanges={
  desired_action:[-2,2],honest_quality:[0,1],byzantine_quality:[0,1],honest_noise_sigma:[0,10],
@@ -193,7 +194,7 @@ function samples(t,scenario,c,bad,sybil,r){
  if(c.n_sybil_agents){const common=v+c.attack_direction*c.collusion_bias+.005*r.normal();for(let i=c.n_agents;i<n;i++)x[i]=common+.002*r.normal();}
  return x;
 }
-export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0){
+export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,record=null){
  const n=bad.length,attack=activeAttack(t,scenario,c),e=makeMat(n,NaN);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   // Exclude inactive, isolated and not-yet-activated identities, even offline.
@@ -231,7 +232,7 @@ export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0)
  delivered=keep.length;
  return{matrix:e,stats:{attempted,delivered,lost,bandwidth_dropped:dropped}};
 }
-export function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r,runIndex=0){
+export function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,r,runIndex=0,record=null){
  const n=active.length;if(!c.network_enabled)return{values:[...proposals],available:[...active],budget:c.bandwidth_messages_per_step,stats:{attempted:active.filter(Boolean).length,delivered:active.filter(Boolean).length,lost:0,bandwidth_dropped:0,expired:0,backlogged:0,component_size:active.filter(Boolean).length,queued:0,mean_delay:0}};
  const largest=[...comps].sort((a,b)=>b.length-a.length||a[0]-b[0])[0]||[],set=new Set(largest);
  let lost=0;
@@ -256,6 +257,37 @@ export function transport(t,proposals,active,comps,queue,lastValues,lastSteps,c,
  return{values:[...lastValues],available:all(n).map(i=>set.has(i)&&good(lastValues[i])&&t-lastSteps[i]<=c.max_message_staleness_steps),
  budget,stats:{attempted:largest.length,delivered,lost,expired,backlogged,
  bandwidth_dropped:0,component_size:largest.length,queued:queue.length,mean_delay:delayList.length?mean(delayList):0}};
+}
+/** Optional complete, deterministic, single-trace source-event journal. */
+export function makeSourceEventRecorder(limit){
+ if(!Number.isInteger(limit)||limit<1||limit>250000)throw Error("Invalid source-event record limit");
+ const events=[];
+ const record=event=>{
+  if(events.length>=limit)throw Error("Лимит журнала исходных событий ("+limit+") исчерпан; результат не публикуется и не усекaется");
+  events.push(event);
+ };
+ return {events,record,limit};
+}
+/** Reconstruct communications independently from recorded attempts and outcomes. */
+export function auditSourceEventJournal(events,ledger){
+ if(!Array.isArray(events)||!Array.isArray(ledger)||!ledger.length)throw Error("Source-event journal or ledger missing");
+ const count=(kind,status)=>events.filter(e=>e.kind===kind&&(!status||e.status===status)).length;
+ const pLost=count("proposal_attempt","lost"),pAccepted=count("proposal_attempt","queued"),
+  pDelivered=count("proposal_final","delivered"),pExpired=count("proposal_final","expired");
+ const eDelivered=count("evidence","delivered"),eLost=count("evidence","lost"),
+  eDropped=count("evidence","dropped");
+ const final=ledger.at(-1),p=final.proposal,e=final.evidence;
+ const issues=[];
+ const expect=(ok,k)=>{if(!ok)issues.push(k);};
+ expect(p.attempted===pLost+pAccepted,"proposal_attempts");
+ expect(p.delivered===pDelivered&&p.lost===pLost&&p.expired===pExpired,"proposal_outcomes");
+ expect(p.pending===pAccepted-pDelivered-pExpired,"proposal_pending");
+ expect(e.attempted===eDelivered+eLost+eDropped,"evidence_attempts");
+ expect(e.delivered===eDelivered&&e.lost===eLost&&e.bandwidth_dropped===eDropped,"evidence_outcomes");
+ expect(final.total.balance===0,"total_balance");
+ return {valid:issues.length===0,issues,counts:{proposalLost:pLost,proposalAccepted:pAccepted,
+  proposalDelivered:pDelivered,proposalExpired:pExpired,evidenceDelivered:eDelivered,
+  evidenceLost:eLost,evidenceDropped:eDropped}};
 }
 const COMMUNICATION_COUNT_FIELDS=["attempted","delivered","lost","bandwidth_dropped","expired"];
 /**
@@ -304,6 +336,8 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  let attempted=0,delivered=0,lost=0,dropped=0,expired=0,queued=0;
  let communicationState=null;const messageLedger=[];
  const series=[],network_series=[],reputationHistory=[],states=[],events=[];
+ const sourceJournal=detail&&c.record_source_events?makeSourceEventRecorder(c.source_event_limit):null;
+ const record=sourceJournal?.record||null;
  let aggregateBundleWallMs=0,trustWallMs=0,transportWallMs=0;
  for(let t=0;t<c.n_steps;t++){
   const eligible=all(n).map(i=>!sybil[i]||t+1>=c.sybil_activation_step);
@@ -312,10 +346,12 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   const {comps,labels}=components(a,running,groups,partition);
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
   const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
+   if(record)for(let i=0;i<n;i++)record({kind:"proposal_generated",step:t+1,source:i+1,value:proposed[i],
+    active:running[i],byzantine:bad[i],sybil:sybil[i]});
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
   const transportT0=performance.now();
-  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex);
+  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex,record);
   transportWallMs+=performance.now()-transportT0;
   const aggregateT0=performance.now();
   const decisions=aggregate(tx.values,rep,tx.available,c,previous);
@@ -332,7 +368,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
   }
   const evidenceT0=performance.now();
-  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex);
+  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record);
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
    communicationState=accountCommunicationStep(communicationState,tx.stats,evidence.stats,queue.length,t+1);
@@ -390,7 +426,15 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       delivery_ratio:ratio,simulation_wall_ms:performance.now()-startWall,aggregation_bundle_wall_ms:aggregateBundleWallMs,trust_evidence_wall_ms:trustWallMs,transport_wall_ms:transportWallMs,completed_steps:c.n_steps};
  });
  if(!detail)return{rows,trajectory:series};
- return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,message_ledger:messageLedger,reputation:reputationHistory,states,events,
+ const sourceEventLog=sourceJournal?{
+    schemaVersion:1,modelVersion:TRUST_MODEL_VERSION,seed:c.seed,runIndex,scenario,
+    totalEvents:sourceJournal.events.length,limit:sourceJournal.limit,complete:true,
+    rngScheme:c.paired_exogenous_events?"keyed-exogenous-v1":"stateful-xorshift32",
+    events:sourceJournal.events,
+    audit:auditSourceEventJournal(sourceJournal.events,messageLedger)}:null;
+ if(sourceEventLog&&!sourceEventLog.audit.valid)
+  throw Error("Сбой проверки журнала исходных событий: "+sourceEventLog.audit.issues.join(", "));
+ return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,message_ledger:messageLedger,source_event_log:sourceEventLog,reputation:reputationHistory,states,events,
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,nominal_band_rate:rows[i].nominal_band_rate})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i],first_attack_isolation_at:firstAttackIsolationAt[i]})),
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:communicationState.total.balance,communication_channel_ledger:communicationState,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
