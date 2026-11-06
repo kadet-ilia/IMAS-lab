@@ -5,13 +5,21 @@
  */
 import fs from "node:fs";
 import {betaTrust,eigenTrust,trimmedWeightedMean,transport,validateConfig,
- buildAdjacency,createRng,accountCommunicationStep} from "./trustEngine.js";
+ buildAdjacency,createRng,accountCommunicationStep,simulateRun} from "./trustEngine.js";
 import {propagate,spreadOneTick,expectedShortfall,
  estimateReliabilityFromObservations} from "./research2027.js";
 
 function evaluate(testCase){
  const v=testCase;
  switch(v.type){
+ case "trust_trace":{
+  const details=simulateRun({...v.config,record_source_events:true},v.scenario||"on_off",
+   v.runIndex||0,0,true).result;
+  return {configuration:details.configuration,series:details.series,
+   reputation:details.reputation,states:details.states,events:details.events,
+   sourceEvents:details.source_event_log.events,rows:details.metrics,
+   summary:details.summary};
+ }
  case "beta":{
   const n=v.history[0].length;
   const c=validateConfig({n_agents:n,n_byzantine:0,trim_each_side:0,
