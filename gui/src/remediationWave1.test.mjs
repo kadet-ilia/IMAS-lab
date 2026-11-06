@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
- DEFAULTS, createRng, validateConfig, observations, simulateRun, makePlan,
+ DEFAULTS, createRng, validateConfig, observations, simulateRun, makePlan, buildAdjacency,
  TRUST_MODEL_VERSION
 } from "./trustEngine.js";
 import {executeStudy, RESEARCH_MODEL_VERSION} from "./research2027.js";
