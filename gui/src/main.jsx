@@ -102,6 +102,8 @@ const DEFAULT_CONFIG = {
   partition_start_step: 70,
   partition_end_step: 110,
   partition_fraction: 0.5,
+  record_source_events: false,
+  source_event_limit: 50000,
 };
 
 const PARAMETER_TOOLTIPS = {
@@ -386,6 +388,8 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
             <NumberField label="Усечение с каждой стороны" value={config.trim_each_side} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("trim_each_side")} tooltip={PARAMETER_TOOLTIPS.trim_each_side} />
             <NumberField label="Радиус ограничения выбросов" value={config.clip_radius} min={0.05} max={10} step={0.05} onChange={set("clip_radius")} tooltip={PARAMETER_TOOLTIPS.clip_radius} />
             <NumberField label="Допуск правильного решения" value={config.correctness_tolerance} min={0.01} max={2} step={0.05} onChange={set("correctness_tolerance")} tooltip={PARAMETER_TOOLTIPS.correctness_tolerance} />
+             <BoolField label="Журнал исходных событий (только трассировка)" checked={config.record_source_events} onChange={set("record_source_events")} hint="При превышении лимита расчёт завершается явной ошибкой: данные не усекаются." />
+             {config.record_source_events?<NumberField label="Максимум событий в журнале" value={config.source_event_limit} min={1} max={250000} onChange={set("source_event_limit")}/>:null}
           </div>
         </details>
       </div>
@@ -630,6 +634,8 @@ function DataTab({ trace, monteCarlo, sensitivityByMode }) {
   const items = [
     ["Паспорта ключевых показателей", "Формулы, знаменатели, единицы и правила интерпретации отсутствующих значений · "+METRIC_PASSPORT_VERSION, "trust_metric_passport.json", passportForStudy("trust")],
     ["Трассировка одного прогона", "Решения, репутации, состояния агентов, сетевые показатели и события изоляции.", "trace.json", trace],
+     ["Поканальный журнал сообщений", "Предложения и свидетельства по тактам с независимым балансовым контролем.", "communication_ledger.json", trace?.message_ledger],
+     ["Журнал исходных событий", "Необязательные детальные события одного прогона; доступно после включения настройки.", "source_events.json", trace?.source_event_log],
     ["Серия Монте-Карло", "σ- и квантильные области, bootstrap-интервалы и распределения метрик.", "monte_carlo.json", monteCarlo],
     ["Однофакторная чувствительность", "Изменение показателей при варьировании числа нарушителей.", "sensitivity_one_factor.json", sensitivityByMode.one_factor],
     ["Многофакторная чувствительность", "Точки факторного плана, главные эффекты и взаимодействия.", "sensitivity_factorial.json", sensitivityByMode.factorial],
