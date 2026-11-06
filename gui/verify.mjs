@@ -449,6 +449,36 @@ const report = {
   screenshots: { dashboard: dashboardScreenshot, help: helpScreenshot, research: researchScreenshot },
 };
 
+// NZ-13: execute all remaining research kernels through the real React/Worker UI,
+// not merely their module-level unit tests or the static presence of controls.
+report.researchRuns={};
+for(const [studyId,name] of [
+ ["study-probgraph","probgraph"],["study-petri","petri"],
+ ["study-cascade","cascade"],["study-misinformation","misinformation"]
+]){
+ await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption(studyId);
+ if(name!=="petri")await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
+ await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+ await page.locator(".r27-study-summary").waitFor({timeout:45000});
+ const button=page.locator(".r27-result-tools").getByRole("button",{name:"Скачать JSON"});
+ const [download]=await Promise.all([page.waitForEvent("download",{timeout:15000}),button.click()]);
+ const result=JSON.parse(fs.readFileSync(await download.path(),"utf8"));
+ if(result.id!==name||!result.metricIntegrity?.valid||result.rows?.length<2)
+  throw Error("NZ-13: invalid end-to-end result for "+name);
+ if(name!=="petri"&&result.config.runs!==10)
+  throw Error("NZ-13: requested sample size not reflected in "+name);
+ if(name==="petri"&&!["reachable","unreachable_within_bound","inconclusive"].includes(result.verdict))
+  throw Error("NZ-13: Petri failed to expose formal verdict");
+ if((name==="probgraph"||name==="cascade")&&(!result.replay?.runId||!result.replaySample))
+  throw Error("NZ-11: actual paired trace is not exported for "+name);
+ if(name==="probgraph"&&result.replay.frames.at(-1).value!==result.pairedRuns[0].methods[0].finalFraction)
+  throw Error("NZ-11: graph replay does not reproduce baseline paired outcome");
+ if(name==="cascade"&&result.replay.frames.at(-1).value!==result.pairedRuns[0].methods[0].loss)
+  throw Error("NZ-11: cascade replay does not reproduce baseline paired loss");
+ report.researchRuns[name]={rows:result.rows.length,modelVersion:result.modelVersion,
+  verified:result.metricIntegrity.valid,runId:result.replay?.runId||null};
+}
+
 // UP-35: exercise the full Vite/React → Worker pool → four-arm ablation
 // route, not merely the mode dropdown. Keep the run deliberately small.
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
