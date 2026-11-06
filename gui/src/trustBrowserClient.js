@@ -89,7 +89,33 @@ export const cacheKeyForPayload=p=>JSON.stringify({
  factor_ranges:p.factor_ranges||null,run_index:p.run_index||0
 });
 export const isBrowserOnly=()=>true;
-const snapshot=results=>({completed:results.map((result,index)=>result===null?null:{index,result}).filter(Boolean)});
+export const TRUST_CHECKPOINT_SCHEMA=2;
+export const snapshotCheckpoint=(results,key,total)=>({
+ schemaVersion:TRUST_CHECKPOINT_SCHEMA,modelVersion:TRUST_MODEL_VERSION,cacheKey:key,total,
+ completed:results.map((result,index)=>result===null?null:{index,result}).filter(Boolean)
+});
+export function restoreCheckpoint(previous,key,plan){
+ const fresh=()=>Array(plan.total).fill(null);
+ if(previous===null||previous===undefined)return fresh();
+ // Legacy checkpoints do not certify that their task indices and mathematical
+ // version match today's plan. Recompute instead of trusting them silently.
+ if(previous.schemaVersion===undefined)return fresh();
+ if(previous.schemaVersion!==TRUST_CHECKPOINT_SCHEMA ||
+    previous.modelVersion!==TRUST_MODEL_VERSION ||
+    previous.cacheKey!==key ||
+    previous.total!==plan.total ||
+    !Array.isArray(previous.completed))
+  throw Error("Несовместимая контрольная точка. Очистите старые локальные данные перед повторным запуском.");
+ const restored=fresh(),seen=new Set();
+ for(const entry of previous.completed){
+  if(!entry||!Number.isInteger(entry.index)||entry.index<0||entry.index>=plan.total||
+    seen.has(entry.index)||!entry.result||!Array.isArray(entry.result.rows)||
+    (plan.action==="trace"&&!entry.result.detail))
+   throw Error("Повреждённая контрольная точка: некорректный индекс, повтор или структура результата.");
+  seen.add(entry.index);restored[entry.index]=entry.result;
+ }
+ return restored;
+}
 const stoppedError=()=>Error("Расчет остановлен до получения результатов");
 
 async function runBrowserExperimentUnlocked(payload,onProgress=()=>{},options={}){
@@ -109,11 +135,7 @@ async function runBrowserExperimentUnlocked(payload,onProgress=()=>{},options={}
   job.plan=plan;
   const previous=await storage("checkpoint:"+key);
   if(job.stopRequested)throw stoppedError();
-  const results=Array(plan.total).fill(null);
-  for(const item of previous?.completed||[]){
-   if(item&&Number.isInteger(item.index)&&item.index>=0&&item.index<plan.total&&item.result!=null)
-    results[item.index]=item.result;
-  }
+  const results=restoreCheckpoint(previous,key,plan);
   job.results=results;
   job.count=results.filter(v=>v!==null).length;
   const pending=results.map((v,i)=>v===null?i:null).filter(v=>v!==null);
@@ -136,7 +158,7 @@ async function runBrowserExperimentUnlocked(payload,onProgress=()=>{},options={}
   job.phase="running";
   const terminate=()=>job.workers.forEach(w=>{try{w.terminate();}catch{}});
   const save=()=>{
-   const state=snapshot(results); // Immutable snapshot at scheduling time.
+   const state=snapshotCheckpoint(results,key,plan.total); // Immutable, versioned snapshot.
    job.saveChain=job.saveChain.then(()=>storage("checkpoint:"+key,state));
    return job.saveChain;
   };
