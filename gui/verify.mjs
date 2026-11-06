@@ -424,6 +424,22 @@ const metricPassportRows=await passportPanel.locator("tbody tr").count();
 if(metricPassportRows!==5)throw Error("UP-04: expected five executable metric passports for E2, got "+metricPassportRows);
 const passportStatus=await passportPanel.innerText();
 if(!passportStatus.includes("пройден"))throw Error("UP-04: accounting audit did not pass for E2");
+const comparisonGrid=page.locator(".r27-study-comparison-grid");
+const plotBox=await comparisonGrid.locator(":scope > .r27-comparison-panel").boundingBox();
+const matrixBox=await comparisonGrid.locator(":scope > .r27-comparison-matrix").boundingBox();
+if(!plotBox||!matrixBox||Math.abs(plotBox.width-matrixBox.width)>3||Math.abs(plotBox.y-matrixBox.y)>3||
+   Math.abs(matrixBox.x-(plotBox.x+plotBox.width+12))>5)
+ throw Error("UI-E2: chart and scenario matrix must be equal-width adjacent panels: "+JSON.stringify({plotBox,matrixBox}));
+if((await page.locator(".r27-comparison-matrix").count())!==1)throw Error("UI-E2: duplicate comparison matrix");
+const summaryBeforePassports=await page.locator("main[data-study='uncertainty']").evaluate(el=>{
+ const summary=el.querySelector(":scope > .r27-summary-panel");
+ const passport=[...el.querySelectorAll(":scope > section.panel")].find(x=>x.querySelector("h2")?.textContent==="Паспорта ключевых показателей");
+ return Boolean(summary&&passport&&summary.nextElementSibling===passport);
+});
+if(!summaryBeforePassports)throw Error("UI-E2: summary must immediately precede metric passports");
+report.researchComparisonEqualWidth=true;
+report.researchSummaryBeforePassports=true;
+
 if((await page.locator(".r27-analytics > section.panel.r27-panel").count())<2)throw Error("Research study diagrams must use the shared panel component");
 const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
 const researchScreenshot = path.join(here, "research2027.png");
@@ -432,6 +448,15 @@ await page.locator(".r27-experiment-navigation").getByRole("button", { name: "С
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
 if((await page.locator(".r27-module-article").count())!==5)throw Error("Missing mathematical manual chapters");
 if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
+if((await page.locator(".r27-doc-simple").count())!==6)throw Error("UI-help: all six plain-language guides must appear");
+await page.getByRole("button",{name:"Вернуться к экспериментам"}).click();
+if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue())!=="study-uncertainty")
+ throw Error("UI-help: return did not restore the last experiment");
+await page.locator(".r27-experiment-navigation").getByRole("button",{name:"Справка",exact:true}).click();
+await page.getByRole("heading",{name:"Единая справка по экспериментальному комплексу IMAS-lab"}).waitFor();
+report.helpReturnToExperiment=true;
+report.helpSimpleExplanations=6;
+
 
 const report = {
   title: await page.title(),
@@ -479,6 +504,20 @@ for(const [studyId,name] of [
   throw Error("NZ-11: graph replay does not reproduce baseline paired outcome");
  if(name==="cascade"&&result.replay.frames.at(-1).value!==result.pairedRuns[0].methods[0].loss)
   throw Error("NZ-11: cascade replay does not reproduce baseline paired loss");
+ if(name!=="petri"){
+  const widths=await page.locator(".r27-study-comparison-grid").evaluate(grid=>[...grid.children].map(x=>x.getBoundingClientRect().width));
+  if(widths.length!==2||Math.abs(widths[0]-widths[1])>3)
+   throw Error("UI: unequal graph and matrix widths for "+name+": "+JSON.stringify(widths));
+  if((await page.locator("main[data-study='"+name+"'] > section.r27-summary-panel").count())!==1)
+   throw Error("UI: relocated summary absent for "+name);
+ }else{
+  if((await page.locator(".r27-study-comparison-grid").count())!==0)
+   throw Error("E4 must not invent a probabilistic comparison matrix");
+  const widths=await page.locator(".r27-analytics").evaluate(root=>[...root.children].slice(0,2).map(x=>x.getBoundingClientRect().width));
+  if(widths.length!==2||Math.abs(widths[0]-widths[1])>3)
+   throw Error("E4: formal history and agent state matrix must have equal widths");
+ }
+
  report.researchRuns[name]={rows:result.rows.length,modelVersion:result.modelVersion,
   verified:result.metricIntegrity.valid,runId:result.replay?.runId||null};
 }
