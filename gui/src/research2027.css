@@ -57,7 +57,7 @@
 @media(max-width:1150px){.r27-root{padding:18px}.r27-work{grid-template-columns:230px minmax(0,1fr)}.r27-petri{grid-template-columns:1fr}.r27-heading h1{font-size:19px}}
 @media(max-width:760px){.r27-work{grid-template-columns:1fr}.r27-settings{max-height:none}.r27-glossary{grid-template-columns:1fr}.r27-root{padding:14px}}
 
-/* The legacy controls must not launch the original experiment from a 2027 tab. */
+/* Controls for each experiment launch only the currently selected mathematical model. */
 /* Single-column workspace is reserved for the shared help, never for the six experiments. */
 .workspace.research-2027-workspace{grid-template-columns:minmax(0,1fr)}
 .workspace.research-2027-workspace>.content{padding-left:12px;padding-right:12px}
@@ -248,7 +248,7 @@
 }
 .r27-experiment-navigation button.r27-export-control svg{height:11px;width:11px;flex:none}
 
-/* Title of the original trust experiment, consistent with the five study headings. */
+/* E1 title uses the same typography as the other five experiment headings. */
 .content[data-study="trust"] > .r27-study-title{
   margin:0 12px 12px;
   font-size:19px;
@@ -259,7 +259,7 @@
 }
 
 
-/* Unified application visual system — shared by trust and five research studies.
+/* Unified application visual system — shared by all six research studies.
    Research pages reuse the actual .content scroll, .panel header/body,
    .sidebar, .field, .kpi-grid and .trust-overview-grid instead of a nested app. */
 :root{
@@ -497,9 +497,8 @@
 }
 
 
-/* 3.3.0: a single shared ExperimentLayout for all six studies.
-   The same aside, main, nav, header, graph/grid and card tokens now render
-   for trust and the five research models. Only the experiment payload differs. */
+/* One shared ExperimentLayout for six equally supported studies: identical
+   sidebar, content, navigation, diagrams and card styles. */
 .workspace > .imas-experiment-content.content {
   display:block;
   overflow-y:auto;
