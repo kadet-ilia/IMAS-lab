@@ -331,3 +331,36 @@ test("UP-30 E5 controls a combined 16-comparison family for damage and danger",(
  const repeated=executeStudy("cascade",{runs:35,seed:990,spread:.6});
  assert.deepEqual(a.pairedEffects,repeated.pairedEffects);
 });
+
+test("MC E6 risk confidence intervals derive from individual decision costs",()=>{
+ const config={agents:7,runs:101,seed:20261206,spread:.5,noise:.35,attackBias:2.2,
+  threshold:.16,costWrong:3,costRefuse:.7,record_source_runs:1,source_run_limit:101};
+ const result=executeStudy("misinformation",config);
+ assert.equal(result.pairedEffects.length,8);
+ assert.equal(result.statisticsAudit.holmFamilyChecked,8);
+ assert.equal(result.multipleTesting.tested,8);
+ assert.ok(result.statisticsAudit.valid);
+ for(const effect of result.pairedEffects){
+  assert.equal(effect.paired,true);
+  assert.ok(effect.pHolm>=effect.pRaw&&effect.pHolm<=1);
+  assert.equal(effect.holmReject05,effect.pHolm<.05);
+ }
+ for(const row of result.rows){
+  const source=result.sourceRunJournal.entries.filter(e=>e.compromised===row.compromised);
+  const j=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"].indexOf(row.method);
+  assert.ok(j>=0);
+  const samples=source.map(e=>{
+   const estimate=e.methodEstimates[j];
+   if(Math.abs(estimate)<config.threshold)return config.costRefuse;
+   return Math.sign(estimate)===e.truth?0:config.costWrong;
+  });
+  const expectedMean=samples.reduce((a,b)=>a+b,0)/samples.length;
+  const variance=samples.reduce((a,b)=>a+(b-expectedMean)**2,0)/(samples.length-1);
+  const halfWidth=1.959963984540054*Math.sqrt(variance/samples.length);
+  assert.ok(Math.abs(row.risk-expectedMean)<1e-10);
+  assert.ok(Math.abs(row.riskCI95Low-(expectedMean-halfWidth))<1e-10);
+  assert.ok(Math.abs(row.riskCI95High-(expectedMean+halfWidth))<1e-10);
+ }
+ const repeated=executeStudy("misinformation",config);
+ assert.deepEqual(result.pairedEffects,repeated.pairedEffects);
+});
