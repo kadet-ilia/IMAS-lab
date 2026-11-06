@@ -139,7 +139,7 @@ async function runUnlocked(id,config,key,onProgress,options){
       next=state.nextScenario;
       const snapshot={schemaVersion:RESEARCH_STORAGE_SCHEMA,modelVersion:RESEARCH_MODEL_VERSION,
        checkpointSchema:RESEARCH_CHECKPOINT_SCHEMA,key,state};
-      job.saveChain=job.saveChain.then(()=>access("checkpoint:"+key,snapshot));
+      job.saveChain=job.saveChain.then(()=>access("checkpoint:"+key,snapshot,true));
       job.saveChain.then(()=>{
        if(job.stopRequested||job.done)return;
        try{progress();if(!job.stopRequested&&!job.done)worker.postMessage({type:"continue",nextScenario:state.nextScenario});}
@@ -154,8 +154,8 @@ async function runUnlocked(id,config,key,onProgress,options){
      void(async()=>{
       try{
        await job.saveChain;
-       await access("complete:"+key,data.result);
-       await access("checkpoint:"+key,null);
+       await access("complete:"+key,data.result,true);
+       await access("checkpoint:"+key,null,true);
        job.done=true;
        resolveJob({state:"completed",result:data.result,cache_hit:false,resumed_units:checkpoint?.nextScenario||0});
       }catch(error){job.done=true;rejectJob(error);}
