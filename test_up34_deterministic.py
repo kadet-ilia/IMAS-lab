@@ -335,6 +335,7 @@ def reconstruct_no_network_trust_trace(result):
     decisions={name:[] for name in
                ("arithmetic_mean","trust_weighted_mean","proposed_robust")}
     expected_isolations=[]
+    expected_attempted=0
     for t in range(c["n_steps"]):
         step=t+1
         records=journal[step]["proposal"]
@@ -414,10 +415,11 @@ def reconstruct_no_network_trust_trace(result):
                         isolated_at[i]=step
                     if byzantine[i] and step>=c["attack_start_step"] and detection_at[i] is None:
                         detection_at[i]=step
-                    expected_isolations.append((step,i+1,after[i]))
+                    expected_isolations.append((step,i+1,after[i],low[i]))
                     active[i]=False
                     cooldown_until[i]=t+c["isolation_cooldown_steps"]
         tick=result["series"][t]
+        expected_attempted+=len(indices)+len(indices)**2
         check_close(tick["active_agents"],sum(running[i] and active[i] for i in range(n)),
                     f"E1.active_agents.tick{step}")
         check_close(tick["isolated_agents"],sum(eligible[i] and not active[i] for i in range(n)),
@@ -429,9 +431,8 @@ def reconstruct_no_network_trust_trace(result):
         onoff=((step-c["attack_start_step"])%c["on_off_period"]<
                 c["on_off_attack_steps"])
         active_attack=step>=c["attack_start_step"] and (
-            result["summary"].get("scenario","")!="on_off" or onoff)
-        # The scenario is included in the source-event metadata, if supplied.
-        # The attack flag is otherwise tested separately in JS schedule tests.
+            result["scenario"]!="on_off" or onoff)
+        check_close(tick["attack_active"],int(active_attack),f"E1.attack_active.tick{step}")
         reputation=[x for x in result["reputation"] if x["step"]==step]
         assert len(reputation)==n
         states=[x for x in result["states"] if x["step"]==step]
@@ -448,9 +449,11 @@ def reconstruct_no_network_trust_trace(result):
                             "byzantine" if byzantine[i] else "honest")
             assert states[i]["agent"]==i+1 and states[i]["state"]==expected_state
     assert len(result["events"])==len(expected_isolations)
-    for actual,(step,agent,score) in zip(result["events"],expected_isolations):
+    for actual,(step,agent,score,confirmations) in zip(result["events"],expected_isolations):
         assert actual["step"]==step and actual["agent"]==agent
         check_close(actual["isolationScore"],score,f"E1.isolation{agent}.{step}")
+        assert actual["confirmations"]==confirmations
+        assert actual["reason"]=="local_post_evidence_below_threshold"
     bad_count=sum(byzantine)
     detected=[v for v in detection_at if v is not None]
     summary=result["summary"]
@@ -462,6 +465,21 @@ def reconstruct_no_network_trust_trace(result):
     check_close(summary["preserved_functionality"],
                 sum(active[i] and not byzantine[i] for i in range(n))/max(1,n-bad_count),
                 "E1.summary.preserved_functionality")
+    premature=sum(byzantine[i] and isolated_at[i] is not None and
+                  isolated_at[i]<c["attack_start_step"] for i in range(n))
+    false_isolations=sum(not byzantine[i] and isolated_at[i] is not None
+                         for i in range(n))+premature
+    check_close(summary["premature_byzantine_isolations"],premature,
+                "E1.summary.premature_isolations")
+    check_close(summary["false_isolations"],false_isolations,
+                "E1.summary.false_isolations")
+    check_close(summary["communication_attempted"],expected_attempted,
+                "E1.summary.communication_attempted")
+    check_close(summary["communication_delivered"],expected_attempted,
+                "E1.summary.communication_delivered")
+    check_close(summary["communication_lost"],0,"E1.summary.communication_lost")
+    check_close(summary["communication_queued"],0,"E1.summary.communication_queued")
+    check_close(summary["message_balance"],0,"E1.summary.message_balance")
     for row in result["rows"]:
         xs=decisions[row["method"]]
         accepted=[x for x in xs if x is not None]
@@ -469,8 +487,13 @@ def reconstruct_no_network_trust_trace(result):
                     c["correctness_tolerance"] for x in xs)
         check_close(row["probability_correct"],correct/c["n_steps"],
                     "E1.metrics.probability_correct")
-        check_close(row["mae"],sum(abs(x-c["desired_action"]) for x in accepted)/len(accepted)
-                    if accepted else None,"E1.metrics.mae")
+        errors=[x-c["desired_action"] for x in accepted]
+        check_close(row["mae"],sum(abs(e) for e in errors)/len(errors)
+                    if errors else None,"E1.metrics.mae")
+        check_close(row["rmse"],math.sqrt(sum(e*e for e in errors)/len(errors))
+                    if errors else None,"E1.metrics.rmse")
+        check_close(row["bias"],sum(errors)/len(errors) if errors else None,
+                    "E1.metrics.bias")
 
 
 class EndToEndEventTapeReconstruction(unittest.TestCase):
