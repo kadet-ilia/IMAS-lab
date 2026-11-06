@@ -63,6 +63,77 @@ export const passportForStudy=id=>{
 };
 const approx=(a,b)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=1e-9;
 const inUnit=x=>Number.isFinite(x)&&x>=-1e-10&&x<=1+1e-10;
+/** Independently replay only source graph uniforms, without reading research2027.js. */
+function auditGraphSourceRuns(id,result,assert){
+ const journal=result.sourceRunJournal,R=journal?.runsPerScenario,N=journal?.agents;
+ const scenarios=id==="probgraph"?4:8;
+ assert(journal?.complete===true&&journal?.schemaVersion===2&&journal.studyId===id,
+  "graph journal: unsupported schema or incomplete archive");
+ assert(Number.isInteger(R)&&R>0&&Number.isInteger(N)&&N>=3&&
+  journal.scenarios===scenarios&&Array.isArray(journal.entries)&&journal.entries.length===scenarios*R,
+  "graph journal: incomplete run set");
+ if(!Array.isArray(journal?.entries)||journal.entries.length!==scenarios*R)return;
+ const pairs=Array.isArray(result.pairedRuns)?result.pairedRuns:[];
+ const seen=new Set();
+ let eventCount=0;
+ for(const record of journal.entries){
+  const scenario=id==="probgraph"?record.scenarioIndex:record.source;
+  const key=scenario+":"+record.run;
+  assert(Number.isInteger(scenario)&&scenario>=0&&scenario<scenarios&&
+   Number.isInteger(record.run)&&record.run>=0&&record.run<R&&!seen.has(key),
+   "graph journal: duplicate or invalid run");
+  seen.add(key);
+  const edges=record.edges,tapes=record.eventTape,initial=id==="probgraph"?record.initialNodes:[record.initialNode];
+  assert(Array.isArray(edges)&&Array.isArray(tapes)&&Array.isArray(initial)&&
+   initial.length>0&&initial.every(v=>Number.isInteger(v)&&v>=0&&v<N)&&
+   new Set(initial).size===initial.length,"graph journal: invalid graph/initialization");
+  if(!Array.isArray(edges)||!Array.isArray(tapes)||!Array.isArray(initial))continue;
+  const edgeSet=new Set();
+  for(const [a,b] of edges){
+   const e=a+":"+b;
+   assert(Number.isInteger(a)&&Number.isInteger(b)&&a>=0&&b>=0&&a<N&&b<N&&a!==b&&
+    !edgeSet.has(e),"graph journal: invalid or duplicate edge");
+   edgeSet.add(e);
+  }
+  assert(tapes.length===(id==="probgraph"?result.config.steps:8)&&
+   tapes.every(row=>Array.isArray(row)&&row.length===edges.length&&row.every(inUnit)),
+   "graph journal: invalid random tape");
+  if(!tapes.every(row=>Array.isArray(row)&&row.length===edges.length))continue;
+  eventCount+=edges.length*tapes.length;
+  const pair=pairs.find(x=>x.scenario===record.scenario&&x.run===record.run);
+  assert(Boolean(pair)&&Array.isArray(pair?.methods),"graph journal: missing paired result");
+  if(!pair)continue;
+  assert(pair.methods.length===record.methodDefenses?.length,
+   "graph journal: missing protection arm");
+  for(let arm=0;arm<(record.methodDefenses||[]).length;arm++){
+   const {method,defense}=record.methodDefenses[arm],actual=pair.methods[arm];
+   assert(actual?.method===method&&approx(actual?.defense,defense),
+    "graph journal: protection arm changed");
+   const infection=new Set(initial);
+   const p=Math.min(1,Math.max(0,(id==="probgraph"?result.config.spread*record.scenarioMultiplier:result.config.spread)*(1-defense)));
+   for(const uniforms of tapes){
+    const newNodes=[];
+    for(let edge=0;edge<edges.length;edge++){
+     const [from,to]=edges[edge];
+     if(infection.has(from)&&!infection.has(to)&&uniforms[edge]<p)newNodes.push(to);
+    }
+    for(const node of newNodes)infection.add(node);
+   }
+   if(id==="probgraph"){
+    const fraction=infection.size/N,danger=Number(fraction>=result.config.criticalFraction);
+    assert(actual.infectedCount===infection.size&&approx(actual.finalFraction,fraction)&&
+     actual.danger===danger,"E3 journal: result disagrees with source propagation");
+   }else{
+    const loss=[...infection].reduce((n,v)=>n+record.impactWeights[v],0);
+    const danger=Number(loss>=record.criticalDamage);
+    assert(actual.affectedCount===infection.size&&approx(actual.loss,loss)&&
+     actual.danger===danger,"E5 journal: result disagrees with source cascade");
+   }
+  }
+ }
+ assert(seen.size===scenarios*R&&journal.edgeEventCount===eventCount&&eventCount<=journal.eventLimit,
+  "graph journal: incomplete or truncated stochastic events");
+}
 export function auditResultMetrics(id,result){
  const issues=[],rows=result?.rows||[];
  const assert=(test,description)=>{if(!test)issues.push(description);};
@@ -134,6 +205,8 @@ export function auditResultMetrics(id,result){
   }
  }else throw Error("Неизвестная модель: "+id);
  if(result?.sourceRunJournal){
+  if(id==="probgraph"||id==="cascade")auditGraphSourceRuns(id,result,assert);
+  else{
   const j=result.sourceRunJournal,R=j.runsPerScenario,N=j.agents;
   assert(j.complete===true&&j.schemaVersion===1&&j.studyId===id&&j.scenarios===4,
    "source journal: incompatible or incomplete manifest");
@@ -189,6 +262,29 @@ export function auditResultMetrics(id,result){
      approx(row.meanDeviation,count.deviation/R),
      "E6 source journal: aggregate counts disagree");
    }
+  }
+  }
+ }
+ if(result?.markingJournal){
+  const j=result.markingJournal;
+  assert(id==="petri"&&j.schemaVersion===1&&j.studyId==="petri"&&j.complete===true&&
+   j.boundedByStateLimit===true&&j.verdict===result.verdict,
+   "E4 journal: invalid bounded-search manifest");
+  assert(Array.isArray(j.records)&&j.records.length===result.processed&&
+   Array.isArray(j.frontier)&&j.frontier.length===result.enqueued-result.processed,
+   "E4 journal: incomplete processed frontier");
+  if(Array.isArray(j.records)){
+   const times=Array(result.config.steps+1).fill(0);
+   for(let i=0;i<j.records.length;i++){
+    const x=j.records[i];
+    assert(x.index===i&&Number.isInteger(x.mask)&&Number.isInteger(x.isolated)&&
+     Number.isInteger(x.t)&&x.t>=0&&x.t<=result.config.steps&&
+     Array.isArray(x.successors)&&typeof x.critical==="boolean",
+     "E4 journal: invalid marking "+i);
+    if(Number.isInteger(x.t)&&x.t>=0&&x.t<times.length)times[x.t]++;
+   }
+   assert(times.every((x,i)=>x===result.statesByTime[i]),
+    "E4 journal: temporal count inconsistent");
   }
  }
  return {version:METRIC_PASSPORT_VERSION,valid:issues.length===0,checkedRows:rows.length,issues};
