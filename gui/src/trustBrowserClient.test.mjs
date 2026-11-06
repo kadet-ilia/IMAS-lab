@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {cacheKeyForPayload,runBrowserExperiment,stopBrowserExperiment,clearBrowserResults} from "./trustBrowserClient.js";
+import {cacheKeyForPayload,runBrowserExperiment,stopBrowserExperiment,clearBrowserResults,TRUST_ORIGIN_LOCK,withOriginStorageLock} from "./trustBrowserClient.js";
 import {TRUST_MODEL_VERSION,DEFAULTS,makePlan,runTask,runActionSync} from "./trustEngine.js";
 
 test("UP-04/35 every browser cache key includes current mathematical model version",()=>{
@@ -215,4 +215,75 @@ test("UP-35 rejected persistent checkpoint transactions must not report complete
   else globalThis.indexedDB=original;
  }
  assert.equal(await stopBrowserExperiment(),false);
+});
+
+
+test("UP-35 Web Locks deny overlapping work and cache clearing across independent tabs",async()=>{
+ await clearBrowserResults();
+ const previous=Object.getOwnPropertyDescriptor(globalThis,"navigator");
+ let locked=false;
+ const mock={
+  request:async(name,options,callback)=>{
+   assert.equal(name,TRUST_ORIGIN_LOCK);
+   assert.equal(options.mode,"exclusive");
+   assert.equal(options.ifAvailable,true);
+   if(locked)return callback(null);
+   locked=true;
+   try{return await callback({name,mode:"exclusive"});}
+   finally{locked=false;}
+  }
+ };
+ let release;
+ const hold=new Promise(resolve=>{release=resolve;});
+ try{
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{locks:mock}});
+  let acquired;
+  const ready=new Promise(resolve=>{acquired=resolve;});
+  const first=withOriginStorageLock(async()=>{acquired();await hold;});
+  await ready;
+  const payload=ablationPayload();
+  payload.config.seed=333331;
+  await assert.rejects(runBrowserExperiment(payload,()=>{},{
+   workerFactory:fakeWorkerFactory()
+  }),/другой вкладке/);
+  await assert.rejects(clearBrowserResults(),/другой вкладке/);
+  release();await first;
+  const result=await runBrowserExperiment(payload,()=>{},{
+   workerFactory:fakeWorkerFactory({delayMs:1})
+  });
+  assert.equal(result.state,"completed");
+  assert.equal(locked,false);
+ }finally{
+  release?.();
+  if(previous)Object.defineProperty(globalThis,"navigator",previous);
+  else delete globalThis.navigator;
+ }
+});
+
+test("UP-35 origin lock always releases after rejection so later jobs can start",async()=>{
+ await clearBrowserResults();
+ const previous=Object.getOwnPropertyDescriptor(globalThis,"navigator");
+ let busy=false;
+ try{
+  Object.defineProperty(globalThis,"navigator",{configurable:true,value:{locks:{
+   request:async(_name,_options,callback)=>{
+    if(busy)return callback(null);
+    busy=true;
+    try{return await callback({name:TRUST_ORIGIN_LOCK});}
+    finally{busy=false;}
+   }
+  }}});
+  await assert.rejects(withOriginStorageLock(async()=>{throw Error("deliberate failure");}),/deliberate failure/);
+  assert.equal(busy,false);
+  const payload=ablationPayload();
+  payload.config.seed=333332;
+  const value=await runBrowserExperiment(payload,()=>{},{
+   workerFactory:fakeWorkerFactory({delayMs:1})
+  });
+  assert.equal(value.state,"completed");
+  assert.equal(busy,false);
+ }finally{
+  if(previous)Object.defineProperty(globalThis,"navigator",previous);
+  else delete globalThis.navigator;
+ }
 });
