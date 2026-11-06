@@ -306,5 +306,200 @@ class IndependentCrossLanguageParity(unittest.TestCase):
                 check_close(actual,expected,path=f'{case["type"]}#{number}')
 
 
+
+def reconstruct_no_network_trust_trace(result):
+    """Independent E1 step-level oracle reading ONLY recorded source events.
+
+    The original Python simulator is not called: it has different transport
+    and failure semantics. Values in the source-event log are exogenous inputs,
+    not precomputed decisions or reputations.
+    """
+    c=result["configuration"]
+    assert c["network_enabled"] is False
+    n=c["n_agents"]+c["n_sybil_agents"]
+    sybil=[i>=c["n_agents"] for i in range(n)]
+    log=result["sourceEvents"]
+    journal={t:{"proposal":[],"evidence":[]} for t in range(1,c["n_steps"]+1)}
+    for event in log:
+        if event["kind"]=="proposal_generated":
+            journal[event["step"]]["proposal"].append(event)
+        elif event["kind"]=="evidence":
+            journal[event["step"]]["evidence"].append(event)
+    byzantine=[None]*n
+    active=[not s for s in sybil]
+    cooldown_until=[-1]*n
+    isolated_at=[None]*n
+    detection_at=[None]*n
+    low=[0]*n
+    hist=[]
+    decisions={name:[] for name in
+               ("arithmetic_mean","trust_weighted_mean","proposed_robust")}
+    expected_isolations=[]
+    for t in range(c["n_steps"]):
+        step=t+1
+        records=journal[step]["proposal"]
+        assert len(records)==n and len(set(item["source"] for item in records))==n
+        prop=[None]*n
+        recorded_running=[False]*n
+        for item in records:
+            i=item["source"]-1
+            prop[i]=item["value"]
+            recorded_running[i]=item["active"]
+            if byzantine[i] is None:
+                byzantine[i]=item["byzantine"]
+            else:
+                assert byzantine[i]==item["byzantine"]
+            assert item["sybil"]==sybil[i]
+        eligible=[not sybil[i] or step>=c["sybil_activation_step"] for i in range(n)]
+        for i in range(n):
+            if (not active[i] and eligible[i] and
+                ((sybil[i] and cooldown_until[i]<0) or
+                 (cooldown_until[i]>=0 and cooldown_until[i]<t))):
+                active[i]=True
+                low[i]=0
+        running=[active[i] and eligible[i] for i in range(n)]
+        assert running==recorded_running,(step,running,recorded_running)
+        indices=[i for i in range(n) if running[i]]
+        if hist:
+            direct=beta_reference({"history":hist,"prior":c["initial_trust"],
+                                   "strength":c["trust_prior_strength"],
+                                   "forgetting":c["forgetting_factor"]})
+        else:
+            direct=[[c["initial_trust"]]*n for _ in range(n)]
+        local=[c["initial_trust"]]*n
+        for j in indices:
+            local[j]=quantile([direct[i][j] for i in indices],.5)
+        eigen=eigen_reference({"matrix":direct,"active":running,
+                               "damping":c["reputation_damping"]})
+        rep=[.7*local[i]+.3*eigen[i] for i in range(n)]
+        values=[prop[i] for i in indices]
+        weights=[max(rep[i],c["minimum_weight"]) for i in indices]
+        if values:
+            average=sum(values)/len(values)
+            weighted=sum(x*w for x,w in zip(values,weights))/sum(weights)
+            center=quantile(values,.5)
+            clipped=[max(center-c["clip_radius"],
+                         min(center+c["clip_radius"],x)) for x in values]
+            robust=trim_reference({"values":clipped,"weights":weights,
+                                   "k":c["trim_each_side"]})
+            robust=min(c["safe_action_max"],max(c["safe_action_min"],robust))
+            tick_results={"arithmetic_mean":average,"trust_weighted_mean":weighted,
+                          "proposed_robust":robust}
+        else:
+            tick_results={key:None for key in decisions}
+        for method,value in tick_results.items():
+            decisions[method].append(value)
+            check_close(result["series"][t][method],value,f"E1.{method}.tick{step}")
+        evidence=[[None]*n for _ in range(n)]
+        for event in journal[step]["evidence"]:
+            i,j=event["observer"]-1,event["target"]-1
+            assert running[i] and running[j]
+            assert event["status"]=="delivered"
+            evidence[i][j]=event["value"]
+        assert len(journal[step]["evidence"])==len(indices)**2
+        hist.append(evidence)
+        if len(hist)>c["trust_window_steps"]:
+            hist.pop(0)
+        updated=beta_reference({"history":hist,"prior":c["initial_trust"],
+                                "strength":c["trust_prior_strength"],
+                                "forgetting":c["forgetting_factor"]})
+        after=[c["initial_trust"]]*n
+        for j in indices:
+            after[j]=quantile([updated[i][j] for i in indices],.5)
+        if c["isolation_enabled"] and step>=c["minimum_evidence_steps"]:
+            for i in range(n):
+                low[i]=low[i]+1 if running[i] and after[i]<c["isolation_threshold"] else 0
+                if running[i] and low[i]>=c["isolation_patience"]:
+                    if isolated_at[i] is None:
+                        isolated_at[i]=step
+                    if byzantine[i] and step>=c["attack_start_step"] and detection_at[i] is None:
+                        detection_at[i]=step
+                    expected_isolations.append((step,i+1,after[i]))
+                    active[i]=False
+                    cooldown_until[i]=t+c["isolation_cooldown_steps"]
+        tick=result["series"][t]
+        check_close(tick["active_agents"],sum(running[i] and active[i] for i in range(n)),
+                    f"E1.active_agents.tick{step}")
+        check_close(tick["isolated_agents"],sum(eligible[i] and not active[i] for i in range(n)),
+                    f"E1.isolated_agents.tick{step}")
+        check_close(tick["available_agents"],len(indices),f"E1.available_agents.tick{step}")
+        check_close(tick["messages_delivered"],len(indices)+len(indices)**2,
+                    f"E1.messages_delivered.tick{step}")
+        check_close(tick["messages_lost"],0,f"E1.messages_lost.tick{step}")
+        onoff=((step-c["attack_start_step"])%c["on_off_period"]<
+                c["on_off_attack_steps"])
+        active_attack=step>=c["attack_start_step"] and (
+            result["summary"].get("scenario","")!="on_off" or onoff)
+        # The scenario is included in the source-event metadata, if supplied.
+        # The attack flag is otherwise tested separately in JS schedule tests.
+        reputation=[x for x in result["reputation"] if x["step"]==step]
+        assert len(reputation)==n
+        states=[x for x in result["states"] if x["step"]==step]
+        assert len(states)==n
+        for i,row in enumerate(reputation):
+            assert row["agent"]==i+1
+            for field,value in (("localTrust",local[i]),("eigenReputation",eigen[i]),
+                                ("reputation",rep[i]),("isolationScore",after[i])):
+                check_close(row[field],value,f"E1.agent{i+1}.tick{step}.{field}")
+            assert row["active"]==active[i]
+            expected_state=("dormant" if sybil[i] and not eligible[i] else
+                            "isolated" if not active[i] else
+                            "sybil" if sybil[i] else
+                            "byzantine" if byzantine[i] else "honest")
+            assert states[i]["agent"]==i+1 and states[i]["state"]==expected_state
+    assert len(result["events"])==len(expected_isolations)
+    for actual,(step,agent,score) in zip(result["events"],expected_isolations):
+        assert actual["step"]==step and actual["agent"]==agent
+        check_close(actual["isolationScore"],score,f"E1.isolation{agent}.{step}")
+    bad_count=sum(byzantine)
+    detected=[v for v in detection_at if v is not None]
+    summary=result["summary"]
+    check_close(summary["detection_rate"],len(detected)/max(1,bad_count),
+                "E1.summary.detection_rate")
+    check_close(summary["mean_detection_delay_steps"],
+                (sum(v-c["attack_start_step"] for v in detected)/len(detected)
+                 if detected else None),"E1.summary.mean_detection_delay_steps")
+    check_close(summary["preserved_functionality"],
+                sum(active[i] and not byzantine[i] for i in range(n))/max(1,n-bad_count),
+                "E1.summary.preserved_functionality")
+    for row in result["rows"]:
+        xs=decisions[row["method"]]
+        accepted=[x for x in xs if x is not None]
+        correct=sum(x is not None and abs(x-c["desired_action"])<=
+                    c["correctness_tolerance"] for x in xs)
+        check_close(row["probability_correct"],correct/c["n_steps"],
+                    "E1.metrics.probability_correct")
+        check_close(row["mae"],sum(abs(x-c["desired_action"]) for x in accepted)/len(accepted)
+                    if accepted else None,"E1.metrics.mae")
+
+
+class EndToEndEventTapeReconstruction(unittest.TestCase):
+    def test_e1_full_step_reconstruction_of_reputation_decision_and_isolation(self):
+        common={"n_agents":7,"n_byzantine":2,"n_sybil_agents":1,
+                "sybil_activation_step":4,"trim_each_side":2,
+                "n_steps":17,"attack_start_step":4,"on_off_period":5,
+                "on_off_attack_steps":2,"source_event_limit":25000,
+                "network_enabled":False,"minimum_evidence_steps":2,
+                "isolation_cooldown_steps":3}
+        cases=[
+            {"type":"trust_trace","scenario":"on_off","runIndex":0,
+             "config":{**common,"seed":20261106,"isolation_enabled":False}},
+            {"type":"trust_trace","scenario":"on_off","runIndex":1,
+             "config":{**common,"seed":20261107,"isolation_enabled":True,
+                       "isolation_threshold":.8,"isolation_patience":1}},
+            {"type":"trust_trace","scenario":"static_bias","runIndex":3,
+             "config":{**common,"seed":20261108,"isolation_enabled":True,
+                       "isolation_threshold":.4,"isolation_patience":2}}
+        ]
+        output=subprocess.run(["node",str(BRIDGE)],input=json.dumps({"cases":cases}),
+                              cwd=ROOT,capture_output=True,text=True,timeout=90)
+        self.assertEqual(output.returncode,0,output.stderr[-4000:])
+        data=json.loads(output.stdout)
+        for idx,item in enumerate(data["results"]):
+            with self.subTest(scenario=idx):
+                reconstruct_no_network_trust_trace(item)
+
+
+
 if __name__=="__main__":
     unittest.main()
