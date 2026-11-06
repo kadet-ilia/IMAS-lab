@@ -139,6 +139,17 @@ await inputT.fill("300");await inputT.press("Tab");
 if((await inputT.inputValue())!=="300"||(await inputAttack.inputValue())!==initialAttack)
  throw Error("UP-02: editing T silently rewrote attack_start_step");
 await inputT.fill("200");await inputT.press("Tab");
+// NZ-10: invalid numeric input must show a durable error and preserve old value.
+await inputN.fill("7.5");await inputN.press("Tab");
+await page.locator(".imas-validation-error").getByText("Недопустимое значение N", {exact:false}).waitFor();
+if((await inputN.inputValue())!=="50")throw Error("NZ-10: fractional N committed");
+if(!(await page.locator(".imas-validation-error").count()))throw Error("NZ-10: validation error lost on blur");
+await inputN.fill("13");await inputN.press("Escape");
+if((await inputN.inputValue())!=="50")throw Error("NZ-10: Escape committed discarded value");
+if((await page.locator(".imas-validation-error").count()))throw Error("NZ-10: stale error after Escape");
+await inputN.fill("16");await inputN.press("Enter");
+if((await inputN.inputValue())!=="16")throw Error("NZ-10: Enter did not commit valid N");
+await inputN.fill("50");await inputN.press("Tab");
 
 
 
