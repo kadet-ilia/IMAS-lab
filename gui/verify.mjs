@@ -524,6 +524,47 @@ for(const [studyId,name,N] of [
   schema:exported.journal.schemaVersion,modelVersion:exported.modelVersion};
 }
 
+// NZ-15: browser exports the complete paired source graph tapes for E3/E5
+// and the bounded BFS marking journal for E4 (not a display-only mock).
+report.graphSourceArchives={};
+for(const [studyId,id,mult] of [
+ ["study-probgraph","probgraph",4],["study-cascade","cascade",8]
+]){
+ await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption(studyId);
+ await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("3");
+ const advanced=page.locator("aside.r27-unified-settings details.advanced").first();
+ await advanced.locator("summary").click();
+ await page.getByRole("combobox",{name:"Архивировать исходные прогоны"}).selectOption("1");
+ await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+ const button=page.locator(".r27-result-tools").getByRole("button",{name:"Скачать исходные прогоны"});
+ await button.waitFor({timeout:45000});
+ const [download]=await Promise.all([page.waitForEvent("download",{timeout:20000}),button.click()]);
+ const exported=JSON.parse(fs.readFileSync(await download.path(),"utf8"));
+ if(exported.journal?.schemaVersion!==2||exported.journal?.complete!==true||
+    exported.journal.entries?.length!==mult*3||exported.journal.studyId!==id)
+  throw Error("NZ-15 incomplete E3/E5 graph event tape: "+id);
+ if(!exported.journal.entries.every(e=>e.eventTape.length===(id==="probgraph"?exported.config.steps:8)&&
+  e.eventTape.every(t=>t.length===e.edges.length)))
+  throw Error("NZ-15 incomplete edge events in "+id);
+ report.graphSourceArchives[id]={runs:exported.journal.entries.length,
+  events:exported.journal.edgeEventCount};
+}
+await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("study-petri");
+const petriAdvanced=page.locator("aside.r27-unified-settings details.advanced").first();
+await petriAdvanced.locator("summary").click();
+await page.getByRole("combobox",{name:"Полный журнал маркировок"}).selectOption("1");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+const markingButton=page.locator(".r27-result-tools").getByRole("button",{name:"Скачать журнал маркировок"});
+await markingButton.waitFor({timeout:45000});
+const [markingsDownload]=await Promise.all([page.waitForEvent("download",{timeout:20000}),markingButton.click()]);
+const markings=JSON.parse(fs.readFileSync(await markingsDownload.path(),"utf8"));
+if(markings.journal?.studyId!=="petri"||!markings.journal?.complete||
+   !markings.journal.records?.length||
+   markings.journal.records.length!==markings.journal.processed)
+ throw Error("NZ-15 invalid E4 bounded-search evidence");
+report.markingSourceArchive={processed:markings.journal.processed,enqueued:markings.journal.enqueued,
+ verdict:markings.journal.verdict};
+
 // UP-35: exercise the full Vite/React → Worker pool → four-arm ablation
 // route, not merely the mode dropdown. Keep the run deliberately small.
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
