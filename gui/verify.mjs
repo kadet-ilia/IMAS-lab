@@ -162,7 +162,7 @@ async function pageChromeSnapshot(){
   const heading=content?.querySelector(":scope > header.imas-experiment-heading");
   const progress=content?.querySelector(":scope > .progress-strip");
   const overview=content?.querySelector(":scope > .trust-overview-grid")||
-    content?.querySelector(":scope > .r27-topology-full");
+    content?.querySelector(":scope > .r27-study-topline > .r27-topology-full");
   const topology=overview?.querySelector(":scope > section.r27-replay");
   const summary=overview?.querySelector(":scope > section.panel")||
     content?.querySelector(":scope > section.r27-summary-panel");
@@ -236,8 +236,9 @@ if((await page.locator('main[data-study="trust"] > .imas-experiment-heading > h2
 async function assertNavButtonsEqual(section){
  const help=await page.locator(".r27-experiment-navigation .r27-nav-right").boundingBox();
  const svg=await page.locator(".r27-experiment-navigation .r27-export-control").boundingBox();
- if(!help || !svg || Math.abs(help.width-svg.width)>1 || Math.abs(help.height-svg.height)>1){
-  throw Error(section+": Help and SVG buttons differ: "+JSON.stringify({help,svg}));
+ if(!help || !svg || Math.abs(help.width-85)>1 || Math.abs(help.height-35)>1 ||
+    Math.abs(svg.width-85)>1 || Math.abs(svg.height-35)>1){
+  throw Error(section+": Help and SVG buttons must both be 85×35 px: "+JSON.stringify({help,svg}));
  }
 }
 await assertNavButtonsEqual("Расчет доверия");
@@ -380,7 +381,7 @@ for (let i=0; i<researchTabs.length; i++) {
   if(surface.overflowY!=="auto" || surface.nested!==0 || surface.panelCount<1){
     throw Error(researchTabs[i]+": research layout must share the trust content scroller and independent panels: "+JSON.stringify(surface));
   }
-  const researchOverview=researchMain.locator(":scope > .r27-topology-full");
+  const researchOverview=researchMain.locator(":scope > .r27-study-topline > .r27-topology-full");
   if((await researchOverview.locator(":scope > .r27-replay-compact").count())!==1||
      (await researchMain.locator(":scope > section.panel.r27-summary-panel").count())!==1){
     throw Error(researchTabs[i]+": missing topology or relocated full-width summary");
@@ -424,19 +425,19 @@ const metricPassportRows=await passportPanel.locator("tbody tr").count();
 if(metricPassportRows!==5)throw Error("UP-04: expected five executable metric passports for E2, got "+metricPassportRows);
 const passportStatus=await passportPanel.innerText();
 if(!passportStatus.includes("пройден"))throw Error("UP-04: accounting audit did not pass for E2");
-const comparisonGrid=page.locator(".r27-study-comparison-grid");
-const plotBox=await comparisonGrid.locator(":scope > .r27-comparison-panel").boundingBox();
+const comparisonGrid=page.locator(".r27-study-topline");
+const plotBox=await comparisonGrid.locator(":scope > .r27-topology-full").boundingBox();
 const matrixBox=await comparisonGrid.locator(":scope > .r27-comparison-matrix").boundingBox();
 if(!plotBox||!matrixBox||Math.abs(plotBox.width-matrixBox.width)>3||Math.abs(plotBox.y-matrixBox.y)>3||
    Math.abs(matrixBox.x-(plotBox.x+plotBox.width+12))>5)
  throw Error("UI-E2: chart and scenario matrix must be equal-width adjacent panels: "+JSON.stringify({plotBox,matrixBox}));
 if((await page.locator(".r27-comparison-matrix").count())!==1)throw Error("UI-E2: duplicate comparison matrix");
-const summaryBeforePassports=await page.locator("main[data-study='uncertainty']").evaluate(el=>{
+const summaryAfterStudySummary=await page.locator("main[data-study='uncertainty']").evaluate(el=>{
  const summary=el.querySelector(":scope > .r27-summary-panel");
- const passport=[...el.querySelectorAll(":scope > section.panel")].find(x=>x.querySelector("h2")?.textContent==="Паспорта ключевых показателей");
- return Boolean(summary&&passport&&summary.nextElementSibling===passport);
+ const study=el.querySelector(":scope > .r27-study-summary");
+ return Boolean(summary&&study&&study.nextElementSibling===summary);
 });
-if(!summaryBeforePassports)throw Error("UI-E2: summary must immediately precede metric passports");
+if(!summaryAfterStudySummary)throw Error("UI-E2: summary must immediately follow study summary");
 
 if((await page.locator(".r27-analytics > section.panel.r27-panel").count())<2)throw Error("Research study diagrams must use the shared panel component");
 const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
@@ -447,6 +448,9 @@ await page.getByRole("heading", { name: "Единая справка по экс
 if((await page.locator(".r27-module-article").count())!==6)throw Error("Missing exactly six experiment manual articles");
 if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
 if((await page.locator(".r27-doc-simple").count())!==6)throw Error("UI-help: all six plain-language guides must appear");
+if((await page.locator(".r27-experiment-navigation .r27-manual-return").count())!==1 ||
+   (await page.locator(".r27-manual-body .r27-manual-return").count())!==0)
+ throw Error("UI-help: return button must be inside navigation, not help body");
 await page.getByRole("button",{name:"Вернуться к экспериментам"}).click();
 if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue())!=="study-uncertainty")
  throw Error("UI-help: return did not restore the last experiment");
@@ -457,7 +461,7 @@ await page.getByRole("heading",{name:"Единая справка по эксп�
 const report = {
   title: await page.title(),
   researchComparisonEqualWidth:true,
-  researchSummaryBeforePassports:true,
+  researchSummaryAfterStudySummary:true,
   helpReturnToExperiment:true,
   helpSimpleExplanations:6,
   url: page.url(),
@@ -505,13 +509,17 @@ for(const [studyId,name] of [
  if(name==="cascade"&&result.replay.frames.at(-1).value!==result.pairedRuns[0].methods[0].loss)
   throw Error("NZ-11: cascade replay does not reproduce baseline paired loss");
  if(name!=="petri"){
-  const widths=await page.locator(".r27-study-comparison-grid").evaluate(grid=>[...grid.children].map(x=>x.getBoundingClientRect().width));
+  const widths=await page.locator(".r27-study-topline").evaluate(grid=>[...grid.children].map(x=>x.getBoundingClientRect().width));
   if(widths.length!==2||Math.abs(widths[0]-widths[1])>3)
    throw Error("UI: unequal graph and matrix widths for "+name+": "+JSON.stringify(widths));
   if((await page.locator("main[data-study='"+name+"'] > section.r27-summary-panel").count())!==1)
    throw Error("UI: relocated summary absent for "+name);
+  const positioned=await page.locator("main[data-study='"+name+"']").evaluate(el=>
+   el.querySelector(":scope > .r27-study-summary")?.nextElementSibling===
+   el.querySelector(":scope > .r27-summary-panel"));
+  if(!positioned)throw Error("UI: summary must follow study summary for "+name);
  }else{
-  if((await page.locator(".r27-study-comparison-grid").count())!==0)
+  if((await page.locator(".r27-study-topline .r27-comparison-matrix").count())!==0)
    throw Error("E4 must not invent a probabilistic comparison matrix");
   const widths=await page.locator(".r27-analytics").evaluate(root=>[...root.children].slice(0,2).map(x=>x.getBoundingClientRect().width));
   if(widths.length!==2||Math.abs(widths[0]-widths[1])>3)
