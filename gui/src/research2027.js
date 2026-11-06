@@ -17,7 +17,8 @@ export const STUDY_DEFS = [
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const avg=x=>x.length?x.reduce((a,b)=>a+b,0)/x.length:0;
 const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=(z.length-1)*q;const lo=Math.floor(h);return z[lo]+(z[Math.min(z.length-1,lo+1)]-z[lo])*(h-lo);};
-export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}};}
+export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
+ getState:()=>state>>>0,restore:old=>{if(!Number.isInteger(old)||old<1||old>4294967295)throw Error("Некорректная контрольная точка ГПСЧ");state=old>>>0;}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
 export const RESEARCH_MODEL_VERSION="research-2027-2.7.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
@@ -65,9 +66,11 @@ const scenarioSettings=[
  {name:"Противоречивые данные",noise:1.8,missing:0.7,delay:0.2},
  {name:"Несвоевременные сообщения",noise:1.2,missing:0.9,delay:0.55}
 ];
-export function runUncertainty(c){
- const r=rng(c.seed);const rows=[],samples=[],oracleBenchmark=[];const names=["Знак среднего","Робастное согласование","Оценка по наблюдаемым признакам"];
- for(const s of scenarioSettings){const missingProbability=clamp(c.loss*s.missing,0,1);const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
+export function runUncertainty(c,checkpoint=null){
+ const r=rng(c.seed);if(checkpoint?.randomState!==undefined)r.restore(checkpoint.randomState);
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],samples=[],oracleBenchmark=checkpoint?.oracleBenchmark?[...checkpoint.oracleBenchmark]:[];
+ const names=["Знак среднего","Робастное согласование","Оценка по наблюдаемым признакам"];
+ for(let scenarioIndex=checkpoint?.nextScenario??0;scenarioIndex<scenarioSettings.length;scenarioIndex++){const s=scenarioSettings[scenarioIndex];const missingProbability=clamp(c.loss*s.missing,0,1);const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
   const truth=r.random()<.5?-1:1;const obs=[];
   for(let i=0;i<c.agents;i++){if(r.random()<missingProbability)continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,oracleWeight:reliability,d:stale?3:1});}
   const values=obs.map(o=>o.x).sort((a,b)=>a-b);const trim=Math.min(Math.floor(values.length*.16),Math.floor((values.length-1)/2));
@@ -92,7 +95,10 @@ export function runUncertainty(c){
    meanObservationAge:m.accepted?m.delay/m.accepted:null};
   rows.push(row);samples.push(row);
  });
- oracleBenchmark.push({scenario:s.name,effectiveMissingProbability:missingProbability,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});}
+ oracleBenchmark.push({scenario:s.name,effectiveMissingProbability:missingProbability,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});
+  if(checkpoint&&scenarioIndex<scenarioSettings.length-1)
+   return {__checkpoint:{nextScenario:scenarioIndex+1,randomState:r.getState(),rows,oracleBenchmark}};
+ }
  return {rows,oracleBenchmark,summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
 export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
@@ -108,11 +114,15 @@ export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
  }
  return {infected,history};
 }
-export function runProbGraph(c){
+export function runProbGraph(c,checkpoint=null){
  const modes=[["Без дополнительного снижения",0],["Снижение вероятности распространения (η=0,38)",.38],["Снижение вероятности распространения (η=0,68)",.68]];
  const scenarios=[["Компрометация источника",.8,1],["Подмена межагентных сообщений",1.2,1],["Компрометация координатора",1.35,2],["Согласованная атака",1.25,3]];
- const rows=[],pairedRuns=[],pairedEffects=[];let replaySample=null;
- scenarios.forEach(([scenario,mult,start],scenarioIndex)=>{
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],
+ pairedRuns=checkpoint?.pairedRuns?[...checkpoint.pairedRuns]:[],
+ pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[];
+ let replaySample=checkpoint?.replaySample||null;
+ for(let scenarioIndex=checkpoint?.nextScenario??0;scenarioIndex<scenarios.length;scenarioIndex++){
+ const [scenario,mult,start]=scenarios[scenarioIndex];
   const statistics=modes.map(()=>({losses:[],events:[],trajectories:Array(c.steps+1).fill(0)}));
   for(let run=0;run<c.runs;run++){
    // Exactly the same topology, initial compromised vertices and stochastic transmission
@@ -152,7 +162,9 @@ export function runProbGraph(c){
     pRaw:p?.p??null,pHolm:null,holmReject05:null,pMethod:p?.method??null,
     paired:true,intervalMethod:ci.method,warning:"Интервал учитывает вариацию Монте-Карло и не скорректирован на множественные сравнения. p-значения корректируются Холмом."});
   }
- });
+  if(checkpoint&&scenarioIndex<scenarios.length-1)
+   return {__checkpoint:{nextScenario:scenarioIndex+1,rows,pairedRuns,pairedEffects,replaySample}};
+ }
  const tested=pairedEffects.filter(row=>row.pRaw!==null);
  const adjusted=holmAdjusted(tested.map(row=>row.pRaw));
  tested.forEach((row,i)=>{row.pHolm=adjusted[i];row.holmReject05=adjusted[i]<.05;});
@@ -191,12 +203,15 @@ export function runPetri(c){
  const rows=[{criterion:"Достижимо опасное состояние",value:truncated?"Не установлено":(reachable?"Да":"Нет")},{criterion:"Число исследованных маркировок",value:index},{criterion:"Число зарегистрированных маркировок",value:seen.size},{criterion:"Горизонт, тактов",value:T},{criterion:"Порог компрометации",value:critical},{criterion:"Стратегия изоляции",value:c.isolationPolicy===0?"Необязательная":"Приоритетная, идеализированная"},{criterion:"Превышен предел пространства состояний",value:truncated?"Да":"Нет"}];
  return {rows,verdict,processed:index,enqueued:seen.size,witness,statesByTime,edges,isolationPolicy:c.isolationPolicy,policyName:c.isolationPolicy===0?"optional_nondeterministic":"ideal_mandatory_priority",summary:"Ограниченная по времени проверка достижимости в дискретной временной раскрашенной сети Петри: метки окрашены идентификатором агента; переходы заражения, ожидания и изоляции имеют задержку один такт.",chartKey:"",chartLabel:"",limits:"Текущий формализованный подкласс использует единичную задержку переходов и один цвет токена — идентификатор агента. При превышении предела поиска результат НЕ является доказательством недостижимости. Необязательная изоляция не обязана менять EF при варьировании τ. Приоритетная политика предполагает мгновенное безошибочное обнаружение всех ранее компрометированных агентов, одновременно изолирует их и запрещает ожидание и передачу на таком такте. Она является идеализированной верхней границей управляемой защиты, а не реалистичным детектором."};
 }
-export function runCascade(c){
- const rows=[],pairedRuns=[],pairedEffects=[];let replaySample=null;
+export function runCascade(c,checkpoint=null){
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],
+ pairedRuns=checkpoint?.pairedRuns?[...checkpoint.pairedRuns]:[],
+ pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[];
+ let replaySample=checkpoint?.replaySample||null;
  const impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
  const criticalDamage=.45*impacts.reduce((a,b)=>a+b,0);
  const conditions=[["Без сдерживания",0],["Защитные меры",c.defenseFactor]];
- for(let start=0;start<c.agents;start++){
+ for(let start=checkpoint?.nextScenario??0;start<c.agents;start++){
   const scenario="Начальная компрометация A"+(start+1);
   const stats=conditions.map(()=>({losses:[],affected:[],critical:[]}));
   for(let run=0;run<c.runs;run++){
@@ -241,6 +256,8 @@ export function runCascade(c){
    pRawDamage:damageP?.p??null,pRawDanger:dangerP?.p??null,
    pHolmDamage:null,pHolmDanger:null,holmRejectDamage05:null,holmRejectDanger05:null,
    intervalMethod:damage.method,paired:true});
+  if(checkpoint&&start<c.agents-1)
+   return {__checkpoint:{nextScenario:start+1,rows,pairedRuns,pairedEffects,replaySample}};
  }
  const allTests=pairedEffects.flatMap(row=>[
   ...(row.pRawDamage===null?[]:[{row,metric:"Damage",p:row.pRawDamage}]),
