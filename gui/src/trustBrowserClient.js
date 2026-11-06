@@ -9,32 +9,56 @@ let active=null;
 
 function openStore(){
  if(typeof indexedDB==="undefined")return Promise.resolve(null);
- return new Promise(resolve=>{
-  const req=indexedDB.open(STORE,1);
-  req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains("entries"))db.createObjectStore("entries");};
+ return new Promise((resolve,reject)=>{
+  let req;
+  try{req=indexedDB.open(STORE,1);}
+  catch(error){reject(Error("Невозможно открыть IndexedDB: "+String(error)));return;}
+  req.onupgradeneeded=()=>{
+   const db=req.result;
+   if(!db.objectStoreNames.contains("entries"))db.createObjectStore("entries");
+  };
   req.onsuccess=()=>resolve(req.result);
-  req.onerror=()=>resolve(null);
-  req.onblocked=()=>resolve(null);
+  req.onerror=()=>reject(Error("Ошибка открытия IndexedDB: "+(req.error?.message||"неизвестная причина")));
+  req.onblocked=()=>reject(Error("IndexedDB заблокирована другой вкладкой"));
  });
 }
 async function storage(key,value){
  const read=arguments.length===1;
  if(read&&memory.has(key))return memory.get(key);
  const db=await openStore();
- if(!read)memory.set(key,value);
- if(!db)return read?memory.get(key):undefined;
- return new Promise(resolve=>{
+ // Memory-only operation is explicit only where the IndexedDB API is absent
+ // (e.g. Node-based tests). If an existing browser IDB is unavailable or its
+ // transaction aborts, reject instead of claiming that an unsaved checkpoint
+ // or final result has been persisted.
+ if(!db){
+  if(!read)memory.set(key,value);
+  return read?memory.get(key):undefined;
+ }
+ return new Promise((resolve,reject)=>{
   let tx,req,settled=false;
-  const done=v=>{if(settled)return;settled=true;db.close();resolve(v);};
+  const close=()=>{try{db.close();}catch{}};
+  const success=v=>{
+   if(settled)return;settled=true;
+   if(read){
+    if(v===undefined)memory.delete(key);
+    else memory.set(key,v);
+   }else memory.set(key,value);
+   close();resolve(v);
+  };
+  const failure=error=>{
+   if(settled)return;settled=true;close();
+   reject(Error("Транзакция IndexedDB не завершена: "+(error?.message||"неизвестная причина")));
+  };
   try{
    tx=db.transaction("entries",read?"readonly":"readwrite");
    req=read?tx.objectStore("entries").get(key):tx.objectStore("entries").put(value,key);
-   if(read){req.onsuccess=()=>done(req.result);}
-   else tx.oncomplete=()=>done(undefined); // Wait for durable commit, not just request success.
-   tx.onerror=()=>done(read?memory.get(key):undefined);
-   tx.onabort=()=>done(read?memory.get(key):undefined);
-   req.onerror=()=>done(read?memory.get(key):undefined);
-  }catch{done(read?memory.get(key):undefined);}
+   // A write is considered saved only after readwrite transaction commit.
+   if(read)req.onsuccess=()=>success(req.result);
+   else tx.oncomplete=()=>success(undefined);
+   tx.onerror=()=>failure(tx.error||req.error);
+   tx.onabort=()=>failure(tx.error||req.error);
+   req.onerror=()=>failure(req.error);
+  }catch(error){failure(error);}
  });
 }
 export const cacheKeyForPayload=p=>JSON.stringify({
@@ -182,12 +206,21 @@ export async function stopBrowserExperiment(){
 }
 export async function clearBrowserResults(){
  if(active)throw Error("Нельзя очищать результаты во время вычислений");
- memory.clear();const db=await openStore();if(!db)return;
- await new Promise(resolve=>{
-  const tx=db.transaction("entries","readwrite");
-  tx.objectStore("entries").clear();
-  tx.oncomplete=()=>{db.close();resolve();};
-  tx.onerror=()=>{db.close();resolve();};
-  tx.onabort=()=>{db.close();resolve();};
+ // Never clear memory until persistent clearing has committed successfully.
+ const db=await openStore();if(!db){memory.clear();return;}
+ await new Promise((resolve,reject)=>{
+  let tx,settled=false;
+  const done=(error=null)=>{
+   if(settled)return;settled=true;db.close();
+   if(error)reject(Error("Не удалось очистить IndexedDB: "+(error.message||"транзакция отклонена")));
+   else{memory.clear();resolve();}
+  };
+  try{
+   tx=db.transaction("entries","readwrite");
+   tx.objectStore("entries").clear();
+   tx.oncomplete=()=>done();
+   tx.onerror=()=>done(tx.error||Error("onerror"));
+   tx.onabort=()=>done(tx.error||Error("onabort"));
+  }catch(error){done(error);}
  });
 }
