@@ -149,7 +149,8 @@ def evaluate(path: pathlib.Path | None,root: pathlib.Path) -> dict:
     if not isinstance(reviews,list) or len(reviews)<2:
         issues.append("independent-review: at least two distinct expert reports required")
     else:
-        ids=set()
+        reviewer_ids=set()
+        organizations=set()
         covered=set()
         for i,item in enumerate(reviews):
             artifact(item,root,issues,"independent-review-"+str(i))
@@ -157,14 +158,17 @@ def evaluate(path: pathlib.Path | None,root: pathlib.Path) -> dict:
                 issues.append("independent-review: malformed reviewer")
                 continue
             label=(item.get("reviewerId"),item.get("organization"))
-            if not all(isinstance(x,str) and x.strip() for x in label) or label in ids:
-                issues.append("independent-review: duplicated/unnamed reviewer or organization")
-            ids.add(label)
+            if not all(isinstance(x,str) and x.strip() for x in label) or (
+                label[0] in reviewer_ids or label[1] in organizations):
+                issues.append("independent-review: duplicate identity or no distinct organization")
+            if all(isinstance(x,str) for x in label):
+                reviewer_ids.add(label[0])
+                organizations.add(label[1])
             if item.get("declaredIndependent") is not True or not item.get("signedDocumentReference"):
                 issues.append("independent-review: independence and signed report must be declared")
             declared=item.get("studyCoverage")
             if isinstance(declared,list):
-                covered.update(declared)
+                covered.update(x for x in declared if isinstance(x,str))
         if not set(STUDIES).issubset(covered):
             issues.append("independent-review: all six studies require coverage")
     status="evidence_present_needs_independent_authentication" if not issues else "blocked_missing_independent_evidence"
