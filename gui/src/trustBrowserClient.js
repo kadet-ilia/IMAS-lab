@@ -5,6 +5,25 @@ import {makePlan,assembleResult,TRUST_MODEL_VERSION} from "./trustEngine.js";
  * checkpoint writes. All scientific results remain local to this origin.
  */
 const memory=new Map(),STORE="imas-lab-test-trust-v3-remediation";
+// The same origin stores ALL trust experiments in a single IndexedDB database.
+// Cross-tab lock covers reads, writes, checkpoints, and clearing as one atomic
+// browser-facing job. Other tabs fail fast rather than running concurrently.
+export const TRUST_ORIGIN_LOCK="imas-lab-test-trust-storage-exclusive-v1";
+export async function withOriginStorageLock(task){
+ const locks=globalThis.navigator?.locks;
+ if(locks?.request){
+  return locks.request(TRUST_ORIGIN_LOCK,{mode:"exclusive",ifAvailable:true},async lock=>{
+   if(!lock)throw Error("Другое вычисление или очистка данных выполняется в другой вкладке. Завершите её перед повторным запуском.");
+   return task();
+  });
+ }
+ // A fallback process-local lease cannot protect IndexedDB against another tab.
+ // Fail closed on browsers lacking Web Locks, but allow Node unit tests without
+ // a browser DOM to exercise pure storage orchestration.
+ if(typeof window!=="undefined")
+  throw Error("Браузер не поддерживает Web Locks: безопасная межвкладочная запись недоступна.");
+ return task();
+}
 let active=null;
 
 function openStore(){
@@ -24,7 +43,9 @@ function openStore(){
 }
 async function storage(key,value){
  const read=arguments.length===1;
- if(read&&memory.has(key))return memory.get(key);
+ // Never trust a browser tab's in-memory cache: another tab may have cleared
+ // or updated the persistent record while this tab was idle.
+ if(read&&typeof indexedDB==="undefined"&&memory.has(key))return memory.get(key);
  const db=await openStore();
  // Memory-only operation is explicit only where the IndexedDB API is absent
  // (e.g. Node-based tests). If an existing browser IDB is unavailable or its
@@ -71,7 +92,7 @@ export const isBrowserOnly=()=>true;
 const snapshot=results=>({completed:results.map((result,index)=>result===null?null:{index,result}).filter(Boolean)});
 const stoppedError=()=>Error("Расчет остановлен до получения результатов");
 
-export async function runBrowserExperiment(payload,onProgress=()=>{},options={}){
+async function runBrowserExperimentUnlocked(payload,onProgress=()=>{},options={}){
  // Reserve the lease BEFORE the first asynchronous cache read. Otherwise two
  // near-simultaneous calls can both pass the old active check.
  if(active)throw Error("Другое вычисление ещё выполняется");
@@ -195,6 +216,10 @@ export async function runBrowserExperiment(payload,onProgress=()=>{},options={})
  }finally{job.done=true;release();}
 }
 
+export async function runBrowserExperiment(payload,onProgress=()=>{},options={}){
+ if(active)throw Error("Другое вычисление ещё выполняется");
+ return withOriginStorageLock(()=>runBrowserExperimentUnlocked(payload,onProgress,options));
+}
 export async function stopBrowserExperiment(){
  const job=active;
  if(!job||job.done||job.finishing||job.stopRequested)return false;
@@ -204,7 +229,7 @@ export async function stopBrowserExperiment(){
  }
  return job.stop();
 }
-export async function clearBrowserResults(){
+async function clearBrowserResultsUnlocked(){
  if(active)throw Error("Нельзя очищать результаты во время вычислений");
  // Never clear memory until persistent clearing has committed successfully.
  const db=await openStore();if(!db){memory.clear();return;}
@@ -223,4 +248,9 @@ export async function clearBrowserResults(){
    tx.onabort=()=>done(tx.error||Error("onabort"));
   }catch(error){done(error);}
  });
+}
+
+export async function clearBrowserResults(){
+ if(active)throw Error("Нельзя очищать результаты во время вычислений");
+ return withOriginStorageLock(()=>clearBrowserResultsUnlocked());
 }
