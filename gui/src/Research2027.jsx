@@ -181,6 +181,9 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
  const opts=result?.rows?.length?Object.keys(result.rows[0]).filter(x=>x in metricNames):[];
  const theory=THEORY[studyId];
  const author=studyId==="petri"||studyId==="misinformation"?"Авторы · ктн Ушаков И.А. · ктн Харжевская А.В. · Егоров Е.В.":"Авторы · ктн Ушаков И.А. · Трофимова Н.А.";
+ const summaryPanel=<ExperimentPanel title="Сводная таблица результатов" subtitle="Показатели расчётов по сценариям и методам" className="r27-summary-panel">
+  {result?<ResultTable rows={result.rows}/>:<div className="r27-summary-empty">Таблица формируется после запуска вычислительного эксперимента.</div>}
+ </ExperimentPanel>;
  return <ExperimentLayout
   sidebar={<ResearchSettings studyId={studyId} config={config} onChange={update} onStart={start} onStop={stop} onReset={resetStudy} running={running}/>}
   navigation={navigation}
@@ -191,8 +194,11 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
   progress={<ExperimentProgress running={running} cacheHit={cacheHit} progress={studyProgress||(result?{message:"Расчёт завершён · "+def.short,completed:1,total:1,percent:100,eta_seconds:0}:{message:"Готов к запуску",completed:0,total:1,percent:0})}/>}
   error={error?<div className="error-banner" role="alert">{error}</div>:null}
  >
-   <div className="r27-topology-full">
-     <TopologyPlayback replay={result?.replay||previewReplay} compact/>
+   <div className={"r27-study-topline"+(studyId==="petri"?" r27-study-topline-formal":"")}>
+     <div className="r27-topology-full">
+       <TopologyPlayback replay={result?.replay||previewReplay} compact/>
+     </div>
+     {studyId!=="petri"?<ScenarioComparisonMatrix result={result} metric={metric}/>:null}
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
    {result?<>
@@ -203,6 +209,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
          <div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
        </div>
      </section>
+     {summaryPanel}
      {studyId==="petri"?
        <section className="panel r27-petri-report">
          <header className="panel-header"><div><h2>Результат верификации</h2><p>Достижимость опасной маркировки</p></div></header>
@@ -213,20 +220,15 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
            <p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p>
          </div>
        </section>:
-       <div className="r27-study-comparison-grid">
        <section className="panel r27-comparison-panel">
          <header className="panel-header"><div><h2>Сравнение сценариев и методов</h2><p>Групповые показатели вычислительного эксперимента</p></div>
            <label className="r27-metric">Показатель <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label>
          </header>
          <div className="panel-body"><ScientificGraph result={result} metric={metric}/></div>
-       </section>
-       <ScenarioComparisonMatrix result={result} metric={metric}/>
-      </div>}
+       </section>}
      <StudyVisualization result={result} metric={metric}/>
-   </>:null}
-     <ExperimentPanel title="Сводная таблица результатов" subtitle="Показатели расчётов по сценариям и методам" className="r27-summary-panel">
-      {result?<ResultTable rows={result.rows}/>:<div className="r27-summary-empty">Таблица формируется после запуска вычислительного эксперимента.</div>}
-     </ExperimentPanel>
+   </>:summaryPanel}
+
    {result?.metricPassport?.length?<ExperimentPanel title="Паспорта ключевых показателей" subtitle={"Реализованная формула, знаменатель, единица измерения и правило для отсутствующих значений · "+result.metricPassportVersion}>
      <ResultTable rows={result.metricPassport}/>
      <p className="r27-note">Автоматический контроль арифметических инвариантов: {result.metricIntegrity?.valid?"пройден":"не пройден"}. Паспорта фиксируют реализованные оценщики, не являются независимой научной экспертизой.</p>
