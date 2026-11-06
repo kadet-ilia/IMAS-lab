@@ -244,7 +244,8 @@ export function runPetri(c,checkpoint=null){
 export function runCascade(c,checkpoint=null){
  const rows=checkpoint?.rows?[...checkpoint.rows]:[],
  pairedRuns=checkpoint?.pairedRuns?[...checkpoint.pairedRuns]:[],
- pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[];
+ pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[],
+  sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
  let replaySample=checkpoint?.replaySample||null;
  const impacts=[1,1.2,1.1,1.7,2.1,1.5,2.4,3].map(x=>x*c.lossScale);
  const criticalDamage=.45*impacts.reduce((a,b)=>a+b,0);
@@ -256,6 +257,15 @@ export function runCascade(c,checkpoint=null){
    const eventSeed=((c.seed>>>0)^Math.imul(start+1,0x9e3779b9)^Math.imul(run+1,0x85ebca6b))>>>0;
    const random=rng(eventSeed);
    const tape=Array.from({length:8},()=>fixedEdges8.map(()=>random.random()));
+   if(c.record_source_runs){
+    const eventCount=tape.length*fixedEdges8.length;
+    if((sourceRuns.length+1)*eventCount>c.source_event_limit)
+     throw Error("Архив E5: превышен лимит исходных событий; полный результат не публикуется");
+    sourceRuns.push({scenario,source:start,run,eventSeed,initialNode:start,
+     edges:fixedEdges8.map(e=>[...e]),eventTape:tape.map(events=>[...events]),
+     impactWeights:[...impacts],criticalDamage,
+     methodDefenses:conditions.map(([method,defense])=>({method,defense}))});
+   }
    if(start===0&&run===0)replaySample={runId:"E5/source-0/run-0/baseline",scenario,run,eventSeed,
     initialNode:start,edges:fixedEdges8.map(e=>[...e]),eventTape:tape.map(t=>[...t]),
     impactWeights:[...impacts],defenseFactor:0};
@@ -295,7 +305,7 @@ export function runCascade(c,checkpoint=null){
    pHolmDamage:null,pHolmDanger:null,holmRejectDamage05:null,holmRejectDanger05:null,
    intervalMethod:damage.method,paired:true});
   if(checkpoint&&start<c.agents-1)
-   return {__checkpoint:{nextScenario:start+1,rows,pairedRuns,pairedEffects,replaySample}};
+   return {__checkpoint:{nextScenario:start+1,rows,pairedRuns,pairedEffects,replaySample,sourceRuns}};
  }
  const allTests=pairedEffects.flatMap(row=>[
   ...(row.pRawDamage===null?[]:[{row,metric:"Damage",p:row.pRawDamage}]),
@@ -306,7 +316,12 @@ export function runCascade(c,checkpoint=null){
   test.row["pHolm"+test.metric]=corrected[i];
   test.row["holmReject"+test.metric+"05"]=corrected[i]<.05;
  });
- return {rows,pairedRuns,pairedEffects,replaySample,multipleTesting:{
+ return {rows,pairedRuns,pairedEffects,replaySample,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:2,studyId:"cascade",complete:true,
+   runsPerScenario:c.runs,scenarios:c.agents,agents:c.agents,
+   edgeEventCount:sourceRuns.length*8*fixedEdges8.length,eventLimit:c.source_event_limit,
+   entries:sourceRuns}}:{}),
+  multipleTesting:{
    family:"E5-eight-sources-times-two-outcomes",tested:allTests.length,
    planned:pairedEffects.length*2,correction:"Holm-FWER-0.05",unadjustedCI:true},
   comparisonDesign:"paired-common-random-numbers",
@@ -441,7 +456,7 @@ export function validateResearchCheckpoint(id,c,state){
  }
  const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
-  id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
+  id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n,
    ...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:{};
  for(const [key,size] of Object.entries(lengths)){
