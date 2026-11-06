@@ -134,7 +134,8 @@ export function runProbGraph(c,checkpoint=null){
  const scenarios=[["Компрометация источника",.8,1],["Подмена межагентных сообщений",1.2,1],["Компрометация координатора",1.35,2],["Согласованная атака",1.25,3]];
  const rows=checkpoint?.rows?[...checkpoint.rows]:[],
  pairedRuns=checkpoint?.pairedRuns?[...checkpoint.pairedRuns]:[],
- pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[];
+ pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[],
+  sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
  let replaySample=checkpoint?.replaySample||null;
  for(let scenarioIndex=checkpoint?.nextScenario??0;scenarioIndex<scenarios.length;scenarioIndex++){
  const [scenario,mult,start]=scenarios[scenarioIndex];
@@ -146,6 +147,15 @@ export function runProbGraph(c,checkpoint=null){
    const random=rng(eventSeed),edges=graph(c.agents,c.edgeProbability,random);
    const initialNodes=chooseUniqueNodes(random,c.agents,start);
    const tape=Array.from({length:c.steps},()=>edges.map(()=>random.random()));
+   if(c.record_source_runs){
+    const eventCount=tape.length*edges.length;
+    const currentEvents=sourceRuns.reduce((total,item)=>total+item.eventTape.length*item.edges.length,0);
+    if(currentEvents+eventCount>c.source_event_limit)
+     throw Error("Архив E3: лимит исходных событий исчерпан; полный результат не публикуется");
+    sourceRuns.push({scenario,scenarioIndex,run,eventSeed,initialNodes:[...initialNodes],
+     edges:edges.map(e=>[...e]),eventTape:tape.map(events=>[...events]),
+     scenarioMultiplier:mult,methodDefenses:modes.map(([method,defense])=>({method,defense}))});
+   }
    if(scenarioIndex===0&&run===0)replaySample={runId:"E3/scenario-0/run-0/baseline",scenario,run,eventSeed,
     initialNodes:[...initialNodes],edges:edges.map(e=>[...e]),eventTape:tape.map(t=>[...t]),
     scenarioMultiplier:mult,defenseFactor:0};
@@ -178,12 +188,16 @@ export function runProbGraph(c,checkpoint=null){
     paired:true,intervalMethod:ci.method,warning:"Интервал учитывает вариацию Монте-Карло и не скорректирован на множественные сравнения. p-значения корректируются Холмом."});
   }
   if(checkpoint&&scenarioIndex<scenarios.length-1)
-   return {__checkpoint:{nextScenario:scenarioIndex+1,rows,pairedRuns,pairedEffects,replaySample}};
+   return {__checkpoint:{nextScenario:scenarioIndex+1,rows,pairedRuns,pairedEffects,replaySample,sourceRuns}};
  }
  const tested=pairedEffects.filter(row=>row.pRaw!==null);
  const adjusted=holmAdjusted(tested.map(row=>row.pRaw));
  tested.forEach((row,i)=>{row.pHolm=adjusted[i];row.holmReject05=adjusted[i]<.05;});
- return {rows,pairedRuns,pairedEffects,replaySample,statisticsVersion:STATISTICS_VERSION,
+ return {rows,pairedRuns,pairedEffects,replaySample,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:2,studyId:"probgraph",complete:true,
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,edgeEventCount:sourceRuns.reduce((n,item)=>n+item.edges.length*item.eventTape.length,0),
+   eventLimit:c.source_event_limit,entries:sourceRuns}}:{}),
+  statisticsVersion:STATISTICS_VERSION,
   multipleTesting:{family:"E3-protection-vs-baseline",tested:tested.length,planned:pairedEffects.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
   comparisonDesign:"paired-common-random-numbers",summary:"Парный Монте-Карло: внутри каждого прогона все уровни снижения вероятности распространения сравниваются при одинаковом графе, наборе уникальных очагов и потоке случайных событий.",chartKey:"dangerProbability",chartLabel:"P(опасного состояния)",series:"method",limits:"Коэффициенты 0,38 и 0,68 уменьшают вероятность распространения, но сами по себе не моделируют алгоритмы фильтрации сообщений или робастной координации."};
 }
@@ -426,7 +440,7 @@ export function validateResearchCheckpoint(id,c,state){
    throw Error("Повреждена очередь контрольной точки BFS");
  }
  const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
-  id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n}:
+  id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
   id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n,
    ...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:{};
