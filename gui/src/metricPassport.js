@@ -95,7 +95,7 @@ function auditGraphSourceRuns(id,result,assert){
     !edgeSet.has(e),"graph journal: invalid or duplicate edge");
    edgeSet.add(e);
   }
-  assert(tapes.length===(id==="probgraph"?result.config.steps:8)&&
+  assert(tapes.length===(id==="probgraph"?journal.config.steps:8)&&
    tapes.every(row=>Array.isArray(row)&&row.length===edges.length&&row.every(inUnit)),
    "graph journal: invalid random tape");
   if(!tapes.every(row=>Array.isArray(row)&&row.length===edges.length))continue;
@@ -110,7 +110,7 @@ function auditGraphSourceRuns(id,result,assert){
    assert(actual?.method===method&&approx(actual?.defense,defense),
     "graph journal: protection arm changed");
    const infection=new Set(initial);
-   const p=Math.min(1,Math.max(0,(id==="probgraph"?result.config.spread*record.scenarioMultiplier:result.config.spread)*(1-defense)));
+   const p=Math.min(1,Math.max(0,(id==="probgraph"?journal.config.spread*record.scenarioMultiplier:journal.config.spread)*(1-defense)));
    for(const uniforms of tapes){
     const newNodes=[];
     for(let edge=0;edge<edges.length;edge++){
@@ -120,7 +120,7 @@ function auditGraphSourceRuns(id,result,assert){
     for(const node of newNodes)infection.add(node);
    }
    if(id==="probgraph"){
-    const fraction=infection.size/N,danger=Number(fraction>=result.config.criticalFraction);
+    const fraction=infection.size/N,danger=Number(fraction>=journal.config.criticalFraction);
     assert(actual.infectedCount===infection.size&&approx(actual.finalFraction,fraction)&&
      actual.danger===danger,"E3 journal: result disagrees with source propagation");
    }else{
@@ -274,11 +274,11 @@ export function auditResultMetrics(id,result){
    Array.isArray(j.frontier)&&j.frontier.length===result.enqueued-result.processed,
    "E4 journal: incomplete processed frontier");
   if(Array.isArray(j.records)){
-   const times=Array(result.config.steps+1).fill(0);
+   const times=Array(journal.config.steps+1).fill(0);
    for(let i=0;i<j.records.length;i++){
     const x=j.records[i];
     assert(x.index===i&&Number.isInteger(x.mask)&&Number.isInteger(x.isolated)&&
-     Number.isInteger(x.t)&&x.t>=0&&x.t<=result.config.steps&&
+     Number.isInteger(x.t)&&x.t>=0&&x.t<=journal.config.steps&&
      Array.isArray(x.successors)&&typeof x.critical==="boolean",
      "E4 journal: invalid marking "+i);
     if(Number.isInteger(x.t)&&x.t>=0&&x.t<times.length)times[x.t]++;
