@@ -405,3 +405,28 @@ test("UP-13 factorial effects require complete physical design and ≥2 cell rep
  assert.equal(one.factorialUncertainty.mainEffectsWithCI,0);
  assert.ok(one.main_effects.every(e=>e.ci95_low===null&&e.ci95_high===null));
 });
+
+
+test("UP-12 G(N,p) has no forced ring, independent undirected edge opportunities and binomial edge count",()=>{
+ const n=12,base={...cfg,n_agents:n,n_byzantine:0,n_sybil_agents:0,
+  trim_each_side:0,network_enabled:true,network_topology:"random"};
+ const graph=p=>buildAdjacency({...base,network_edge_probability:p},createRng(117),Array(n).fill(false));
+ for(const p of [0,1]){
+  const adjacency=graph(p);
+  for(let i=0;i<n;i++)for(let j=0;j<n;j++)
+   assert.equal(adjacency[i][j],i!==j&&p===1,"boundary p="+p+" edge "+i+","+j);
+ }
+ const p=.37,trials=500,opportunities=trials*n*(n-1)/2;
+ let count=0;
+ for(let seed=1;seed<=trials;seed++){
+  const adjacency=buildAdjacency({...base,network_edge_probability:p},createRng(seed,992),Array(n).fill(false));
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+   assert.equal(adjacency[i][j],adjacency[j][i]);
+   if(adjacency[i][j])count++;
+  }
+  assert.ok(adjacency.every((row,i)=>!row[i]));
+ }
+ const expected=opportunities*p,sd=Math.sqrt(opportunities*p*(1-p));
+ assert.ok(Math.abs(count-expected)<=6*sd,
+  "empirical ER edge count "+count+" should agree with binomial "+expected+" ± "+(6*sd));
+});
