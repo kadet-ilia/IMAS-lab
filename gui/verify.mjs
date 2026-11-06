@@ -479,6 +479,23 @@ for(const [studyId,name] of [
   verified:result.metricIntegrity.valid,runId:result.replay?.runId||null};
 }
 
+// NZ-14: prove real Chromium IndexedDB persistence across navigation AND reload,
+// not merely an in-process mock, using the same validated E2 configuration.
+await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("study-uncertainty");
+await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.locator(".progress-strip").getByText("Результат восстановлен из IndexedDB",{exact:false}).waitFor({timeout:30000});
+report.researchCacheAfterNavigation=true;
+await page.reload({waitUntil:"domcontentloaded"});
+await page.getByRole("heading",{name:"IMAS_LaB_test · Лабораторный стенд ИМАС"}).waitFor();
+await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("study-uncertainty");
+await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.locator(".progress-strip").getByText("Результат восстановлен из IndexedDB",{exact:false}).waitFor({timeout:30000});
+report.researchCacheAfterReload=true;
+if(!report.researchCacheAfterNavigation||!report.researchCacheAfterReload)
+ throw Error("NZ-14: research IndexedDB cache was lost during navigation/reload");
+
 // UP-35: exercise the full Vite/React → Worker pool → four-arm ablation
 // route, not merely the mode dropdown. Keep the run deliberately small.
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
