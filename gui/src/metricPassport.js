@@ -77,6 +77,30 @@ export function auditResultMetrics(id,result){
   if(result?.summary?.message_balance!==undefined)assert(result.summary.message_balance===0,"trust: message conservation");
   for(const state of result?.network_series||[])if(state.message_balance!==undefined)
    assert(state.message_balance===0,"trust: message conservation at tick "+state.step);
+  if(Array.isArray(result?.message_ledger)){
+   const fields=["attempted","delivered","lost","bandwidth_dropped","expired","pending"];
+   for(const entry of result.message_ledger){
+    for(const key of ["proposal","evidence","total"]){
+     const x=entry[key];
+     assert(x&&fields.every(k=>Number.isSafeInteger(x[k])&&x[k]>=0),
+      "trust: invalid "+key+" message counts at tick "+entry.step);
+     if(!x||!fields.every(k=>Number.isSafeInteger(x[k])&&x[k]>=0))continue;
+     assert(x.attempted===x.delivered+x.lost+x.bandwidth_dropped+x.expired+x.pending,
+      "trust: "+key+" conservation at tick "+entry.step);
+    }
+    if(entry.proposal&&entry.evidence&&entry.total)
+     for(const field of fields)assert(entry.total[field]===entry.proposal[field]+entry.evidence[field],
+      "trust: channel sum "+field+" at tick "+entry.step);
+   }
+   if(result?.summary?.communication_attempted!==undefined){
+    const last=result.message_ledger.at(-1)?.total;
+    assert(last&&last.attempted===result.summary.communication_attempted,
+     "trust: final attempted messages differ from ledger");
+   }
+  }
+  if(result?.source_event_log)
+   assert(result.source_event_log.complete===true&&result.source_event_log.audit?.valid===true,
+    "trust: invalid source-event journal audit");
  }else if(id==="uncertainty"){
   for(const r of rows){
    assert(inUnit(r.coverage)&&inUnit(r.correctUnconditional)&&inUnit(r.errorRate),"uncertainty: outside [0,1]");
