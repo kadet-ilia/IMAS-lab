@@ -364,6 +364,9 @@ export function validateResearchCheckpoint(id,c,state){
  if(!state||typeof state!=="object"||Array.isArray(state)||!Number.isInteger(state.nextScenario)||
     state.nextScenario<0||state.nextScenario>=total)throw Error("Некорректный индекс контрольной точки исследования");
  const n=state.nextScenario;
+ if(n>0&&(state.schemaVersion!==RESEARCH_CHECKPOINT_SCHEMA||state.studyId!==id||
+   state.modelVersion!==RESEARCH_MODEL_VERSION||state.configSignature!==JSON.stringify(c)))
+  throw Error("Контрольная точка относится к иной модели или конфигурации");
  const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n}:
   id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n}:
   id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
@@ -397,10 +400,11 @@ export function executeStudyChunk(id,params={},checkpoint=null){
  validateResearchCheckpoint(id,c,state);
  const raw=researchHandlers[id](c,id==="petri"?null:state);
  if(raw.__checkpoint){
-  validateResearchCheckpoint(id,c,raw.__checkpoint);
-  if(raw.__checkpoint.nextScenario!==state.nextScenario+1)throw Error("Невалидный переход контрольной точки");
-  return {done:false,completedUnits:raw.__checkpoint.nextScenario,totalUnits,state:raw.__checkpoint,
-   elapsedMs:Date.now()-start};
+  const next={...raw.__checkpoint,schemaVersion:RESEARCH_CHECKPOINT_SCHEMA,studyId:id,
+   modelVersion:RESEARCH_MODEL_VERSION,configSignature:JSON.stringify(c)};
+  validateResearchCheckpoint(id,c,next);
+  if(next.nextScenario!==state.nextScenario+1)throw Error("Невалидный переход контрольной точки");
+  return {done:false,completedUnits:next.nextScenario,totalUnits,state:next,elapsedMs:Date.now()-start};
  }
  return {done:true,completedUnits:totalUnits,totalUnits,
   result:completeResearchResult(id,c,raw,Date.now()-start)};
