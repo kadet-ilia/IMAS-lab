@@ -234,11 +234,12 @@
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:78px;
-  min-width:78px;
-  max-width:78px;
-  height:27px;
-  min-height:27px;
+  width:85px;
+  min-width:85px;
+  max-width:85px;
+  height:35px;
+  min-height:35px;
+  max-height:35px;
   box-sizing:border-box;
   padding:4px 6px;
   gap:4px;
@@ -651,22 +652,23 @@
   }
 }
 
-/* Six-experiment layout: one topology, then equal halves for the chart and
-   the scenario/method matrix; the full results table sits above KPI passports. */
-.r27-topology-full {min-width:0;margin:0 0 12px}
+/* E2/E3/E5/E6: topology and scenario matrix share equal-width columns;
+   the full results table follows the study summary, before other panels. */
+.r27-topology-full {min-width:0;margin:0}
 .r27-topology-full > .r27-replay{margin:0;width:100%;max-width:none;padding:12px 14px}
-.r27-study-comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;margin:0 0 12px}
-.r27-study-comparison-grid > .panel{min-width:0;margin:0;border:1px solid var(--border);border-radius:0}
-.r27-study-comparison-grid .r27-comparison-matrix{padding:0;background:var(--surface)}
-.r27-study-comparison-grid .r27-comparison-matrix .panel-header{min-height:47px;padding:11px 13px 7px}
-.r27-study-comparison-grid .r27-comparison-matrix .panel-header h2{font-size:14px;color:var(--imas-text)}
-.r27-study-comparison-grid .r27-comparison-matrix .panel-header p{font-size:11px;color:var(--muted)}
-.r27-study-comparison-grid .r27-comparison-matrix .panel-body{padding:0 9px 9px}
-.r27-study-comparison-grid .r27-table-scroll{max-height:430px;overflow:auto;max-width:100%}
-.r27-study-comparison-grid .r27-table{font-size:10px}
-.r27-study-comparison-grid .r27-table th,.r27-study-comparison-grid .r27-table td{white-space:normal;min-width:75px;overflow-wrap:anywhere;padding:8px}
-.r27-study-comparison-grid .r27-table th:first-child{min-width:128px}
-.r27-study-comparison-grid .r27-chart{min-width:0}
+.r27-study-topline{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:stretch;margin:0 0 12px}
+.r27-study-topline-formal{grid-template-columns:minmax(0,1fr)}
+.r27-study-topline > .panel{min-width:0;margin:0;border:1px solid var(--border);border-radius:0}
+.r27-study-topline .r27-comparison-matrix{padding:0;background:var(--surface)}
+.r27-study-topline .r27-comparison-matrix .panel-header{min-height:47px;padding:11px 13px 7px}
+.r27-study-topline .r27-comparison-matrix .panel-header h2{font-size:14px;color:var(--imas-text)}
+.r27-study-topline .r27-comparison-matrix .panel-header p{font-size:11px;color:var(--muted)}
+.r27-study-topline .r27-comparison-matrix .panel-body{padding:0 9px 9px}
+.r27-study-topline .r27-table-scroll{max-height:430px;overflow:auto;max-width:100%}
+.r27-study-topline .r27-table{font-size:10px}
+.r27-study-topline .r27-table th,.r27-study-topline .r27-table td{white-space:normal;min-width:75px;overflow-wrap:anywhere;padding:8px}
+.r27-study-topline .r27-table th:first-child{min-width:128px}
+.r27-comparison-panel .r27-chart{min-width:0}
 .r27-analytics{grid-template-columns:repeat(2,minmax(0,1fr))}
 .r27-manual-return{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid #a9bdd2;color:#174d7e;border-radius:3px;padding:7px 12px;font-size:12px;font-weight:650;cursor:pointer}
 .r27-manual-return:hover{background:#eaf2fa;border-color:#2672ff}
@@ -675,9 +677,7 @@
 .r27-doc-simple{border-left:4px solid #3d80bd;background:#f3f8fd;padding:11px 16px;margin:0 0 14px}
 .r27-doc-simple h2{margin:0 0 8px;font-size:17px}
 .r27-doc-simple p{line-height:1.6;font-size:14px}
-@media(max-width:1040px){
- .r27-study-comparison-grid{grid-template-columns:1fr}
-}
+
 
 /* Prospective Monte Carlo planning: shared transparent statistical controls. */
 .r27-mc-planner{margin:12px 0;border:1px solid #d5e3ef;background:#f7fbfe;padding:12px 11px;border-radius:3px}
@@ -690,3 +690,20 @@
 .r27-mc-plan-buttons button{border:1px solid #a9c2d9;background:#fff;color:#20547f;padding:8px;border-radius:3px;font-size:11px;font-weight:600;text-align:left}
 .r27-mc-plan-buttons button:disabled{opacity:.45}
 .r27-mc-planner .r27-note{font-size:10px;line-height:1.55;margin:7px 0;color:#526a7e}
+
+/* Playback remains legible within a half-width topology column. */
+.r27-study-topline .r27-playback-grid{grid-template-columns:minmax(0,1fr)}
+.r27-study-topline .r27-playback-figure{min-width:0}
+.r27-study-topline .r27-playback-aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;align-content:start}
+.r27-study-topline .r27-playback-aside h4{grid-column:1/-1;margin:0}
+.r27-study-topline .r27-playback-controls{min-width:0}
+.r27-experiment-content:not([data-study="trust"]) > .r27-summary-panel{margin:0 0 12px}
+/* The help return action is now in the sticky experiment navigation. */
+.r27-experiment-navigation.r27-help-navigation button.r27-manual-return{
+ margin-left:auto;height:35px;min-height:35px;padding:7px 11px;
+ background:#fff;border:1px solid #a9bdd2;color:#174d7e;font-size:12px;font-weight:650;
+}
+.r27-experiment-navigation.r27-help-navigation button.r27-manual-return:hover{
+ background:#eaf2fa;border-color:#2672ff;
+}
+.r27-experiment-navigation.r27-help-navigation button.r27-nav-right{margin-left:0}
