@@ -1,6 +1,7 @@
 import React from "react";
 import {STUDY_DEFS} from "./research2027.js";
 import {ExperimentParameterTooltip} from "./ExperimentLayout.jsx";
+import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 
 const PARAMETERS={
  agents:["N — число агентов","Число моделируемых агентов. Для двух графов риска количество вершин фиксировано структурой исследовательской постановки.",3,100,1],
@@ -88,6 +89,7 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
    </div>)}
    <details className="advanced"><summary>Статистика и вычисления</summary><div className="advanced-body">
      <ResearchField name="seed" value={config.seed} onChange={onChange}/>
+     {studyId!=="petri"?<MonteCarloPlanner studyId={studyId} runs={config.runs} maxRuns={config.record_source_runs?Math.min(config.source_run_limit,10000):10000} onChangeRuns={n=>onChange("runs",n)}/>:null}
      {("record_source_runs" in config)?<>
       <ResearchField name="record_source_runs" value={config.record_source_runs} onChange={onChange}/>
       {config.record_source_runs===1?<>
