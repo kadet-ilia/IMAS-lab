@@ -142,7 +142,7 @@ async function runUnlocked(id,config,key,onProgress,options){
       job.saveChain=job.saveChain.then(()=>access("checkpoint:"+key,snapshot));
       job.saveChain.then(()=>{
        if(job.stopRequested||job.done)return;
-       try{progress();worker.postMessage({type:"continue",nextScenario:state.nextScenario});}
+       try{progress();if(!job.stopRequested&&!job.done)worker.postMessage({type:"continue",nextScenario:state.nextScenario});}
        catch(e){void fail(e);}
       }).catch(e=>void fail(e));
      }catch(error){void fail(error);}
