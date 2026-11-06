@@ -2,7 +2,7 @@ import React, {forwardRef,useEffect,useImperativeHandle,useMemo,useRef,useState}
 import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
 import {runResearchBrowser,stopResearchBrowser} from "./researchBrowserClient.js";
-import {TopologyPlayback,StudyVisualization} from "./ExperimentVisuals.jsx";
+import {TopologyPlayback,StudyVisualization,ScenarioComparisonMatrix} from "./ExperimentVisuals.jsx";
 import {ResearchSettings} from "./ResearchSettings.jsx";
 import {ExperimentLayout,ExperimentPanel,ExperimentKpi,ExperimentProgress} from "./ExperimentLayout.jsx";
 import {UnifiedHelp} from "./UnifiedHelp.jsx";
@@ -191,13 +191,42 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
   progress={<ExperimentProgress running={running} cacheHit={cacheHit} progress={studyProgress||(result?{message:"Расчёт завершён · "+def.short,completed:1,total:1,percent:100,eta_seconds:0}:{message:"Готов к запуску",completed:0,total:1,percent:0})}/>}
   error={error?<div className="error-banner" role="alert">{error}</div>:null}
  >
-   <div className="trust-overview-grid">
+   <div className="r27-topology-full">
      <TopologyPlayback replay={result?.replay||previewReplay} compact/>
+   </div>
+   <ResearchKpis studyId={studyId} result={result}/>
+   {result?<>
+     <section className="panel r27-study-summary">
+       <header className="panel-header"><div><h2>Основные результаты исследования</h2><p>Сводные оценки и исходные параметры расчёта</p></div></header>
+       <div className="panel-body">
+         <p>{result.summary}</p>
+         <div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
+       </div>
+     </section>
+     {studyId==="petri"?
+       <section className="panel r27-petri-report">
+         <header className="panel-header"><div><h2>Результат верификации</h2><p>Достижимость опасной маркировки</p></div></header>
+         <div className="panel-body">
+           <p>{result.verdict==="reachable"?"Найден контрпример достижения опасной маркировки.":result.verdict==="unreachable_within_bound"?"На заданном горизонте и при данной политике опасное состояние недостижимо; фронт поиска исчерпан.":"Полнота поиска не достигнута; вывод о недостижимости невозможен."}</p>
+           <p><strong>Политика изоляции:</strong> {result.policyName==="ideal_mandatory_priority"?"Приоритетная, идеализированная: все выявленные агенты изолируются до передачи":"Необязательная, недетерминированная: EF учитывает и путь без изоляции"}. <strong>Зарегистрировано маркировок:</strong> {result.enqueued}; <strong>обработано:</strong> {result.processed}.</p>
+           <ol>{(result.witness||[]).map((state,i)=><li key={i}>{state}</li>)}</ol>
+           <p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p>
+         </div>
+       </section>:
+       <div className="r27-study-comparison-grid">
+       <section className="panel r27-comparison-panel">
+         <header className="panel-header"><div><h2>Сравнение сценариев и методов</h2><p>Групповые показатели вычислительного эксперимента</p></div>
+           <label className="r27-metric">Показатель <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label>
+         </header>
+         <div className="panel-body"><ScientificGraph result={result} metric={metric}/></div>
+       </section>
+       <ScenarioComparisonMatrix result={result} metric={metric}/>
+      </div>}
+     <StudyVisualization result={result} metric={metric}/>
+   </>:null}
      <ExperimentPanel title="Сводная таблица результатов" subtitle="Показатели расчётов по сценариям и методам" className="r27-summary-panel">
       {result?<ResultTable rows={result.rows}/>:<div className="r27-summary-empty">Таблица формируется после запуска вычислительного эксперимента.</div>}
      </ExperimentPanel>
-   </div>
-   <ResearchKpis studyId={studyId} result={result}/>
    {result?.metricPassport?.length?<ExperimentPanel title="Паспорта ключевых показателей" subtitle={"Реализованная формула, знаменатель, единица измерения и правило для отсутствующих значений · "+result.metricPassportVersion}>
      <ResultTable rows={result.metricPassport}/>
      <p className="r27-note">Автоматический контроль арифметических инвариантов: {result.metricIntegrity?.valid?"пройден":"не пройден"}. Паспорта фиксируют реализованные оценщики, не являются независимой научной экспертизой.</p>
@@ -223,30 +252,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      <p className="r27-note">Предварительное сравнение фиксированного числа усечений с каждой стороны. Никакой подбор по скрытым меткам нарушителя не выполняется. Статистическая значимость и практическая оптимальность выбора k не подтверждены.</p>
     </ExperimentPanel>:null}
    {result?<>
-     <section className="panel r27-study-summary">
-       <header className="panel-header"><div><h2>Основные результаты исследования</h2><p>Сводные оценки и исходные параметры расчёта</p></div></header>
-       <div className="panel-body">
-         <p>{result.summary}</p>
-         <div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
-       </div>
-     </section>
-     {studyId==="petri"?
-       <section className="panel r27-petri-report">
-         <header className="panel-header"><div><h2>Результат верификации</h2><p>Достижимость опасной маркировки</p></div></header>
-         <div className="panel-body">
-           <p>{result.verdict==="reachable"?"Найден контрпример достижения опасной маркировки.":result.verdict==="unreachable_within_bound"?"На заданном горизонте и при данной политике опасное состояние недостижимо; фронт поиска исчерпан.":"Полнота поиска не достигнута; вывод о недостижимости невозможен."}</p>
-           <p><strong>Политика изоляции:</strong> {result.policyName==="ideal_mandatory_priority"?"Приоритетная, идеализированная: все выявленные агенты изолируются до передачи":"Необязательная, недетерминированная: EF учитывает и путь без изоляции"}. <strong>Зарегистрировано маркировок:</strong> {result.enqueued}; <strong>обработано:</strong> {result.processed}.</p>
-           <ol>{(result.witness||[]).map((state,i)=><li key={i}>{state}</li>)}</ol>
-           <p>Количество состояний по тактам: {result.statesByTime.join(" · ")}</p>
-         </div>
-       </section>:
-       <section className="panel r27-comparison-panel">
-         <header className="panel-header"><div><h2>Сравнение сценариев и методов</h2><p>Групповые показатели вычислительного эксперимента</p></div>
-           <label className="r27-metric">Показатель <select value={metric} onChange={e=>setMetric(e.target.value)}>{opts.map(x=><option value={x} key={x}>{metricNames[x]}</option>)}</select></label>
-         </header>
-         <div className="panel-body"><ScientificGraph result={result} metric={metric}/></div>
-       </section>}
-     <StudyVisualization result={result} metric={metric}/>
+
      <section className="panel r27-study-limits">
        <header className="panel-header"><div><h2>Интерпретация и экспорт</h2><p>Границы применимости и результаты воспроизводимых расчётов</p></div>
          <div className="r27-result-tools"><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".csv",toCsv(result.rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button type="button" onClick={()=>download("imas_"+studyId+"_"+result.config.seed+".json",JSON.stringify(result,null,2),"application/json;charset=utf-8")}>Скачать JSON</button>{result.sourceRunJournal?.complete?<button type="button" onClick={()=>download("imas_"+studyId+"_raw_"+result.config.seed+".json",JSON.stringify({modelVersion:result.modelVersion,config:result.config,journal:result.sourceRunJournal,
