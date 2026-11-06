@@ -39,12 +39,12 @@ export function auditResearchInference(id,c,result){
    warnings.push("Качество измерено на синтетических данных; внешняя калибровка не предоставлена");
  }
  let adjustedChecks=0;
- if(id==="probgraph"||id==="cascade"){
+ if(id==="probgraph"||id==="cascade"||id==="misinformation"){
   const effects=result.pairedEffects||[];
-  const raw=id==="probgraph"?effects.filter(x=>x.pRaw!==null).map(x=>x.pRaw):
+  const raw=(id==="probgraph"||id==="misinformation")?effects.filter(x=>x.pRaw!==null).map(x=>x.pRaw):
    effects.flatMap(x=>[x.pRawDamage,x.pRawDanger].filter(p=>p!==null));
   const correction=holmAdjusted(raw);
-  const observed=id==="probgraph"?effects.filter(x=>x.pRaw!==null).map(x=>x.pHolm):
+  const observed=(id==="probgraph"||id==="misinformation")?effects.filter(x=>x.pRaw!==null).map(x=>x.pHolm):
    effects.flatMap(x=>[x.pHolmDamage,x.pHolmDanger].filter(p=>p!==null));
   assert(correction.length===observed.length&&correction.every((p,i)=>
    Number.isFinite(observed[i])&&Math.abs(observed[i]-p)<=1e-12),
