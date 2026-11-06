@@ -374,6 +374,9 @@ export function validateResearchCheckpoint(id,c,state){
  if(!state||typeof state!=="object"||Array.isArray(state)||!Number.isInteger(state.nextScenario)||
     state.nextScenario<0||state.nextScenario>=total)throw Error("Некорректный индекс контрольной точки исследования");
  const n=state.nextScenario;
+ if(state.accumulatedExecutionMs!==undefined&&
+  (!Number.isFinite(state.accumulatedExecutionMs)||state.accumulatedExecutionMs<0))
+  throw Error("Некорректное накопленное время вычисления");
  if(n>0&&(state.schemaVersion!==RESEARCH_CHECKPOINT_SCHEMA||state.studyId!==id||
    state.modelVersion!==RESEARCH_MODEL_VERSION||state.configSignature!==JSON.stringify(c)))
   throw Error("Контрольная точка относится к иной модели или конфигурации");
@@ -419,13 +422,14 @@ export function executeStudyChunk(id,params={},checkpoint=null){
  const raw=researchHandlers[id](c,state);
  if(raw.__checkpoint){
   const next={...raw.__checkpoint,schemaVersion:RESEARCH_CHECKPOINT_SCHEMA,studyId:id,
-   modelVersion:RESEARCH_MODEL_VERSION,configSignature:JSON.stringify(c)};
+   modelVersion:RESEARCH_MODEL_VERSION,configSignature:JSON.stringify(c),
+   accumulatedExecutionMs:(state.accumulatedExecutionMs||0)+(Date.now()-start)};
   validateResearchCheckpoint(id,c,next);
   if(next.nextScenario!==state.nextScenario+1)throw Error("Невалидный переход контрольной точки");
   return {done:false,completedUnits:next.nextScenario,totalUnits,state:next,elapsedMs:Date.now()-start};
  }
  return {done:true,completedUnits:id==="petri"?state.nextScenario+1:totalUnits,totalUnits,
-  result:completeResearchResult(id,c,raw,Date.now()-start)};
+  result:completeResearchResult(id,c,raw,(state.accumulatedExecutionMs||0)+(Date.now()-start))};
 }
 export function toCsv(rows){if(!rows?.length)return "";const columns=[...new Set(rows.flatMap(row=>Object.keys(row)))];const escape=x=>{const t=x==null?"":String(x);return /[";\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;};return "\ufeff"+columns.join(";")+"\n"+rows.map(row=>columns.map(k=>escape(row[k])).join(";")).join("\n");}
 export function statisticalIndicators(values){return quantileInfo(values);}
