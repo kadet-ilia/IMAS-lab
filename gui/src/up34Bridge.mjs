@@ -13,8 +13,9 @@ function evaluate(testCase){
  const v=testCase;
  switch(v.type){
  case "research_source":{
-  if(!["uncertainty","misinformation"].includes(v.studyId))throw Error("Unsupported raw archive research study");
-  return executeStudy(v.studyId,{...v.config,record_source_runs:1});
+  if(!["uncertainty","probgraph","petri","cascade","misinformation"].includes(v.studyId))throw Error("Unsupported raw archive research study");
+  return executeStudy(v.studyId,{...v.config,
+   ...(v.studyId==="petri"?{record_marking_log:1}:{record_source_runs:1})});
  }
  case "trust_trace":{
   const details=simulateRun({...v.config,record_source_events:true},v.scenario||"on_off",
