@@ -7,11 +7,15 @@ import fs from "node:fs";
 import {betaTrust,eigenTrust,trimmedWeightedMean,transport,validateConfig,
  buildAdjacency,createRng,accountCommunicationStep,simulateRun} from "./trustEngine.js";
 import {propagate,spreadOneTick,expectedShortfall,
- estimateReliabilityFromObservations} from "./research2027.js";
+ estimateReliabilityFromObservations,executeStudy} from "./research2027.js";
 
 function evaluate(testCase){
  const v=testCase;
  switch(v.type){
+ case "research_source":{
+  if(!["uncertainty","misinformation"].includes(v.studyId))throw Error("Unsupported raw archive research study");
+  return executeStudy(v.studyId,{...v.config,record_source_runs:1});
+ }
  case "trust_trace":{
   const details=simulateRun({...v.config,record_source_events:true},v.scenario||"on_off",
    v.runIndex||0,0,true).result;
