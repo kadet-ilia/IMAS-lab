@@ -487,6 +487,38 @@ await page.locator(".topbar .cache-badge").waitFor({timeout:15000});
 report.ablationReloadedCacheHit=await page.locator(".topbar .cache-badge").count()===1;
 if(!report.ablationReloadedCacheHit)throw Error("UP-35: IndexedDB did not retain completed ablation across page reload");
 
+// UP-35: verify real Web Worker scheduling with 4 and 1 streams, including
+// numerical equivalence of exported scientific results across pool sizes.
+const readAblationExport=async()=>{
+ await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Данные",exact:true}).click();
+ const row=page.locator(".data-row").filter({hasText:"Абляция: атака и управляющая изоляция"});
+ const [file]=await Promise.all([page.waitForEvent("download",{timeout:15000}),row.getByRole("button",{name:"Скачать JSON"}).click()]);
+ const result=JSON.parse(fs.readFileSync(await file.path(),"utf8"));
+ await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Чувствительность"}).click();
+ await page.locator(".sensitivity-action select").selectOption("ablation");
+ return result;
+};
+const poolResults={};
+for(const pool of [4,1]){
+ await field("Браузерных потоков (0 — авто)",pool);
+ await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
+ await page.getByText("Абляционный эксперимент: режим атаки × управляющая изоляция",{exact:true}).waitFor({timeout:45000});
+ // Wait until the job finishes, not merely until the stale table becomes visible.
+ await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).waitFor({state:"visible",timeout:45000});
+ await page.waitForFunction(()=>!document.querySelector(".sensitivity-action button")?.disabled,{timeout:45000});
+ poolResults[pool]=await readAblationExport();
+ if(poolResults[pool].parallel_workers_used!==pool)
+  throw Error("UP-35: requested "+pool+" workers, got "+poolResults[pool].parallel_workers_used);
+ if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==12)
+  throw Error("UP-35: incomplete real browser calculation at pool size "+pool);
+}
+report.workerPool4=poolResults[4].parallel_workers_used;
+report.workerPool1=poolResults[1].parallel_workers_used;
+report.workerPoolsEquivalent=JSON.stringify(poolResults[4].ablation_rows)===JSON.stringify(poolResults[1].ablation_rows)
+ &&JSON.stringify(poolResults[4].ablation_contrasts)===JSON.stringify(poolResults[1].ablation_contrasts);
+if(!report.workerPoolsEquivalent)throw Error("UP-35: 1-worker and 4-worker scientific outputs differ");
+
+
 
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
