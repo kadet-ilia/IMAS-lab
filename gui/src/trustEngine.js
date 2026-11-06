@@ -60,7 +60,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.9.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.10.0-remediation";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,500],n_sensitivity_runs:[1,100],
@@ -313,6 +313,10 @@ export function auditSourceEventJournal(events,ledger){
  expect(p.pending===pAccepted-pDelivered-pExpired,"proposal_pending");
  expect(e.attempted===eDelivered+eLost+eDropped,"evidence_attempts");
  expect(e.delivered===eDelivered&&e.lost===eLost&&e.bandwidth_dropped===eDropped,"evidence_outcomes");
+ const topologyEvents=events.filter(e=>e.kind==="topology");
+ expect(topologyEvents.length===1&&topologyEvents[0].step===0&&
+  Array.isArray(topologyEvents[0].edges)&&Array.isArray(topologyEvents[0].partitionGroups),
+  "topology_provenance");
  expect(final.total.balance===0,"total_balance");
  return {valid:issues.length===0,issues,counts:{proposalLost:pLost,proposalAccepted:pAccepted,
   proposalDelivered:pDelivered,proposalExpired:pExpired,evidenceDelivered:eDelivered,
@@ -367,6 +371,9 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  const series=[],network_series=[],reputationHistory=[],states=[],events=[];
  const sourceJournal=detail&&c.record_source_events?makeSourceEventRecorder(c.source_event_limit):null;
  const record=sourceJournal?.record||null;
+ if(record)record({kind:"topology",step:0,n,
+  edges:all(n).flatMap(i=>all(n).filter(j=>i<j&&a[i][j]).map(j=>[i,j])),
+  partitionGroups:[...groups],byzantine:[...bad],sybil:[...sybil]});
  let aggregateBundleWallMs=0,trustWallMs=0,transportWallMs=0;
  for(let t=0;t<c.n_steps;t++){
   const eligible=all(n).map(i=>!sybil[i]||t+1>=c.sybil_activation_step);
@@ -456,7 +463,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  });
  if(!detail)return{rows,trajectory:series};
  const sourceEventLog=sourceJournal?{
-    schemaVersion:1,modelVersion:TRUST_MODEL_VERSION,seed:c.seed,runIndex,scenario,
+    schemaVersion:2,modelVersion:TRUST_MODEL_VERSION,seed:c.seed,runIndex,scenario,
     totalEvents:sourceJournal.events.length,limit:sourceJournal.limit,complete:true,
     rngScheme:c.paired_exogenous_events?"keyed-exogenous-v1":"stateful-xorshift32",
     events:sourceJournal.events,
