@@ -445,6 +445,7 @@ class FullNetworkTraceVerification(unittest.TestCase):
         evidence=next(e for e in corrupt["sourceEvents"]
                       if e["kind"]=="evidence" and e["status"]=="delivered")
         evidence["value"]=.0 if evidence["value"]>=.5 else 1.0
+        evidence["generated"]=evidence["value"]
         with self.assertRaises(AssertionError):
             independent_network_trace(corrupt)
 
