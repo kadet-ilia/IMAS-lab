@@ -16,8 +16,10 @@ function evaluate(testCase){
   const details=simulateRun({...v.config,record_source_events:true},v.scenario||"on_off",
    v.runIndex||0,0,true).result;
   return {scenario:details.scenario,configuration:details.configuration,series:details.series,
+   networkSeries:details.network_series,messageLedger:details.message_ledger,
    reputation:details.reputation,states:details.states,events:details.events,
-   sourceEvents:details.source_event_log.events,rows:details.metrics,
+   sourceEvents:details.source_event_log.events,sourceEventAudit:details.source_event_log.audit,
+   sourceEventSchema:details.source_event_log.schemaVersion,rows:details.metrics,
    summary:details.summary};
  }
  case "beta":{
