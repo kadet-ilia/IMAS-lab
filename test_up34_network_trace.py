@@ -7,6 +7,7 @@ bandwidth, Bayesian trust, reputation, decisions and isolation are computed
 independently and compared on every tick. Graph sampling distributions are
 outside this event-tape verification.
 """
+import copy
 import json
 import math
 import subprocess
@@ -436,6 +437,29 @@ class FullNetworkTraceVerification(unittest.TestCase):
         for idx,item in enumerate(result["results"]):
             with self.subTest(scenario=idx):
                 independent_network_trace(item)
+
+        # Mutation controls: changing just one exogenous event must invalidate
+        # the independent reconstructed numerical solution, even if the
+        # serialized aggregates and the JS-side audit flag remain untouched.
+        corrupt=copy.deepcopy(result["results"][0])
+        evidence=next(e for e in corrupt["sourceEvents"]
+                      if e["kind"]=="evidence" and e["status"]=="delivered")
+        evidence["value"]=.0 if evidence["value"]>=.5 else 1.0
+        with self.assertRaises(AssertionError):
+            independent_network_trace(corrupt)
+
+        corrupt=copy.deepcopy(result["results"][4])
+        delivery=next(e for e in corrupt["sourceEvents"]
+                      if e["kind"]=="proposal_final")
+        delivery["due"]+=1
+        with self.assertRaises(AssertionError):
+            independent_network_trace(corrupt)
+
+        corrupt=copy.deepcopy(result["results"][1])
+        topology=next(e for e in corrupt["sourceEvents"] if e["kind"]=="topology")
+        topology["edges"].append([0,0])
+        with self.assertRaises(AssertionError):
+            independent_network_trace(corrupt)
 
 
 if __name__=="__main__":
