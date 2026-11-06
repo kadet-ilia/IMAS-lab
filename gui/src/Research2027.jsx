@@ -179,6 +179,10 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
    {result?.scenarioMetrics?.length? <ExperimentPanel title="Информационный охват сценариев" subtitle="Общая характеристика распространения, не отдельного алгоритма принятия решений">
       <ResultTable rows={result.scenarioMetrics}/>
     </ExperimentPanel>:null}
+   {result?.robustnessSensitivity?.length? <ExperimentPanel title="Чувствительность к параметру усечения" subtitle="Одинаковые случайные наблюдения для f=0–3 и k=0–3">
+     <ResultTable rows={result.robustnessSensitivity}/>
+     <p className="r27-note">Предварительное сравнение фиксированного числа усечений с каждой стороны. Никакой подбор по скрытым меткам нарушителя не выполняется. Статистическая значимость и практическая оптимальность выбора k не подтверждены.</p>
+    </ExperimentPanel>:null}
    {result?<>
      <section className="panel r27-study-summary">
        <header className="panel-header"><div><h2>Основные результаты исследования</h2><p>Сводные оценки и исходные параметры расчёта</p></div></header>
