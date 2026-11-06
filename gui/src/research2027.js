@@ -19,7 +19,7 @@ const avg=x=>x.length?x.reduce((a,b)=>a+b,0)/x.length:0;
 const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=(z.length-1)*q;const lo=Math.floor(h);return z[lo]+(z[Math.min(z.length-1,lo+1)]-z[lo])*(h-lo);};
 export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
-export const RESEARCH_MODEL_VERSION="research-2027-2.5.0-remediation";
+export const RESEARCH_MODEL_VERSION="research-2027-2.6.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
  if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
  const nodes=Array.from({length:n},(_,i)=>i);
@@ -67,9 +67,9 @@ const scenarioSettings=[
 ];
 export function runUncertainty(c){
  const r=rng(c.seed);const rows=[],samples=[],oracleBenchmark=[];const names=["Знак среднего","Робастное согласование","Оценка по наблюдаемым признакам"];
- for(const s of scenarioSettings){const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
+ for(const s of scenarioSettings){const missingProbability=clamp(c.loss*s.missing,0,1);const acc=names.map(()=>({correct:0,accepted:0,delay:0,wrong:0})),oracle={correct:0,accepted:0};for(let k=0;k<c.runs;k++){
   const truth=r.random()<.5?-1:1;const obs=[];
-  for(let i=0;i<c.agents;i++){if(r.random()<clamp(c.loss*s.missing,0,.9))continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,oracleWeight:reliability,d:stale?3:1});}
+  for(let i=0;i<c.agents;i++){if(r.random()<missingProbability)continue;const sigma=c.signalNoise*s.noise;const attacked=r.random()<c.corruption;const stale=r.random()<s.delay;const x=(stale?-truth:truth)+r.normal()*sigma+(attacked?-truth*1.6:0);const reliability=(attacked?.22:.93)/(sigma*sigma+.15)*(stale?.22:1);obs.push({x,oracleWeight:reliability,d:stale?3:1});}
   const values=obs.map(o=>o.x).sort((a,b)=>a-b);const trim=Math.min(Math.floor(values.length*.16),Math.floor((values.length-1)/2));
   const trimmed=values.slice(trim,values.length-trim);
   const weights=estimateReliabilityFromObservations(obs.map(({x,d})=>({x,d})),c.signalNoise*s.noise);
@@ -85,14 +85,14 @@ export function runUncertainty(c){
  acc.forEach((m,j)=>{
   const acceptedCI=wilson95(m.accepted,c.runs),correctCI=wilson95(m.correct,c.runs),wrongCI=wilson95(m.wrong,c.runs);
   const conditionalCI=m.accepted?wilson95(m.correct,m.accepted):null;
-  const row={scenario:s.name,method:names[j],runs:c.runs,coverage:m.accepted/c.runs,coverageCI95Low:acceptedCI.lower,coverageCI95High:acceptedCI.upper,
+  const row={scenario:s.name,method:names[j],runs:c.runs,effectiveMissingProbability:missingProbability,coverage:m.accepted/c.runs,coverageCI95Low:acceptedCI.lower,coverageCI95High:acceptedCI.upper,
    correctUnconditional:m.correct/c.runs,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
    accuracy:m.accepted?m.correct/m.accepted:null,accuracyCI95Low:conditionalCI?.lower??null,accuracyCI95High:conditionalCI?.upper??null,
    errorRate:m.wrong/c.runs,errorCI95Low:wrongCI.lower,errorCI95High:wrongCI.upper,
    meanObservationAge:m.accepted?m.delay/m.accepted:null};
   rows.push(row);samples.push(row);
  });
- oracleBenchmark.push({scenario:s.name,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});}
+ oracleBenchmark.push({scenario:s.name,effectiveMissingProbability:missingProbability,method:"Идеализированный контроль с истинными флагами",oracle:true,runs:c.runs,coverage:oracle.accepted/c.runs,accuracy:oracle.accepted?oracle.correct/oracle.accepted:null,correctUnconditional:oracle.correct/c.runs});}
  return {rows,oracleBenchmark,summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
 export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
