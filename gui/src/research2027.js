@@ -113,7 +113,7 @@ export function runUncertainty(c,checkpoint=null){
  }
  return {rows,oracleBenchmark,
   ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"uncertainty",complete:true,
-   runsPerScenario:c.runs,scenarios:4,entries:sourceRuns}}:{}),
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,threshold:c.threshold,entries:sourceRuns}}:{}),
   summary:"Три сравниваемых метода используют только наблюдения и одинаковый порог. Отдельный oracleBenchmark вычислен с истинными флагами и не входит в практическое ранжирование.",chartKey:"correctUnconditional",chartLabel:"P(правильное решение без отказа)",series:"method",limits:"Прикладной вес строится из отклонения от медианы и наблюдаемого возраста сообщения; оценщик синтетический и не калиброван. OracleBenchmark использует скрытые истинные флаги только как идеализированный контроль."};
 }
 export function propagate(n,edges,initial,r,p,steps,defense=0,tape=null){
@@ -364,7 +364,7 @@ export function runMisinformation(c,checkpoint=null){
  }
  return {rows,scenarioMetrics,robustnessSensitivity,
   ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"misinformation",complete:true,
-   runsPerScenario:c.runs,scenarios:4,entries:sourceRuns}}:{}),
+   runsPerScenario:c.runs,scenarios:4,agents:c.agents,threshold:c.threshold,entries:sourceRuns}}:{}),
   statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
 }
 export function validateStudy(id,raw={}){
