@@ -21,7 +21,7 @@ const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=
 export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
  getState:()=>state>>>0,restore:old=>{if(!Number.isInteger(old)||old<1||old>4294967295)throw Error("Некорректная контрольная точка ГПСЧ");state=old>>>0;}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
-export const RESEARCH_MODEL_VERSION="research-2027-2.11.0-remediation";
+export const RESEARCH_MODEL_VERSION="research-2027-2.12.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
  if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
  const nodes=Array.from({length:n},(_,i)=>i);
@@ -361,10 +361,11 @@ export function runMisinformation(c,checkpoint=null){
  const rows=checkpoint?.rows?[...checkpoint.rows]:[],
   scenarioMetrics=checkpoint?.scenarioMetrics?[...checkpoint.scenarioMetrics]:[],
   robustnessSensitivity=checkpoint?.robustnessSensitivity?[...checkpoint.robustnessSensitivity]:[],
+  pairedEffects=checkpoint?.pairedEffects?[...checkpoint.pairedEffects]:[],
   sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
  const methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
  for(let bad=checkpoint?.nextScenario??0;bad<=Math.min(3,c.agents-1);bad++){
-  const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0}));
+  const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0,riskSamples:[]}));
   const trimStats=Array.from({length:4},()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
   for(let k=0;k<c.runs;k++){
    const truth=r.random()<.5?1:-1;const seeds=new Set();while(seeds.size<bad)seeds.add(sample(r,c.agents));const exposed=new Set(seeds);
@@ -386,7 +387,11 @@ export function runMisinformation(c,checkpoint=null){
     eventTapes:rawTapes,observations:observed.map((x,i)=>({agent:i+1,value:x})),
     methodEstimates:[...votes],trimEstimates:Array.from({length:4},(_,trim)=>tmean(observed,trim)),
     estimatorUsesHiddenFlags:false});
-   votes.forEach((v,j)=>{const m=stats[j];if(Math.abs(v)<c.threshold)m.abstain++;else if(Math.sign(v)===truth)m.correct++;else m.wrong++;
+   votes.forEach((v,j)=>{const m=stats[j];let cost=0;
+     if(Math.abs(v)<c.threshold){m.abstain++;cost=c.costRefuse;}
+     else if(Math.sign(v)===truth)m.correct++;
+     else{m.wrong++;cost=c.costWrong;}
+     m.riskSamples.push(cost);
      m.deviation+=Math.abs(v-truth);});
    for(let trim=0;trim<=3;trim++){
     const estimate=tmean(observed,trim),m=trimStats[trim];
@@ -400,11 +405,13 @@ export function runMisinformation(c,checkpoint=null){
   stats.forEach((m,j)=>{
    const wrongCI=wilson95(m.wrong,c.runs),refuseCI=wilson95(m.abstain,c.runs),correctCI=wilson95(m.correct,c.runs);
    const risk=c.costWrong*wrongCI.estimate+c.costRefuse*refuseCI.estimate;
+   const riskCI=mean95(m.riskSamples);
    rows.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,compromised:bad,method:methods[j],runs:c.runs,
     wrongProbability:wrongCI.estimate,wrongCI95Low:wrongCI.lower,wrongCI95High:wrongCI.upper,
     correctProbability:correctCI.estimate,correctCI95Low:correctCI.lower,correctCI95High:correctCI.upper,
     abstentionProbability:refuseCI.estimate,abstentionCI95Low:refuseCI.lower,abstentionCI95High:refuseCI.upper,
-    meanDeviation:m.deviation/c.runs,risk,costWrong:c.costWrong,costRefuse:c.costRefuse});
+    meanDeviation:m.deviation/c.runs,risk,riskCI95Low:riskCI.lower,riskCI95High:riskCI.upper,
+    riskCIMethod:riskCI.method,costWrong:c.costWrong,costRefuse:c.costRefuse});
   });
   trimStats.forEach((m,trim)=>{
    const correct=m.correct/c.runs,wrong=m.wrong/c.runs,abstain=m.abstain/c.runs;
@@ -414,10 +421,25 @@ export function runMisinformation(c,checkpoint=null){
     meanDeviation:m.deviation/c.runs,risk:c.costWrong*wrong+c.costRefuse*abstain,
     costWrong:c.costWrong,costRefuse:c.costRefuse});
   });
+  for(const baselineIndex of [0,1]){
+   const differences=stats[baselineIndex].riskSamples.map((cost,i)=>cost-stats[2].riskSamples[i]);
+   const interval=c.runs>=2?pairedDifference95(stats[baselineIndex].riskSamples,stats[2].riskSamples,c.seed+bad*100+baselineIndex,300):null;
+   const p=c.runs>=2?pairedSignFlipP(differences,c.seed+bad*100+baselineIndex,4095):null;
+   pairedEffects.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,
+    baseline:methods[baselineIndex],method:methods[2],metric:"risk",runs:c.runs,
+    riskReduction:interval?.estimate??null,riskReductionCI95Low:interval?.lower??null,
+    riskReductionCI95High:interval?.upper??null,pRaw:p?.p??null,pHolm:null,
+    holmReject05:null,paired:true,intervalMethod:interval?.method??null});
+  }
   if(checkpoint&&bad<Math.min(3,c.agents-1))
-   return {__checkpoint:{nextScenario:bad+1,randomState:r.getState(),rows,scenarioMetrics,robustnessSensitivity,sourceRuns}};
+   return {__checkpoint:{nextScenario:bad+1,randomState:r.getState(),rows,scenarioMetrics,robustnessSensitivity,pairedEffects,sourceRuns}};
  }
- return {rows,scenarioMetrics,robustnessSensitivity,
+ const tested=pairedEffects.filter(effect=>effect.pRaw!==null);
+ const adjusted=holmAdjusted(tested.map(effect=>effect.pRaw));
+ tested.forEach((effect,i)=>{effect.pHolm=adjusted[i];effect.holmReject05=adjusted[i]<.05;});
+ return {rows,scenarioMetrics,robustnessSensitivity,pairedEffects,
+  multipleTesting:{family:"E6-risk-trimmed-vs-two-baselines-across-four-attack-levels",
+   planned:8,tested:tested.length,correction:"Holm-FWER-0.05",unadjustedCI:true},
   ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"misinformation",complete:true,
    runsPerScenario:c.runs,scenarios:4,agents:c.agents,threshold:c.threshold,entries:sourceRuns}}:{}),
   statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
@@ -485,7 +507,7 @@ export function validateResearchCheckpoint(id,c,state){
  const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
-  id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n,
+  id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n,pairedEffects:2*n,
    ...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:{};
  for(const [key,size] of Object.entries(lengths)){
   if((!Array.isArray(state[key])&&n>0)||(Array.isArray(state[key])&&state[key].length!==size))
