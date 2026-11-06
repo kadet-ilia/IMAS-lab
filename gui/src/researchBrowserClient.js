@@ -36,7 +36,7 @@ async function openDb(){
 }
 async function access(key,value,write=false){
  const db=await openDb();
- if(!db){if(write){memory.set(key,value);return;}return memory.get(key);}
+ if(!db){if(write){if(value===null)memory.delete(key);else memory.set(key,value);return;}return memory.get(key);}
  return new Promise((resolve,reject)=>{
   let settled=false,data;
   const finish=(error=null)=>{
@@ -47,7 +47,7 @@ async function access(key,value,write=false){
   };
   try{
    const transaction=db.transaction(STORE,write?"readwrite":"readonly");
-   const request=write?transaction.objectStore(STORE).put(value,key):transaction.objectStore(STORE).get(key);
+   const request=write?(value===null?transaction.objectStore(STORE).delete(key):transaction.objectStore(STORE).put(value,key)):transaction.objectStore(STORE).get(key);
    if(!write)request.onsuccess=()=>{data=request.result;};
    transaction.oncomplete=()=>finish();
    transaction.onerror=()=>finish(transaction.error||request.error);
@@ -147,6 +147,7 @@ async function runUnlocked(id,config,key,onProgress,options){
       }).catch(e=>void fail(e));
      }catch(error){void fail(error);}
     }else if(data?.type==="result"){
+     if(next!==total-1) {void fail(Error("Результат получен без выполнения всех стадий"));return;}
      if(data.result?.id!==id||data.result.modelVersion!==RESEARCH_MODEL_VERSION||
        !data.result.metricIntegrity?.valid){void fail(Error("Worker вернул недостоверный результат"));return;}
      job.finishing=true;terminate();
