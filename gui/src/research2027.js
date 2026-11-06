@@ -305,14 +305,18 @@ export function runMisinformation(c,checkpoint=null){
  const r=rng(c.seed);if(checkpoint?.randomState!==undefined)r.restore(checkpoint.randomState);
  const rows=checkpoint?.rows?[...checkpoint.rows]:[],
   scenarioMetrics=checkpoint?.scenarioMetrics?[...checkpoint.scenarioMetrics]:[],
-  robustnessSensitivity=checkpoint?.robustnessSensitivity?[...checkpoint.robustnessSensitivity]:[];
+  robustnessSensitivity=checkpoint?.robustnessSensitivity?[...checkpoint.robustnessSensitivity]:[],
+  sourceRuns=checkpoint?.sourceRuns?[...checkpoint.sourceRuns]:[];
  const methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
  for(let bad=checkpoint?.nextScenario??0;bad<=Math.min(3,c.agents-1);bad++){
   const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0}));
   const trimStats=Array.from({length:4},()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
   for(let k=0;k<c.runs;k++){
    const truth=r.random()<.5?1:-1;const seeds=new Set();while(seeds.size<bad)seeds.add(sample(r,c.agents));const exposed=new Set(seeds);
-   for(let t=0;t<3;t++){const eventTape=fixedEdges7.map(()=>r.random());const tick=spreadOneTick(exposed,fixedEdges7,eventTape,c.spread);exposed.clear();for(const v of tick.next)exposed.add(v);}
+   const rawTapes=c.record_source_runs?[]:null;
+   for(let t=0;t<3;t++){const eventTape=fixedEdges7.map(()=>r.random());
+    if(rawTapes)rawTapes.push([...eventTape]);
+    const tick=spreadOneTick(exposed,fixedEdges7,eventTape,c.spread);exposed.clear();for(const v of tick.next)exposed.add(v);}
    const points=[];for(let i=0;i<c.agents;i++){const compromised=seeds.has(i),misled=exposed.has(i);
     const x=truth+r.normal()*c.noise+(compromised?-truth*c.attackBias:misled?-truth*c.attackBias*.7:0);
     points.push({x});
@@ -321,6 +325,12 @@ export function runMisinformation(c,checkpoint=null){
    const weights=estimateReliabilityFromObservations(points,c.noise);
    const observed=points.map(x=>x.x);
    const votes=[avg(observed),points.reduce((a,x,i)=>a+x.x*weights[i],0)/weights.reduce((a,b)=>a+b,0),tmean(observed,3)];
+   if(rawTapes)sourceRuns.push({scenario:"Скомпрометировано "+bad+" из "+c.agents,
+    compromised:bad,run:k,truth,initialCompromised:[...seeds].sort((a,b)=>a-b),
+    exposed:[...exposed].sort((a,b)=>a-b),edges:fixedEdges7.map(e=>[...e]),
+    eventTapes:rawTapes,observations:observed.map((x,i)=>({agent:i+1,value:x})),
+    methodEstimates:[...votes],trimEstimates:Array.from({length:4},(_,trim)=>tmean(observed,trim)),
+    estimatorUsesHiddenFlags:false});
    votes.forEach((v,j)=>{const m=stats[j];if(Math.abs(v)<c.threshold)m.abstain++;else if(Math.sign(v)===truth)m.correct++;else m.wrong++;
      m.deviation+=Math.abs(v-truth);});
    for(let trim=0;trim<=3;trim++){
@@ -350,9 +360,12 @@ export function runMisinformation(c,checkpoint=null){
     costWrong:c.costWrong,costRefuse:c.costRefuse});
   });
   if(checkpoint&&bad<Math.min(3,c.agents-1))
-   return {__checkpoint:{nextScenario:bad+1,randomState:r.getState(),rows,scenarioMetrics,robustnessSensitivity}};
+   return {__checkpoint:{nextScenario:bad+1,randomState:r.getState(),rows,scenarioMetrics,robustnessSensitivity,sourceRuns}};
  }
- return {rows,scenarioMetrics,robustnessSensitivity,statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
+ return {rows,scenarioMetrics,robustnessSensitivity,
+  ...(c.record_source_runs?{sourceRunJournal:{schemaVersion:1,studyId:"misinformation",complete:true,
+   runsPerScenario:c.runs,scenarios:4,entries:sourceRuns}}:{}),
+  statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
 }
 export function validateStudy(id,raw={}){
  const def=STUDY_DEFS.find(s=>s.id===id);if(!def)throw Error("Неизвестный эксперимент");
@@ -413,7 +426,8 @@ export function validateResearchCheckpoint(id,c,state){
  const lengths=id==="uncertainty"?{rows:3*n,oracleBenchmark:n,...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:
   id==="probgraph"?{rows:3*n,pairedRuns:c.runs*n,pairedEffects:2*n}:
   id==="cascade"?{rows:2*n,pairedRuns:c.runs*n,pairedEffects:n}:
-  id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n}:{};
+  id==="misinformation"?{rows:3*n,scenarioMetrics:n,robustnessSensitivity:4*n,
+   ...(c.record_source_runs?{sourceRuns:n*c.runs}:{})}:{};
  for(const [key,size] of Object.entries(lengths)){
   if((!Array.isArray(state[key])&&n>0)||(Array.isArray(state[key])&&state[key].length!==size))
    throw Error("Повреждена контрольная точка "+id+": "+key);
