@@ -437,8 +437,6 @@ const summaryBeforePassports=await page.locator("main[data-study='uncertainty']"
  return Boolean(summary&&passport&&summary.nextElementSibling===passport);
 });
 if(!summaryBeforePassports)throw Error("UI-E2: summary must immediately precede metric passports");
-report.researchComparisonEqualWidth=true;
-report.researchSummaryBeforePassports=true;
 
 if((await page.locator(".r27-analytics > section.panel.r27-panel").count())<2)throw Error("Research study diagrams must use the shared panel component");
 const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
@@ -446,7 +444,7 @@ const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
-if((await page.locator(".r27-module-article").count())!==5)throw Error("Missing mathematical manual chapters");
+if((await page.locator(".r27-module-article").count())!==6)throw Error("Missing exactly six experiment manual articles");
 if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
 if((await page.locator(".r27-doc-simple").count())!==6)throw Error("UI-help: all six plain-language guides must appear");
 await page.getByRole("button",{name:"Вернуться к экспериментам"}).click();
@@ -454,12 +452,14 @@ if((await page.getByRole("combobox",{name:"Выбор эксперимента"}
  throw Error("UI-help: return did not restore the last experiment");
 await page.locator(".r27-experiment-navigation").getByRole("button",{name:"Справка",exact:true}).click();
 await page.getByRole("heading",{name:"Единая справка по экспериментальному комплексу IMAS-lab"}).waitFor();
-report.helpReturnToExperiment=true;
-report.helpSimpleExplanations=6;
 
 
 const report = {
   title: await page.title(),
+  researchComparisonEqualWidth:true,
+  researchSummaryBeforePassports:true,
+  helpReturnToExperiment:true,
+  helpSimpleExplanations:6,
   url: page.url(),
   browser: usingSystemBrowser ? executablePath : "bundled @sparticuz/chromium",
   bodyLength: (await page.locator("body").innerText()).trim().length,
