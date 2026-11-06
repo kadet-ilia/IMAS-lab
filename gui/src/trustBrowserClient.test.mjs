@@ -122,3 +122,96 @@ test("UP-35 a worker cannot silently claim completion with tasks missing",async(
   workerFactory:fakeWorkerFactory({premature:true})
  }),/невыполненными заданиями/);
 });
+
+
+test("UP-35 parallelism 1 vs 4 vs auto preserves all deterministic scientific results",async()=>{
+ const baseline=runActionSync(ablationPayload());
+ for(const workers of [1,4,0]){
+  await clearBrowserResults();
+  const payload=ablationPayload();
+  payload.config.parallel_workers=workers;
+  const assigned=[],progress=[];
+  const value=await runBrowserExperiment(payload,p=>progress.push(p),{
+   workerFactory:fakeWorkerFactory({delayMs:1,collect:assigned})
+  });
+  assert.equal(value.state,"completed");
+  assert.equal(value.result.completed_tasks,12);
+  assert.equal(value.result.partial,false);
+  assert.equal(value.result.parallel_workers_used,workers===0?1:workers);
+  assert.deepEqual(assigned.sort((a,b)=>a-b),Array.from({length:12},(_,i)=>i));
+  assert.deepEqual(value.result.ablation_rows,baseline.ablation_rows);
+  assert.deepEqual(value.result.ablation_contrasts,baseline.ablation_contrasts);
+  assert.ok(progress.every(p=>p.completed>=0&&p.completed<=12));
+  assert.equal(progress.at(-1).completed,12);
+ }
+});
+test("UP-35 rejected IndexedDB opening must fail rather than silently pretend persistence",async()=>{
+ await clearBrowserResults();
+ const original=globalThis.indexedDB;
+ globalThis.indexedDB={
+  open(){
+   const request={error:Error("IDB forced opening error")};
+   queueMicrotask(()=>request.onerror?.());
+   return request;
+  }
+ };
+ try{
+  const payload=ablationPayload();
+  payload.config.seed=987654321;
+  await assert.rejects(runBrowserExperiment(payload,()=>{},{
+   workerFactory:fakeWorkerFactory()
+  }),/Ошибка открытия IndexedDB/);
+ }finally{
+  if(original===undefined)delete globalThis.indexedDB;
+  else globalThis.indexedDB=original;
+ }
+ assert.equal(await stopBrowserExperiment(),false);
+});
+test("UP-35 rejected persistent checkpoint transactions must not report completed work",async()=>{
+ await clearBrowserResults();
+ const original=globalThis.indexedDB;
+ let writes=0;
+ globalThis.indexedDB={
+  open(){
+   const db={
+    objectStoreNames:{contains:()=>true},
+    close(){},
+    transaction(_store,mode){
+     const tx={error:null};
+     tx.objectStore=()=>({
+      get(){
+       const req={result:undefined,error:null};
+       queueMicrotask(()=>req.onsuccess?.());
+       return req;
+      },
+      put(){
+       writes++;
+       const req={error:null};
+       queueMicrotask(()=>{
+        tx.error=Error("simulated quota abort");
+        tx.onabort?.();
+       });
+       return req;
+      }
+     });
+     return tx;
+    }
+   };
+   const req={result:db,error:null};
+   queueMicrotask(()=>req.onsuccess?.());
+   return req;
+  }
+ };
+ try{
+  const payload=ablationPayload();
+  payload.config.seed=771132;
+  await assert.rejects(runBrowserExperiment(payload,()=>{},{
+   workerFactory:fakeWorkerFactory({delayMs:1})
+  }),/Транзакция IndexedDB не завершена/);
+  assert.ok(writes>0);
+ }finally{
+  if(original===undefined)delete globalThis.indexedDB;
+  else globalThis.indexedDB=original;
+ }
+ assert.equal(await stopBrowserExperiment(),false);
+});
