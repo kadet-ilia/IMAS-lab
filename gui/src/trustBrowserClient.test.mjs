@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {cacheKeyForPayload,runBrowserExperiment,stopBrowserExperiment,clearBrowserResults,TRUST_ORIGIN_LOCK,withOriginStorageLock} from "./trustBrowserClient.js";
+import {cacheKeyForPayload,runBrowserExperiment,stopBrowserExperiment,clearBrowserResults,TRUST_ORIGIN_LOCK,withOriginStorageLock,TRUST_CHECKPOINT_SCHEMA,snapshotCheckpoint,restoreCheckpoint} from "./trustBrowserClient.js";
 import {TRUST_MODEL_VERSION,DEFAULTS,makePlan,runTask,runActionSync} from "./trustEngine.js";
 
 test("UP-04/35 every browser cache key includes current mathematical model version",()=>{
@@ -285,5 +285,40 @@ test("UP-35 origin lock always releases after rejection so later jobs can start"
  }finally{
   if(previous)Object.defineProperty(globalThis,"navigator",previous);
   else delete globalThis.navigator;
+ }
+});
+
+
+test("UP-35 versioned checkpoint recovers exactly the completed (possibly noncontiguous) tasks",()=>{
+ const payload=ablationPayload(),plan=makePlan(payload),key=cacheKeyForPayload(payload);
+ const state=Array(plan.total).fill(null);
+ for(const index of [0,5,11])state[index]=runTask(plan,plan.tasks[index]);
+ const snap=snapshotCheckpoint(state,key,plan.total);
+ assert.equal(snap.schemaVersion,TRUST_CHECKPOINT_SCHEMA);
+ assert.equal(snap.modelVersion,TRUST_MODEL_VERSION);
+ assert.equal(snap.cacheKey,key);
+ assert.equal(snap.completed.length,3);
+ assert.deepEqual(restoreCheckpoint(snap,key,plan),state);
+ const fresh=restoreCheckpoint(null,key,plan);
+ assert.equal(fresh.length,plan.total);
+ assert.ok(fresh.every(v=>v===null));
+ const old=restoreCheckpoint({completed:snap.completed},key,plan);
+ assert.ok(old.every(v=>v===null),"unsafe unversioned snapshots must not be reused");
+});
+test("UP-35 checkpoint rejects version/key/length mismatch, duplicate indices and corrupt task data",()=>{
+ const payload=ablationPayload(),plan=makePlan(payload),key=cacheKeyForPayload(payload);
+ const state=Array(plan.total).fill(null);
+ state[0]=runTask(plan,plan.tasks[0]);
+ const snap=snapshotCheckpoint(state,key,plan.total);
+ for(const patch of [
+  {schemaVersion:TRUST_CHECKPOINT_SCHEMA+1},
+  {cacheKey:key+"tampered"},
+  {total:plan.total+1},
+  {modelVersion:"wrong-version"},
+  {completed:[...snap.completed,...snap.completed]},
+  {completed:[{index:plan.total,result:state[0]}]},
+  {completed:[{index:0,result:{rows:"invalid"}}]}
+ ]){
+  assert.throws(()=>restoreCheckpoint({...snap,...patch},key,plan),/контрольная точка/);
  }
 });
