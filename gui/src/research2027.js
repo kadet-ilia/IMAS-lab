@@ -20,7 +20,7 @@ const pct=(x,q)=>{if(!x.length)return 0;const z=[...x].sort((a,b)=>a-b);const h=
 export function rng(seed){let state=(Number(seed)>>>0)||1;const next=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};return {random:next,normal:()=>{const u=Math.max(next(),1e-12),v=next();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);},
  getState:()=>state>>>0,restore:old=>{if(!Number.isInteger(old)||old<1||old>4294967295)throw Error("Некорректная контрольная точка ГПСЧ");state=old>>>0;}};}
 const sample=(rand,n)=>Math.floor(rand.random()*n);
-export const RESEARCH_MODEL_VERSION="research-2027-2.7.0-remediation";
+export const RESEARCH_MODEL_VERSION="research-2027-2.8.0-remediation";
 export function chooseUniqueNodes(rand,n,k){
  if(!Number.isInteger(n)||!Number.isInteger(k)||k<0||k>n)throw Error("initialCount: требуется 0≤K≤N");
  const nodes=Array.from({length:n},(_,i)=>i);
@@ -277,9 +277,13 @@ export function runCascade(c,checkpoint=null){
   limits:"Коэффициенты критичности и распространения синтетические. Интервалы описывают только вариацию Монте-Карло; при малом числе хвостовых наблюдений оценки ES95 ненадёжны."};
 }
 function tmean(x,trimEachSide=3){if(!x.length)return 0;const a=[...x].sort((p,q)=>p-q),trim=Math.min(trimEachSide,Math.floor((a.length-1)/2));return avg(a.slice(trim,a.length-trim));}
-export function runMisinformation(c){
- const r=rng(c.seed),rows=[],scenarioMetrics=[],robustnessSensitivity=[],methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
- for(let bad=0;bad<=Math.min(3,c.agents-1);bad++){
+export function runMisinformation(c,checkpoint=null){
+ const r=rng(c.seed);if(checkpoint?.randomState!==undefined)r.restore(checkpoint.randomState);
+ const rows=checkpoint?.rows?[...checkpoint.rows]:[],
+  scenarioMetrics=checkpoint?.scenarioMetrics?[...checkpoint.scenarioMetrics]:[],
+  robustnessSensitivity=checkpoint?.robustnessSensitivity?[...checkpoint.robustnessSensitivity]:[];
+ const methods=["Обычное среднее","Взвешивание по наблюдаемым признакам","Усечённое среднее (fmax=3)"];
+ for(let bad=checkpoint?.nextScenario??0;bad<=Math.min(3,c.agents-1);bad++){
   const stats=methods.map(()=>({wrong:0,correct:0,abstain:0,deviation:0}));
   const trimStats=Array.from({length:4},()=>({wrong:0,correct:0,abstain:0,deviation:0}));let exposedSum=0;
   for(let k=0;k<c.runs;k++){
@@ -321,6 +325,8 @@ export function runMisinformation(c){
     meanDeviation:m.deviation/c.runs,risk:c.costWrong*wrong+c.costRefuse*abstain,
     costWrong:c.costWrong,costRefuse:c.costRefuse});
   });
+  if(checkpoint&&bad<Math.min(3,c.agents-1))
+   return {__checkpoint:{nextScenario:bad+1,randomState:r.getState(),rows,scenarioMetrics,robustnessSensitivity}};
  }
  return {rows,scenarioMetrics,robustnessSensitivity,statisticsVersion:STATISTICS_VERSION,summary:"Сравнительная оценка риска неверного коллективного решения при компрометации от нуля до трёх агентов и распространении ложной информации по девяти ориентированным зависимостям.",chartKey:"wrongProbability",chartLabel:"P(ошибочного решения)",series:"method",limits:"Для сравниваемых методов истинная метка компрометации недоступна; веса определяются по наблюдаемым оценкам. Усечение трёх значений с каждой стороны при N=7 допускает fmax=3, но не гарантирует эффективность против согласованных атак. Результаты требуют внешней калибровки. Риск = costWrong·P(ошибка)+costRefuse·P(отказ), без стоимости задержки; охват общий для сценария."};
 }
