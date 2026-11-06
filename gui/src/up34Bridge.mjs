@@ -15,7 +15,7 @@ function evaluate(testCase){
  case "trust_trace":{
   const details=simulateRun({...v.config,record_source_events:true},v.scenario||"on_off",
    v.runIndex||0,0,true).result;
-  return {configuration:details.configuration,series:details.series,
+  return {scenario:details.scenario,configuration:details.configuration,series:details.series,
    reputation:details.reputation,states:details.states,events:details.events,
    sourceEvents:details.source_event_log.events,rows:details.metrics,
    summary:details.summary};
