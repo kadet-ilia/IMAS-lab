@@ -496,6 +496,34 @@ report.researchCacheAfterReload=true;
 if(!report.researchCacheAfterNavigation||!report.researchCacheAfterReload)
  throw Error("NZ-14: research IndexedDB cache was lost during navigation/reload");
 
+// NZ-15: real Chromium UI and Worker must archive and export EVERY run,
+// with observations and hidden ground truth strictly separated.
+report.researchSourceArchives={};
+for(const [studyId,name,N] of [
+ ["study-uncertainty","uncertainty",21],["study-misinformation","misinformation",7]
+]){
+ await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption(studyId);
+ await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
+ const advanced=page.locator("aside.r27-unified-settings details.advanced").first();
+ await advanced.locator("summary").click();
+ await page.getByRole("combobox",{name:"Архивировать исходные прогоны"}).selectOption("1");
+ await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+ const sourceButton=page.locator(".r27-result-tools").getByRole("button",{name:"Скачать исходные прогоны"});
+ await sourceButton.waitFor({timeout:45000});
+ const [download]=await Promise.all([page.waitForEvent("download",{timeout:20000}),sourceButton.click()]);
+ const exported=JSON.parse(fs.readFileSync(await download.path(),"utf8"));
+ if(exported.config.record_source_runs!==1||exported.journal?.complete!==true||
+    exported.journal.entries?.length!==40||exported.journal.studyId!==name)
+  throw Error("NZ-15 incomplete raw journal: "+name);
+ for(const entry of exported.journal.entries){
+  const messages=name==="uncertainty"?entry.messages:entry.observations;
+  if(messages?.length!==N||!entry.methodEstimates||![-1,1].includes(entry.truth))
+   throw Error("NZ-15 malformed agent-level observations: "+name);
+ }
+ report.researchSourceArchives[name]={runs:exported.journal.entries.length,agents:N,
+  schema:exported.journal.schemaVersion,modelVersion:exported.modelVersion};
+}
+
 // UP-35: exercise the full Vite/React → Worker pool → four-arm ablation
 // route, not merely the mode dropdown. Keep the run deliberately small.
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
