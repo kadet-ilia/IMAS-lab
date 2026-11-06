@@ -133,5 +133,63 @@ export function auditResultMetrics(id,result){
    assert(approx(r.risk,r.costWrong*r.wrongProbability+r.costRefuse*r.abstentionProbability),"E6: cost-weighted risk");
   }
  }else throw Error("Неизвестная модель: "+id);
+ if(result?.sourceRunJournal){
+  const j=result.sourceRunJournal,R=j.runsPerScenario,N=j.agents;
+  assert(j.complete===true&&j.schemaVersion===1&&j.studyId===id&&j.scenarios===4,
+   "source journal: incompatible or incomplete manifest");
+  assert(Number.isInteger(R)&&R>0&&Number.isInteger(N)&&N>=3&&
+   Array.isArray(j.entries)&&j.entries.length===4*R,
+   "source journal: missing or truncated runs");
+  if(Array.isArray(j.entries)&&j.entries.length===4*R&&R>0&&N>0){
+   const ids=new Set(),counts=Array.from({length:4},()=>Array.from({length:3},()=>({right:0,wrong:0,refuse:0,deviation:0})));
+   for(const e of j.entries){
+    const index=id==="uncertainty"?e.scenarioIndex:e.compromised;
+    const key=index+":"+e.run;
+    assert(Number.isInteger(index)&&index>=0&&index<4&&
+     Number.isInteger(e.run)&&e.run>=0&&e.run<R&&!ids.has(key),"source journal: missing or repeated run ID");
+    ids.add(key);
+    if(!Number.isInteger(index)||index<0||index>=4)continue;
+    assert([1,-1].includes(e.truth)&&Array.isArray(e.methodEstimates)&&
+     e.methodEstimates.length===3&&e.methodEstimates.every(Number.isFinite),"source journal: invalid truth or estimators");
+    if(!Array.isArray(e.methodEstimates)||e.methodEstimates.length!==3)continue;
+    if(id==="uncertainty"){
+     assert(Array.isArray(e.messages)&&e.messages.length===N&&
+      e.messages.every((m,i)=>m.agent===i+1&&(m.missing===true||
+       m.missing===false&&Number.isFinite(m.x)&&[1,3].includes(m.age))),
+      "E2 source journal: missing per-agent observation");
+    }else if(id==="misinformation"){
+     assert(Array.isArray(e.observations)&&e.observations.length===N&&
+      e.observations.every((m,i)=>m.agent===i+1&&Number.isFinite(m.value))&&
+      Array.isArray(e.eventTapes)&&e.eventTapes.length===3&&
+      e.eventTapes.every(t=>Array.isArray(t)&&t.length===9&&t.every(inUnit))&&
+      Array.isArray(e.trimEstimates)&&e.trimEstimates.length===4&&
+      approx(e.trimEstimates[3],e.methodEstimates[2]),
+      "E6 source journal: missing graph tape or observation");
+    }
+    const available=id==="uncertainty"?e.messages?.filter(m=>m.missing===false).length||0:N;
+    assert(id!=="uncertainty"||available===e.observedCount,
+     "E2 source journal: incorrect observed count");
+    e.methodEstimates.forEach((estimate,k)=>{
+     const c=counts[index][k],accepted=(id==="uncertainty"?available>=Math.ceil(N*.3):true)&&Math.abs(estimate)>=j.threshold;
+     if(!accepted)c.refuse++;
+     else if(Math.sign(estimate)===e.truth)c.right++;else c.wrong++;
+     if(id==="misinformation")c.deviation+=Math.abs(estimate-e.truth);
+    });
+   }
+   assert(ids.size===4*R,"source journal: missing pair identifiers");
+   for(let si=0;si<4;si++)for(let k=0;k<3;k++){
+    const row=rows[3*si+k],count=counts[si][k];
+    assert(Boolean(row),"source journal: missing aggregated row");
+    if(!row)continue;
+    if(id==="uncertainty")assert(approx(row.coverage,(count.right+count.wrong)/R)&&
+     approx(row.correctUnconditional,count.right/R)&&approx(row.errorRate,count.wrong/R),
+     "E2 source journal: aggregate counts disagree");
+    if(id==="misinformation")assert(approx(row.correctProbability,count.right/R)&&
+     approx(row.wrongProbability,count.wrong/R)&&approx(row.abstentionProbability,count.refuse/R)&&
+     approx(row.meanDeviation,count.deviation/R),
+     "E6 source journal: aggregate counts disagree");
+   }
+  }
+ }
  return {version:METRIC_PASSPORT_VERSION,valid:issues.length===0,checkedRows:rows.length,issues};
 }
