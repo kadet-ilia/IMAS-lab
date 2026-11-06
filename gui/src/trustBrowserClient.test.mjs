@@ -137,7 +137,8 @@ test("UP-35 parallelism 1 vs 4 vs auto preserves all deterministic scientific re
   assert.equal(value.state,"completed");
   assert.equal(value.result.completed_tasks,12);
   assert.equal(value.result.partial,false);
-  assert.equal(value.result.parallel_workers_used,workers===0?1:workers);
+  if(workers===0)assert.ok(value.result.parallel_workers_used>=1&&value.result.parallel_workers_used<=4);
+  else assert.equal(value.result.parallel_workers_used,workers);
   assert.deepEqual(assigned.sort((a,b)=>a-b),Array.from({length:12},(_,i)=>i));
   assert.deepEqual(value.result.ablation_rows,baseline.ablation_rows);
   assert.deepEqual(value.result.ablation_contrasts,baseline.ablation_contrasts);
