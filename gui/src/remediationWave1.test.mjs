@@ -88,3 +88,23 @@ test("NZ-11: E3/E5 animation matches the actual paired run zero, not another RNG
  assert.equal(e5.replay.frames.at(-1).status.filter(x=>x==="affected").length,
   e5.pairedRuns[0].methods[0].affectedCount);
 });
+
+test("NZ-09: fixed f by trim grid uses the same observations as main E6 trim=3",()=>{
+ const r=executeStudy("misinformation",{runs:60,seed:472,spread:.4,noise:.2,
+  attackBias:2.5,threshold:.16,costWrong:3,costRefuse:.5});
+ assert.equal(r.robustnessSensitivity.length,16);
+ for(let f=0;f<=3;f++){
+  const values=r.robustnessSensitivity.filter(x=>x.compromised===f);
+  assert.deepEqual(values.map(x=>x.trim_each_side),[0,1,2,3]);
+  for(const x of values){
+   assert.ok(Math.abs(x.correctProbability+x.wrongProbability+x.abstentionProbability-1)<1e-12);
+   assert.ok(Math.abs(x.risk-(3*x.wrongProbability+.5*x.abstentionProbability))<1e-12);
+  }
+  const main=r.rows.find(x=>x.compromised===f&&x.method.includes("fmax=3"));
+  const fixed=values.find(x=>x.trim_each_side===3);
+  assert.equal(fixed.correctProbability,main.correctProbability);
+  assert.equal(fixed.wrongProbability,main.wrongProbability);
+  assert.equal(fixed.abstentionProbability,main.abstentionProbability);
+  assert.equal(fixed.meanDeviation,main.meanDeviation);
+ }
+});
