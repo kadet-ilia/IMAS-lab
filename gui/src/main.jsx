@@ -653,7 +653,7 @@ const HELP_SECTIONS = [
 ];
 
 function TrustHelpArticle() {
-  return <article className="help-article"><h2 className="help-article-title">Справка по модельному эксперименту ИМАС</h2>
+  return <article className="help-article"><h2 className="help-article-title">Расчёт доверия: математическая модель и порядок эксперимента</h2>
     <section id="purpose"><h2>Назначение и постановка задачи</h2><p>Комплекс моделирует коллективную выработку скалярного решения в интеллектуальной мультиагентной системе при наличии корректных, византийских и ложных Sybil-идентичностей. Цель эксперимента состоит в оценке точности, воспроизводимости и киберустойчивости трех методов агрегирования при изменении параметров доверия, изоляции, атаки и сети.</p><div className="process-strip"><span>Предложения агентов</span><i>→</i><span>Сетевая доставка</span><i>→</i><span>Доверие и репутация</span><i>→</i><span>Робастное решение</span><i>→</i><span>Изоляция</span></div></section>
     <section id="agents"><h2>Агенты и модель нарушителя</h2><p>Корректный агент формирует предложение как сумму желаемого действия и нормального шума. Византийские агенты создают постоянное, малозаметное, периодическое или согласованное смещение. Sybil-идентичности являются дополнительными виртуальными агентами, управляемыми нарушителем и передающими согласованные значения.</p><Formula number="1">x<sub>i</sub>(t)=x<sup>*</sup>(t)+ε<sub>i</sub>(t), ε<sub>i</sub>∼N(0,σ²).</Formula><Formula number="2">x<sub>i</sub><sup>adv</sup>(t)=x<sup>*</sup>(t)+d·b<sub>s</sub>+η<sub>i</sub>(t).</Formula></section>
     <section id="trust"><h2>Дисконтированная Beta-модель доверия</h2><p>Для каждой пары «наблюдатель–оцениваемый агент» накапливаются положительные и отрицательные свидетельства. Отсутствующее из-за сетевого ограничения наблюдение обозначается NaN и не изменяет апостериорные параметры.</p><Formula number="3">α<sub>ij</sub>(t)=α₀+Σ<sub>k=0</sub><sup>W−1</sup>φ<sup>k</sup>e<sub>ij</sub>(t−k).</Formula><Formula number="4">β<sub>ij</sub>(t)=β₀+Σ<sub>k=0</sub><sup>W−1</sup>φ<sup>k</sup>[1−e<sub>ij</sub>(t−k)].</Formula><Formula number="5">w<sub>ij</sub>(t)=α<sub>ij</sub>(t)/(α<sub>ij</sub>(t)+β<sub>ij</sub>(t)).</Formula></section>
@@ -682,6 +682,7 @@ function App() {
   const [scenario, setScenario] = useState("collusion");
   const [attackLevel, setAttackLevel] = useState("high");
   const [activeTab, setActiveTab] = useState("trace");
+  const lastExperimentRef=useRef("trace");
   const [trace, setTrace] = useState(null);
   const [monteCarlo, setMonteCarlo] = useState(null);
   const [sensitivityByMode, setSensitivityByMode] = useState({ one_factor: null, factorial: null, ablation: null });
@@ -694,6 +695,7 @@ function App() {
   const runningRef = useRef(false);
   const researchActionsRef = useRef(null);
   const [researchRuntime,setResearchRuntime] = useState(null);
+  useEffect(()=>{if(activeTab!=="help2027")lastExperimentRef.current=activeTab;},[activeTab]);
 
   const request = async (action, options = {}) => {
     if (runningRef.current) return;
@@ -798,7 +800,7 @@ function App() {
       {isResearch
         ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
         : activeTab==="help2027"
-          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
+          ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS} onBack={()=>setActiveTab(lastExperimentRef.current)}/></main>
           : <ExperimentLayout
               sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
               navigation={experimentNavigation}
