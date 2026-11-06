@@ -9,6 +9,7 @@ on:
       - 'README.md'
       - 'experiment.py'
       - 'validate_external_calibration.py'
+      - 'scientific_release_gate.py'
       - 'test_*.py'
       - 'requirements.txt'
       - '.github/workflows/verify-2027.yml'
@@ -19,6 +20,7 @@ on:
       - 'README.md'
       - 'experiment.py'
       - 'validate_external_calibration.py'
+      - 'scientific_release_gate.py'
       - 'test_*.py'
       - 'requirements.txt'
       - 'audit/remediation/**'
@@ -77,4 +79,13 @@ jobs:
           node-version: '22'
       - run: pip install -r requirements.txt
       - name: Cross-language independent reference and legacy Python regressions
-        run: python -m unittest -v test_experiment test_encoding test_repository_hygiene test_primitive_parity test_up34_deterministic test_up34_network_trace test_up34_research_raw test_up34_graph_and_marking test_external_calibration test_legacy_divergences
+        run: python -m unittest -v test_experiment test_encoding test_repository_hygiene test_primitive_parity test_up34_deterministic test_up34_network_trace test_up34_research_raw test_up34_graph_and_marking test_external_calibration test_scientific_release_gate test_legacy_divergences      - name: UP-36 evidence-readiness report (not scientific acceptance)
+        run: python scientific_release_gate.py --output acceptance-readiness.json
+      - name: Upload fail-closed scientific acceptance blockers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-up36-acceptance-readiness
+          path: acceptance-readiness.json
+          if-no-files-found: warn
+          retention-days: 14
