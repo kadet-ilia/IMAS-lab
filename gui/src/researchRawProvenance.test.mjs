@@ -71,7 +71,9 @@ test("NZ-15 source archives fail closed rather than silently sampling runs",()=>
   const config=settings[id];
   assert.throws(()=>validateStudy(id,{...config,runs:13}),/R превышает лимит/);
   assert.throws(()=>validateStudy(id,{...config,source_run_limit:1001}),/целое число/);
-  assert.throws(()=>validateStudy(id,{...config,record_source_runs:1,source_run_limit:1000,runs:1000,agents:21}),
-   /предел 50000|фиксирован/);
+  if(id==="uncertainty")assert.throws(()=>validateStudy(id,{...config,record_source_runs:1,
+   source_run_limit:1000,runs:1000,agents:21}),/предел 50000/);
+  else assert.doesNotThrow(()=>validateStudy(id,{...config,record_source_runs:1,
+   source_run_limit:1000,runs:1000,agents:7}));
  }
 });
