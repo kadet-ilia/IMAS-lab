@@ -9,6 +9,7 @@ export function chooseAction(st,step,c,generated,admitted){
  const safe=candidates.filter(a=>a.id!=="isolate_segment");
  const fail=reason=>({action:"operator",reason,automatic:false,safe:true,correct:false,margin:null});
  if(!safe.length)return fail("empty_safe_set");
+ if(!admitted.length)return {...fail("no_admitted_agents"),action:"refusal",safe:false};
  if(admitted.length<c.minimum_admitted)return fail("insufficient_agents");
  const scored=safe.map(a=>{
   let s=0,sw=0;
