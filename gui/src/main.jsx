@@ -246,8 +246,8 @@ function NumberField({ label, value, min, max, step = 1, onChange, hint, id, too
   );
 }
 
-function SelectField({ label, value, onChange, children, tooltip }) {
-  return <label className="field"><FieldLabel label={label} tooltip={tooltip} /><select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
+function SelectField({ label, value, onChange, children, tooltip, disabled=false }) {
+  return <label className="field"><FieldLabel label={label} tooltip={tooltip} /><select aria-label={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>{children}</select></label>;
 }
 
 function BoolField({ label, checked, onChange, hint, tooltip }) {
@@ -329,7 +329,7 @@ function Sidebar({config,setConfig,scenario,setScenario,attackLevel,setAttackLev
     <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
-        <SelectField label="Модель" value={model} onChange={setModel}>
+        <SelectField label="Модель" value={model} onChange={setModel} disabled={running||articleRunning}>
           <option value="legacy">Beta-доверие + EigenTrust (trust-js-2.10)</option>
           <option value="article">Статья (формулы 1–21)</option>
         </SelectField>
@@ -828,6 +828,8 @@ function App() {
     ablation: sensitivityByMode.ablation?.client_signature === experimentSignature ? sensitivityByMode.ablation : null,
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
+  const activeArticleResult=articleResult?.client_signature===JSON.stringify(articleConfig)
+    &&(activeTab!=="sensitivity"||articleResult?.article_kind==="table3")?articleResult:null;
   const exportVisibleCharts = () => {
     const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
@@ -880,7 +882,12 @@ function App() {
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
-              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario}
+                 attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={()=>request("trace")} running={running}
+                 model={trustModel} setModel={setTrustModel} articleConfig={articleConfig}
+                 setArticleConfig={setArticleConfig} articleView={articleView}
+                 onArticlePreset={articlePreset} articleClaims={articleClaims} setArticleClaims={setArticleClaims}
+                 articleRunning={articleRunning} onArticleRun={runForTab}/>} 
               navigation={experimentNavigation}
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
