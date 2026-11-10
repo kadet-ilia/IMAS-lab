@@ -407,6 +407,8 @@ for (let i=0; i<researchTabs.length; i++) {
 }
 // The article engine is NOT a seventh experiment; it is the second model of E1.
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
+if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).locator("option").count())!==6)
+ throw Error("An article model must not add a seventh experiment menu item");
 const trustModelControl=page.getByRole("combobox",{name:"Модель"});
 await trustModelControl.selectOption("article");
 if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue())!=="trace")
@@ -418,6 +420,10 @@ await page.locator(".sidebar").getByRole("button",{name:"Запустить эк
 await page.locator(".article-table tbody tr").first().waitFor({timeout:30000});
 if((await page.locator(".article-table tbody tr").count())!==4)
  throw Error("E1 article model must display four aggregation methods");
+await page.locator(".article-chart svg").first().waitFor({timeout:10000});
+if((await page.locator(".article-chart svg").count())<2)
+ throw Error("Article mode E1 must render error and trust charts inside the existing layout");
+await page.screenshot({path:path.join(here,"article-trust.png"),fullPage:false});
 await trustModelControl.selectOption("legacy");
 await page.getByLabel("Число Sybil-идентичностей").count(); // original E1 controls are retained.
 if((await page.locator(".article-trust-settings").count())!==0)
