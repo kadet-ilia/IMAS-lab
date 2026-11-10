@@ -2,6 +2,17 @@
 
 Version: `imas-article-1.0.0`. Development branch: `codex/imas-article-model-20261110`, based on `IMAS_LaB_test`.
 
+## Integration target: EXISTING experiment E1 "Расчёт доверия"
+
+**This is a modification of E1, not a seventh experiment.** The experiment selector retains exactly six studies: "Расчёт доверия" and E2–E6. The first field in the existing E1 sidebar is now "Модель":
+
+- **Статья (формулы 1–21)** — vector imas-article-1.0.0 with its own quality, trust, CUSUM, action choice, and Psi settings.
+- **Beta-доверие + EigenTrust (trust-js-2.10)** — untouched original model, kept for backwards-compatible E1 results and regression baseline.
+
+Both modes occupy the same `ExperimentLayout`, share E1's header, toolbar, top navigation, tabs (Один прогон / Монте-Карло / Чувствительность / Данные), and use the same export/chart area. E2–E6 are unchanged and no extra menu item is registered. The original Beta model is the initial selection to retain the previous browser behavior and CI baselines; reviewers may switch to the article model directly in E1.
+
+Current article-mode mapping: "Один прогон" displays the per-run trace and mean error/trust trajectory; "Монте-Карло" reports paired aggregated summary; "Чувствительность" evaluates seven Table-3 scenarios; "Данные" provides the metric passport and exports. The source article's independent parameter sensitivity grid remains a future extension.
+
 ## Separation and reproducibility
 
 The existing `trust-js-2.10.0-remediation` model remains in `gui/src/trustEngine.js`. The new model is implemented in `gui/src/articleModel/` and `gui/src/articleEngine.js`. `trustWorker.js` dispatches only when `config.model === "article"`. No legacy mathematical functions are rewritten. Separate IndexedDB database `imas-article-model-v1` is used for new model results. The cache key includes the full validated configuration and the mathematical model version.
