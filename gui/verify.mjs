@@ -413,6 +413,7 @@ await page.locator(".article-claims").waitFor();
 await page.getByRole("button",{name:"Рассчитать · парные прогоны"}).click();
 await page.locator(".article-table tbody tr").first().waitFor({timeout:30000});
 if((await page.locator(".article-table tbody tr").count())!==4)throw Error("Article mode: expected four aggregation methods");
+await page.locator(".article-chart .recharts-surface").first().waitFor({timeout:10000});
 if((await page.locator(".article-chart .recharts-surface").count())!==2)throw Error("Article mode: missing error/trust charts");
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
