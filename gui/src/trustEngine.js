@@ -224,9 +224,12 @@ export function trimmedWeightedMean(values,weights,k){
  return total<=1e-15?mean(keep.map(i=>values[i])):sum(keep.map((i,j)=>values[i]*w[j]))/total;
 }
 function aggregate(proposals,reputation,available,c,last){
- const idx=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
- if(!idx.length)return Object.fromEntries(METHODS.map(method=>[method,null]));
- const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight)),arithmetic=mean(v);
+ const everyone=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
+ if(!everyone.length)return Object.fromEntries(METHODS.map(method=>[method,null]));
+ const idx=c.trust_algorithm==="article"?everyone.filter(i=>reputation[i]>=c.admission_threshold):everyone;
+ const arithmetic=mean(everyone.map(i=>proposals[i]));
+ if(!idx.length)return {arithmetic_mean:arithmetic,trust_weighted_mean:null,proposed_robust:null};
+ const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight));
  const weighted=sum(v.map((x,i)=>x*w[i]))/sum(w),center=median(v),cv=v.map(x=>clamp(x,center-c.clip_radius,center+c.clip_radius));
  return {arithmetic_mean:arithmetic,trust_weighted_mean:weighted,proposed_robust:clamp(trimmedWeightedMean(cv,w,c.trim_each_side),c.safe_action_min,c.safe_action_max)};
 }
@@ -409,6 +412,12 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  let active=all(n).map(i=>!sybil[i]),low=Array(n).fill(0),isolatedAt=Array(n).fill(null),until=Array(n).fill(-1);
  const firstAttackIsolationAt=Array(n).fill(null);
  const hist=[],queue=[],lastValues=Array(n).fill(NaN),lastSteps=Array(n).fill(-1e9);
+ const articleMode=c.trust_algorithm==="article",articleTrust={
+  D:makeMat(n,c.initial_trust),E:Array(n).fill(c.initial_trust),
+  T:makeMat(n,c.initial_trust),tau:Array(n).fill(c.initial_trust),
+  z:Array(n).fill(0)
+ };
+ let precedingProposals=Array(n).fill(NaN);
  let previous=Object.fromEntries(METHODS.map(m=>[m,null]));
  const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
  let attempted=0,delivered=0,lost=0,dropped=0,expired=0,queued=0;
@@ -426,14 +435,28 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
-  const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
+  const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),
+     direct=articleMode?articleTrust.D:betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
    if(record)for(let i=0;i<n;i++)record({kind:"proposal_generated",step:t+1,source:i+1,value:proposed[i],
     active:running[i],byzantine:bad[i],sybil:sybil[i]});
-  for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
-  const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
+  if(articleMode)for(let i=0;i<n;i++)scores[i]=articleTrust.tau[i];
+  else for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
+  const eigen=articleMode?[...articleTrust.E]:eigenTrust(direct,running,c.reputation_damping),
+    rep=articleMode?[...articleTrust.tau]:scores.map((s,i)=>.7*s+.3*eigen[i]);
+  trustWallMs+=performance.now()-trustT0;
   const transportT0=performance.now();
   const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex,record);
   transportWallMs+=performance.now()-transportT0;
+  // Same E1 simulator, now with article trust updated from this tick's evidence.
+  const articleEvidence=articleMode?
+    observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record):null;
+  const articleQ=articleMode?
+    articleInteractionQuality(articleEvidence.matrix,tx.values,precedingProposals,c):null;
+  if(articleMode){
+   updateArticleTrust(articleTrust,articleQ,c,running);
+   for(let i=0;i<n;i++)rep[i]=articleTrust.tau[i];
+   precedingProposals=[...tx.values];
+  }
   const aggregateT0=performance.now();
   const decisions=aggregate(tx.values,rep,tx.available,c,previous);
   aggregateBundleWallMs+=performance.now()-aggregateT0;previous=decisions;
@@ -449,8 +472,8 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
   }
   const evidenceT0=performance.now();
-  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record);
-  hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
+  const evidence=articleMode?articleEvidence:observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record);
+  if(!articleMode){hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();}
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
    communicationState=accountCommunicationStep(communicationState,tx.stats,evidence.stats,queue.length,t+1);
    if(queued!==queue.length||communicationState.total.attempted!==attempted||
@@ -459,8 +482,9 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
      communicationState.total.expired!==expired||communicationState.total.pending!==queued)
     throw Error("Communication: disagreement between transport counters and channel ledger at tick "+(t+1));
    if(detail)messageLedger.push(communicationState);
-  const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
-  for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
+  const updated=articleMode?articleTrust.D:betaTrust(hist,c,n),
+    newScores=articleMode?[...articleTrust.tau]:Array(n).fill(c.initial_trust);
+  if(!articleMode)for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
   trustWallMs+=performance.now()-evidenceT0;
   if(c.isolation_enabled&&t+1>=c.minimum_evidence_steps){
    for(let i=0;i<n;i++){
