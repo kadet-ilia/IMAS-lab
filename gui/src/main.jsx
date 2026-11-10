@@ -892,22 +892,28 @@ function App() {
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
               title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
-              description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
-              progress={<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
-              error={error?<div className="error-banner">{error}</div>:null}
+              description={isArticle?"Формулы (1–21): векторные наблюдения, прямое доверие, репутация, изоляция, робастная агрегация и Ψ_L.":"Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."}
+              progress={<ProgressStrip progress={isArticle?articleProgress:progress} running={visibleRunning} cacheHit={isArticle?articleCacheHit:cacheHit}/>}
+              error={(isArticle?articleError:error)?<div className="error-banner">{isArticle?articleError:error}</div>:null}
             >
+              {isArticle
+                ? <ArticleTrustResults result={activeArticleResult} progress={articleProgress}
+                    error={articleError} cacheHit={articleCacheHit} view={articleView}
+                    tab={activeTab} running={articleRunning} onRun={runForTab}/>
+                : <>
               {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
               {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
+                </>}
             </ExperimentLayout>}
     </div>
     <footer className="statusbar">
-      <span>Шаги: {isArticle?(articleRuntime?.steps??"—"):isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Шаги: {isArticle?articleConfig.n_steps:isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
       <span>Время: {isArticle?"—":isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
-      <span>{isArticle?(articleRuntime?String(articleRuntime.completed)+" / "+String(articleRuntime.total):"—"):isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
+      <span>{isArticle?(articleProgress?String(articleProgress.overallCompleted??articleProgress.completed)+" / "+String(articleProgress.overallTotal??articleProgress.total):"—"):isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
       <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
-      <span className="status-log">{isArticle?"Модель статьи · "+ "imas-article-1.0.0":isResearch?"Синтетическая модель — результаты требуют независимой валидации":activeTab==="help2027"?"Единая справка по шести экспериментам":lastRun?.log?"Лог: "+lastRun.log:""}</span>
+      <span className="status-log">{isArticle?"Расчёт доверия · "+ARTICLE_MODEL_VERSION:isResearch?"Синтетическая модель — результаты требуют независимой валидации":activeTab==="help2027"?"Единая справка по шести экспериментам":lastRun?.log?"Лог: "+lastRun.log:""}</span>
     </footer>
   </div>;
 }
