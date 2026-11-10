@@ -1,6 +1,7 @@
 import React from "react";
 import {STUDY_DEFS} from "./research2027.js";
 import {ExperimentParameterTooltip} from "./ExperimentLayout.jsx";
+import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 
 const PARAMETERS={
  agents:["N — число агентов","Число моделируемых агентов. Для двух графов риска количество вершин фиксировано структурой исследовательской постановки.",3,100,1],
@@ -14,13 +15,21 @@ const PARAMETERS={
  spread:["pₛ — вероятность распространения","Вероятность передачи нарушения по ребру на одном такте.",0,1,.01],
  steps:["T — горизонт, тактов","Число модельных временных тактов.",1,20,1],
  criticalFraction:["q — опасная доля","Минимальная доля поражённых агентов, соответствующая опасному состоянию.",0,1,.01],
- detectionDelay:["τ — задержка изоляции","Первый такт, после которого доступен переход изоляции.",0,20,1],
+ detectionDelay:["τ — начало возможности изоляции","В необязательной модели разрешает, но не требует переход изоляции. В приоритетной идеализированной модели принудительная одновременная изоляция всех обнаруженных агентов начинается с этого такта.",0,20,1],
+ isolationPolicy:["Политика изоляции","Необязательная — проверка EF при недетерминированных переходах. Приоритетная — идеальный контроллер: обнаруживает всех заражённых и принудительно изолирует их до любой передачи, начиная с такта τ.",0,1,1],
  criticalCount:["K — критическое число","Число поражённых агентов для критической маркировки.",1,100,1],
  stateLimit:["M — предел маркировок","Максимальное количество состояний для ограниченной проверки.",100,200000,100],
- lossScale:["k — масштаб ущерба","Масштаб условных потерь. Не является валютной единицей.",0,100,.1],
+ lossScale:["k — масштаб ущерба","Положительный коэффициент условного ущерба. При нуле относительный критерий опасности не определён.",.01,100,.01],
  defenseFactor:["η — эффективность защиты","Коэффициент снижения интенсивности распространения.",0,1,.01],
  noise:["σ — СКО шума оценок","Стандартное отклонение исходных оценок агентов.",0,5,.01],
- attackBias:["b — смещение нарушителя","Модуль смещения предложений скомпрометированных агентов.",0,10,.1]
+ attackBias:["b — смещение нарушителя","Модуль смещения предложений скомпрометированных агентов.",0,10,.1],
+ costWrong:["Cош — цена неправильного решения","Неотрицательная условная цена неверного автоматического решения. Не является денежной единицей.",0,100,0.1],
+ costRefuse:["Cотк — цена отказа","Неотрицательная условная цена передачи решения оператору. Моделирование задержки отдельно не реализовано.",0,100,0.1],
+ record_source_runs:["Архивировать исходные прогоны","Сохранить все первичные наблюдения E2/E6 либо графы и таблицы случайных событий E3/E5 каждого прогона.",0,1,1],
+ source_run_limit:["Предельное R для полного архива","Число прогонов не должно превышать этот предел; превышение лимита архива приводит к ошибке.",1,1000,1],
+ source_event_limit:["Максимум случайных событий","Предельное количество случайных значений в полном графовом архиве E3/E5. Превышение прерывает расчёт без публикации усечённого архива.",100,250000,100],
+ record_marking_log:["Полный журнал маркировок","Записать каждую обработанную маркировку, все переходы, фронт BFS и факт добавления нового состояния.",0,1,1],
+ marking_log_limit:["Максимум записанных маркировок","Жёсткий предел размера полного помаркировочного журнала E4. При превышении расчёт отклоняется.",100,200000,100]
 };
 
 const GROUPS={
@@ -36,7 +45,7 @@ const GROUPS={
  ],
  petri:[
   ["Основные параметры",["agents","runs"]],
-  ["Маркировки и переходы",["steps","criticalCount","detectionDelay"]],
+  ["Маркировки и переходы",["steps","criticalCount","detectionDelay","isolationPolicy"]],
   ["Формальная верификация",["stateLimit"]],
  ],
  cascade:[
@@ -48,6 +57,7 @@ const GROUPS={
   ["Основные параметры",["agents","runs"]],
   ["Компрометация и распространение",["spread","attackBias"]],
   ["Согласование решений",["noise","threshold"]],
+  ["Функция риска",["costWrong","costRefuse"]],
  ]
 };
 
@@ -55,7 +65,14 @@ function ResearchField({name,value,onChange,disabled=false}){
  const [title,description,min,max,step]=PARAMETERS[name]||[name,"",undefined,undefined,1];
  return <label className="field r27-setting-field">
    <span className="field-label"><span>{title}</span><ExperimentParameterTooltip text={description}/></span>
-   <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?undefined:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>
+   {(name==="record_source_runs"||name==="record_marking_log")?<select aria-label={title} value={value} disabled={disabled} onChange={e=>onChange(name,Number(e.target.value))}>
+     <option value={0}>Нет — только сводные показатели</option>
+     <option value={1}>Да — полная серия исходных прогонов</option>
+    </select>:name==="isolationPolicy"?<select aria-label={title} value={value} disabled={disabled} onChange={e=>onChange(name,Number(e.target.value))}>
+     <option value={0}>Необязательная (недетерминированная)</option>
+     <option value={1}>Приоритетная принудительная (идеальная)</option>
+    </select>:
+   <input aria-label={title} type="number" min={name==="criticalCount"?1:min} max={name==="criticalCount"?7:max} step={step} value={Number.isFinite(value)?value:""} disabled={disabled} onChange={e=>onChange(name,e.target.value===""?NaN:Number(e.target.value))}/>}
    {disabled?<small>Фиксированная конфигурация исследовательского графа</small>:null}
  </label>;
 }
@@ -63,7 +80,7 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
  const def=STUDY_DEFS.find(s=>s.id===studyId);
  const groups=GROUPS[studyId]||[];
  const fixed=(studyId==="cascade"||studyId==="misinformation");
- const entries=(fields)=><>{fields.map((key)=><ResearchField key={key} name={key} value={config[key]} disabled={(fixed&&key==="agents")||(studyId==="petri"&&key==="runs")} onChange={onChange}/>)}</>;
+ const entries=(fields)=><>{fields.map((key)=><ResearchField key={key} name={key} value={config[key]} disabled={((fixed||studyId==="petri")&&key==="agents")||(studyId==="petri"&&key==="runs")} onChange={onChange}/>)}</>;
  return <aside className="sidebar r27-unified-settings">
   <div className="sidebar-scroll">
    <h2>Параметры эксперимента</h2>
@@ -72,6 +89,20 @@ export function ResearchSettings({studyId,config,onChange,onStart,onStop,onReset
    </div>)}
    <details className="advanced"><summary>Статистика и вычисления</summary><div className="advanced-body">
      <ResearchField name="seed" value={config.seed} onChange={onChange}/>
+     {studyId!=="petri"?<MonteCarloPlanner studyId={studyId} runs={config.runs} maxRuns={config.record_source_runs?Math.min(config.source_run_limit,10000):10000} onChangeRuns={n=>onChange("runs",n)}/>:null}
+     {("record_source_runs" in config)?<>
+      <ResearchField name="record_source_runs" value={config.record_source_runs} onChange={onChange}/>
+      {config.record_source_runs===1?<>
+       <ResearchField name="source_run_limit" value={config.source_run_limit} onChange={onChange}/>
+       {"source_event_limit" in config?<ResearchField name="source_event_limit" value={config.source_event_limit} onChange={onChange}/>:null}
+      </>:null}
+      <p className="r27-note">R не должно превышать лимит архивирования. Неполные архивы исходных прогонов не выдаются.</p>
+     </>:null}
+     {("record_marking_log" in config)?<>
+      <ResearchField name="record_marking_log" value={config.record_marking_log} onChange={onChange}/>
+      {config.record_marking_log===1?<ResearchField name="marking_log_limit" value={config.marking_log_limit} onChange={onChange}/>:null}
+      <p className="r27-note">Архив E4 фиксирует полный обработанный участок поиска, но не доказывает недостижимость при превышении предела пространства состояний.</p>
+     </>:null}
      <p className="r27-note">Результаты являются синтетическими и не характеризуют защищённость конкретного объекта.</p>
    </div></details>
    <details className="advanced"><summary>Дополнительно</summary><div className="advanced-body">

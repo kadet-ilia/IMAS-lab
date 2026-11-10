@@ -1,5 +1,6 @@
 import React, {useEffect,useMemo,useState} from "react";
 import {LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,ResponsiveContainer,BarChart,Bar} from "recharts";
+import {FRACTION_METRICS,formatStudyValue} from "./metricFormatting.js";
 import "./research2027.css";
 
 const PALETTE={normal:"#cfe1f1",coordinator:"#6ca6df",missing:"#e3e8ed",misled:"#edb663",compromised:"#d85454",affected:"#d85454",isolated:"#7c83a2"};
@@ -68,15 +69,27 @@ export function TopologyPlayback({replay,compact=false}){
   {compact?<details className="r27-replay-notes"><summary>{replay.notes?.includes("Схематическое")?"Схематическая топология · Подробнее":"Описание и ограничения трассы"}</summary><p>{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p></details>:<p className="r27-note">{replay.notes||"Трасса иллюстрирует отдельную реализацию; статистические данные приведены отдельно."}</p>}
  </section>;
 }
+/** Single comparison matrix, aligned side-by-side with the main graph for E2/E3/E5/E6. */
+export function ScenarioComparisonMatrix({result,metric}){
+ const rows=result?.rows||[];
+ const scenarios=[...new Set(rows.map(x=>x.scenario).filter(Boolean))];
+ const methods=[...new Set(rows.map(x=>x.method).filter(Boolean))];
+ const measured=scenarios.map(s=>methods.map(m=>rows.find(x=>x.scenario===s&&x.method===m)?.[metric]));
+ const numbers=measured.flat().filter(Number.isFinite),lo=Math.min(...numbers,0),hi=Math.max(...numbers,0),span=Math.max(hi-lo,1e-9);
+ return <section className="panel r27-panel r27-comparison-matrix" aria-label="Сравнительная матрица по сценариям и методам">
+  <header className="panel-header"><div><h2>Сравнительная матрица по сценариям и методам</h2><p>Значения показателя, выбранного над графиком; цвет соответствует величине.</p></div></header>
+  <div className="panel-body">{metric&&methods.length&&scenarios.length&&numbers.length?
+   <div className="r27-table-scroll"><table className="r27-table"><thead><tr><th>Сценарий</th>{methods.map(m=><th key={m}>{m}</th>)}</tr></thead>
+   <tbody>{scenarios.map((scenario,i)=><tr key={scenario}><th>{scenario}</th>{methods.map((method,j)=>{
+    const value=measured[i][j],z=Number.isFinite(value)?(value-lo)/span:0;
+    return <td key={method} style={{background:Number.isFinite(value)?"rgba(24,104,173,"+(0.07+0.43*z)+")":undefined}}>{formatStudyValue(metric,value)}</td>;
+   })}</tr>)}</tbody></table></div>
+  :<div className="r27-summary-empty">Сравнительные показатели появятся после завершения расчёта.</div>}</div>
+ </section>;
+}
 export function StudyVisualization({result,metric}){
  const replay=result?.replay, frames=replay?.frames||[];
  const timeline=frames.map(frame=>({step:frame.step,value:frame.value,compromised:frame.status.filter(x=>x==="compromised"||x==="affected").length,misled:frame.status.filter(x=>x==="misled").length,isolated:frame.status.filter(x=>x==="isolated").length}));
- const rows=result?.rows||[];
- const scenarios=[...new Set(rows.map(x=>x.scenario).filter(Boolean))], methods=[...new Set(rows.map(x=>x.method).filter(Boolean))];
- const measured=scenarios.map(s=>methods.map(m=>rows.find(x=>x.scenario===s&&x.method===m)?.[metric]));
- const numbers=measured.flat().filter(v=>typeof v==="number"&&Number.isFinite(v));
- const hi=Math.max(...numbers,0),lo=Math.min(...numbers,0),span=Math.max(hi-lo,1e-9);
- const cells=methods.length&&scenarios.length&&metric&&numbers.length?true:false;
  const petri=result?.id==="petri";
  const byTime=petri?(result.statesByTime||[]).map((value,step)=>({step,value})):timeline;
  return <div className="r27-analytics">
@@ -89,7 +102,7 @@ export function StudyVisualization({result,metric}){
     {(replay?.vertices||[]).flatMap((v,i)=>[<b key={"a"+i}>А{i+1}</b>,...frames.map((frame,j)=><span key={i+"_"+j} title={"А"+(i+1)+"; t="+frame.step+"; "+(LABELS[frame.status[i]]||frame.status[i])} style={{background:PALETTE[frame.status[i]]||PALETTE.normal}}/>)])}
    </div></div>
   </div></section>
-  {cells?<section className="panel r27-panel r27-matrix-panel"><header className="panel-header"><div><h2>Сравнительная матрица по сценариям и методам</h2><p>Показатель выбран в меню основной диаграммы; насыщенность пропорциональна значению в текущем наборе.</p></div></header><div className="panel-body"><div className="r27-table-scroll"><table className="r27-table"><thead><tr><th>Сценарий</th>{methods.map(m=><th key={m}>{m}</th>)}</tr></thead><tbody>{scenarios.map((s,i)=><tr key={s}><th>{s}</th>{methods.map((m,j)=>{const v=measured[i][j],z=typeof v==="number"?(v-lo)/span:0;return <td key={m} style={{background:typeof v==="number"?"rgba(24,104,173,"+(0.07+0.43*z)+")":undefined}}>{round(v)}</td>;})}</tr>)}</tbody></table></div></div></section>:null}
+
  </div>;
 }
 export function baselineReplay(data,config){
@@ -108,10 +121,17 @@ export function baselineReplay(data,config){
  const frames=series.filter((x,i)=>i%stride===0||i===series.length-1).map(row=>{
   const step=row.step,status=Array.from({length:n},(_,i)=>{
    const agent=byAgent.get(i+1)||agents[i]||{}, raw=byState.get(step+":"+(i+1));
+   // The timestamped state is authoritative: first isolation is a historical event,
+   // not proof that the agent remains isolated after its cooldown.
+   if(raw==="isolated")return "isolated";
+   if(raw==="dormant")return "normal";
+   if(raw==="byzantine")return "compromised";
+   if(raw==="sybil")return "misled";
+   if(raw==="honest")return "normal";
    const isolated=agent.isolated_at!==null&&agent.isolated_at!==undefined&&agent.isolated_at<=step;
-   if(isolated||raw==="isolated")return "isolated";
-   if(raw==="byzantine"||agent.byzantine&&step>=config.attack_start_step)return "compromised";
-   if(raw==="sybil"||agent.sybil)return "misled";
+   if(isolated)return "isolated"; // Legacy traces without state snapshots only.
+   if(agent.byzantine&&step>=config.attack_start_step)return "compromised";
+   if(agent.sybil)return "misled";
    return "normal";
   });
   const meanTrust=reps.filter(x=>x.step===step).map(x=>x.reputation).filter(Number.isFinite);
