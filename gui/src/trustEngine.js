@@ -488,13 +488,21 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   trustWallMs+=performance.now()-evidenceT0;
   if(c.isolation_enabled&&t+1>=c.minimum_evidence_steps){
    for(let i=0;i<n;i++){
-    low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
-    if(running[i]&&low[i]>=c.isolation_patience){
+    const witnesses=articleMode?all(n).filter(k=>k!==i&&running[k]&&good(articleQ[k][i])):[];
+    if(articleMode&&witnesses.length&&c.cusum_enabled){
+     const qualityMedian=median(witnesses.map(k=>articleQ[k][i]));
+     articleTrust.z[i]=Math.max(0,articleTrust.z[i]+c.cusum_mu-qualityMedian);
+    }
+    if(!articleMode||witnesses.length)
+     low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
+    const viaThreshold=low[i]>=c.isolation_patience,
+      viaCusum=articleMode&&c.cusum_enabled&&witnesses.length>0&&articleTrust.z[i]>c.cusum_limit;
+    if(running[i]&&(viaThreshold||viaCusum)){
      if(isolatedAt[i]===null)isolatedAt[i]=t+1;
      const postAttack=t+1>=c.attack_start_step;
      if(bad[i]&&postAttack&&firstAttackIsolationAt[i]===null)firstAttackIsolationAt[i]=t+1;
-     if(detail)events.push({step:t+1,agent:i+1,type:bad[i]&&postAttack?(sybil[i]?"sybil":"byzantine"):"false_positive",prematureByzantineIsolation:Boolean(bad[i]&&!postAttack),reason:"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold});
-     active[i]=false;until[i]=t+c.isolation_cooldown_steps;
+     if(detail)events.push({step:t+1,agent:i+1,type:bad[i]&&postAttack?(sybil[i]?"sybil":"byzantine"):"false_positive",prematureByzantineIsolation:Boolean(bad[i]&&!postAttack),reason:articleMode?(viaThreshold?"article_threshold":"article_cusum"):"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold,cusum:articleTrust.z[i]});
+     active[i]=false;until[i]=c.isolation_cooldown_steps===0?Infinity:t+c.isolation_cooldown_steps;
     }
    }
   }
@@ -505,7 +513,10 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   if(detail){
    network_series.push({...row,proposal_queue:tx.stats.queued,mean_message_delay:tx.stats.mean_delay,delivery_ratio:delivered/Math.max(1,attempted),message_balance:communicationState.total.balance,proposal_message_balance:communicationState.proposal.balance,evidence_message_balance:communicationState.evidence.balance});
    for(let i=0;i<n;i++){
-    reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],localTrust:scores[i],eigenReputation:eigen[i],isolationScore:newScores[i],isolationThreshold:c.isolation_threshold,byzantine:bad[i],sybil:sybil[i],active:active[i]});
+    reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],localTrust:scores[i],eigenReputation:articleMode?null:eigen[i],
+     directTrust:articleMode?median(all(n).filter(k=>k!==i&&running[k]).map(k=>articleTrust.D[k][i])):null,
+     groupReputation:articleMode?articleTrust.E[i]:null,integralTrust:articleMode?articleTrust.tau[i]:null,
+     cusum:articleMode?articleTrust.z[i]:null,isolationScore:newScores[i],isolationThreshold:c.isolation_threshold,byzantine:bad[i],sybil:sybil[i],active:active[i]});
     states.push({step:t+1,agent:i+1,state:sybil[i]&&!eligible[i]?"dormant":!active[i]?"isolated":sybil[i]?"sybil":bad[i]?"byzantine":"honest"});
    }
   }
@@ -513,7 +524,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  // A pre-attack isolation of a latent Byzantine identity is not attack detection.
  const found=all(n).filter(i=>firstAttackIsolationAt[i]!==null),allBad=bad.filter(Boolean).length;
  const detectionRate=found.length/Math.max(1,allBad);
- const meanTime=found.length?mean(found.map(i=>firstAttackIsolationAt[i]-c.attack_start_step)):null;
+ const meanTime=found.length?mean(found.map(i=>firstAttackIsolationAt[i]-c.attack_start_step+(articleMode?1:0))):null;
  const prematureBad=all(n).filter(i=>bad[i]&&isolatedAt[i]!==null&&isolatedAt[i]<c.attack_start_step).length;
  const fp=all(n).filter(i=>isolatedAt[i]!==null&&!bad[i]).length+prematureBad;
  const preserved=all(n).filter(i=>active[i]&&!bad[i]).length/Math.max(1,bad.filter(x=>!x).length),ratio=delivered/Math.max(1,attempted);
@@ -543,7 +554,9 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,nominal_band_rate:rows[i].nominal_band_rate})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i],first_attack_isolation_at:firstAttackIsolationAt[i]})),
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:communicationState.total.balance,communication_channel_ledger:communicationState,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
-   configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
+   configuration:configDetail(c),scenario,run_index:runIndex,partial:false,
+   trustEquationSet:articleMode?"q(8),D(9),E(11),T(12),tau(13),z(14)":"Beta+EigenTrust",
+   articleTrustState:articleMode?{D:articleTrust.D,E:articleTrust.E,T:articleTrust.T,tau:articleTrust.tau,z:articleTrust.z}:null}};
 }
 const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","mean_detection_delay_steps","premature_byzantine_isolations","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
