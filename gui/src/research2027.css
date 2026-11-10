@@ -140,7 +140,7 @@
 .r27-study-content .r27-results{border:0;box-shadow:none;border-radius:0;background:transparent;padding:0;display:block}
 .r27-study-content .r27-replay,.r27-study-content .r27-chart,.r27-study-content .r27-petri-report,.r27-study-content .r27-table-scroll{border-radius:2px}
 .r27-study-content .r27-theory-short{background:#fff;border:1px solid var(--border);padding:16px;margin-top:15px}
-.r27-experiment-navigation button.r27-export-control{padding:4px 7px;height:27px;display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#48617a;white-space:nowrap}
+.r27-experiment-navigation button.r27-export-control{padding:4px 7px;height:27px;display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#48617a;white-space:nowrap}
 .r27-experiment-navigation button.r27-export-control svg{height:11px;width:11px}
 .r27-manual-layout{min-height:0;flex:1;overflow:auto;display:grid;grid-template-columns:310px minmax(0,1fr);gap:14px;padding:14px;background:#f5f7f9;align-items:start}
 .r27-help-tree{position:sticky;top:0;max-height:calc(100vh - 170px);min-width:0;padding:14px 12px;overflow:auto}
@@ -243,7 +243,7 @@
   box-sizing:border-box;
   padding:4px 6px;
   gap:4px;
-  font-size:10px;
+  font-size:12px;
   line-height:1;
   white-space:nowrap;
 }
@@ -665,8 +665,8 @@
 .r27-study-topline .r27-comparison-matrix .panel-header p{font-size:11px;color:var(--muted)}
 .r27-study-topline .r27-comparison-matrix .panel-body{padding:0 9px 9px}
 .r27-study-topline .r27-table-scroll{max-height:430px;overflow:auto;max-width:100%}
-.r27-study-topline .r27-table{font-size:10px}
-.r27-study-topline .r27-table th,.r27-study-topline .r27-table td{white-space:normal;min-width:75px;overflow-wrap:anywhere;padding:8px}
+.r27-study-topline .r27-table{font-size:12px}
+.r27-study-topline .r27-table th,.r27-study-topline .r27-table td{white-space:normal;min-width:75px;overflow-wrap:anywhere;padding:14px}
 .r27-study-topline .r27-table th:first-child{min-width:128px}
 .r27-comparison-panel .r27-chart{min-width:0}
 .r27-analytics{grid-template-columns:repeat(2,minmax(0,1fr))}
