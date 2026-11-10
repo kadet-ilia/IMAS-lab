@@ -31,21 +31,26 @@ export async function runArticleSeries(raw,onProgress=()=>{}){
    if(settled)return;settled=true;worker.terminate();current=null;err?reject(err):resolve({result,cache_hit:false});
   };
   worker.onerror=e=>finish(Error(e.message||"Ошибка вычислительного потока"));
-  worker.onmessage=async({data})=>{
+  // Serialized durable checkpoint writes; the finished event cannot race an IDB commit.
+  let saveChain=Promise.resolve();
+  worker.onmessage=({data})=>{
    if(settled)return;
    if(data?.type==="failed"){finish(Error(data.error));return;}
    if(data?.type==="task"){
-    try{
+    saveChain=saveChain.then(async()=>{
+     if(settled)return;
      if(data.index!==tasks.length)throw Error("Нарушена последовательность контрольной точки");
      tasks.push(data.result);
      await idb("progress:"+key,tasks);
      onProgress({stage:"article",completed:tasks.length,total:config.n_runs,
       percent:100*tasks.length/config.n_runs,message:"Модель статьи: парные прогоны"});
-    }catch(e){finish(e);}
-   }
-   if(data?.type==="finished"){
-    try{if(tasks.length!==config.n_runs)throw Error("Не все прогоны завершены");
-     finish(null,summarizeArticleTasks(config,tasks));}catch(e){finish(e);}
+    }).catch(e=>finish(e));
+   }else if(data?.type==="finished"){
+    saveChain.then(()=>{
+     if(settled)return;
+     if(tasks.length!==config.n_runs)throw Error("Не все прогоны завершены");
+     finish(null,summarizeArticleTasks(config,tasks));
+    }).catch(e=>finish(e));
    }
   };
   onProgress({stage:"article",completed:tasks.length,total:config.n_runs,percent:100*tasks.length/config.n_runs});
