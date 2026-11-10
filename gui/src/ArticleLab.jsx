@@ -143,12 +143,12 @@ export const ArticleLab=forwardRef(function ArticleLab({navigation,onRuntimeChan
       </tr>)}</tbody>
      </table></div>
      <p>Доля небезопасных решений: {result.rows[0]?.unsafeActions??0}. Прогонов с Ψ_L &gt; 1: {result.rows[0]?.psiAboveOne??0} (для первого метода).</p>
-     <h3>Динамика ошибок · первый парный прогон</h3>
+     <h3>Динамика средних ошибок по тактам · Монте-Карло</h3>
      <div className="article-chart"><ResponsiveContainer width="100%" height={320}><LineChart data={result.trajectory}>
       <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis/><Tooltip/><Legend/>
       {Object.entries(LABELS).map(([k,name],i)=><Line type="monotone" key={k} dataKey={k} name={name} stroke={["#2672ff","#079b91","#be8737","#7657c8"][i]} dot={false}/>)}
      </LineChart></ResponsiveContainer></div>
-     <h3>Медианное доверие · первый прогон</h3>
+     <h3>Среднее медианное доверие по тактам</h3>
      <div className="article-chart"><ResponsiveContainer width="100%" height={220}><LineChart data={result.trajectory}>
       <CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,1]}/><Tooltip/>
       <Line dataKey="trustMedian" stroke="#123a63" name="med τ" dot={false}/>
