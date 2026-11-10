@@ -13,7 +13,7 @@ export function initState(c,run=0){
 }
 /** Attack is indexed by zero-based t; t >= attack_start_step. */
 export function activeAttack(c,t,attacked=true){
- if(!attacked||c.attack_shift===0||t<c.attack_start_step)return false;
+ if(!attacked||c.n_byzantine===0||c.attack_shift===0||t<c.attack_start_step)return false;
  return c.attack_scenario!=="on_off"||((t-c.attack_start_step)%c.on_off_period)<c.on_off_attack_steps;
 }
 /** (2): observed coordinates are null for unobserved entries (not zero). */
@@ -25,7 +25,7 @@ export function generateMessages(st,t,c,attacked=true){
   const mask=rng(c.seed,st.run,"observation",i);
   const y=x.map((v,k)=>mask.random()<c.observation_fraction?v+c.honest_noise_sigma*r.normal():null);
   if(active&&st.bad.has(i)){
-   const amp=c.attack_scenario==="subtle"?c.subtle_shift:c.attack_shift;
+   const amp=c.attack_scenario==="trust"?0:c.attack_scenario==="subtle"?c.subtle_shift:c.attack_shift;
    for(let k=0;k<d;k++)if(y[k]!==null)y[k]+=amp*c.attack_vector[k];
   }
   return y;
