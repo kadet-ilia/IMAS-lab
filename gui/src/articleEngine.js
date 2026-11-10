@@ -169,7 +169,7 @@ export function summarizeArticleTasks(raw,tasks){
   const sample=runs.flatMap(run=>run.rows.filter(r=>r.method===method));
   const errors=valid(sample.map(r=>r.error)),psis=valid(sample.map(r=>r.psi));
   const ci=interval(psis,c,method);
-  const times=valid(sample.map(r=>r.meanIsolationTime));
+  const times=valid(runs.flatMap(run=>run.events.filter(e=>e.malicious&&e.duringAttack).map(e=>e.attackTick)));
   rows.push({method,runs:sample.length,meanError:mean(errors),sdError:stdev(errors),
    meanPsi:mean(psis),psiCI95Low:ci[0],psiCI95High:ci[1],
    psiPassRate:psis.length?psis.filter(x=>x>=c.psi_min).length/psis.length:null,
