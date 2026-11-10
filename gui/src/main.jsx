@@ -19,7 +19,10 @@ import {
 } from "recharts";
 import "./styles.css";
 import "./articleLab.css";
-import {ArticleLab} from "./ArticleLab.jsx";
+import {ArticleTrustSettings,ArticleTrustResults} from "./ArticleTrustPanels.jsx";
+import {ARTICLE_DEFAULTS,ARTICLE_PRESETS,validateArticleConfig,ARTICLE_MODEL_VERSION} from "./articleEngine.js";
+import {runArticleSeries,stopArticleSeries} from "./articleBrowserClient.js";
+import {runArticleTable3} from "./articleScenarios.js";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
@@ -304,7 +307,8 @@ function StateHeatmap({ states, agents, steps }) {
   );
 }
 
-function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running }) {
+function Sidebar({config,setConfig,scenario,setScenario,attackLevel,setAttackLevel,onRun,running,
+  model,setModel,articleConfig,setArticleConfig,articleView,onArticlePreset,articleClaims,setArticleClaims,articleRunning,onArticleRun}) {
   const set = (key) => (value) => setConfig((current) => ({ ...current, [key]: value }));
   const ratio = ((config.n_byzantine / Math.max(config.n_agents, 1)) * 100).toFixed(1);
   const effectiveTotal = config.n_agents + config.n_sybil_agents;
@@ -314,6 +318,8 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
   const updateSteps = (value) => set("n_steps")(value);
   let configError=null;
   try{validateConfig(config);}catch(e){configError=e.message;}
+  let articleConfigError=null;
+  try{validateArticleConfig(articleConfig);}catch(e){articleConfigError=e.message;}
   const changeLevel = (value) => {
     const level = ATTACK_LEVELS[value];
     setAttackLevel(value);
@@ -323,6 +329,15 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
     <aside className="sidebar r27-unified-settings">
       <div className="sidebar-scroll">
         <h2>Параметры эксперимента</h2>
+        <SelectField label="Модель" value={model} onChange={setModel}>
+          <option value="legacy">Beta-доверие + EigenTrust (trust-js-2.10)</option>
+          <option value="article">Статья (формулы 1–21)</option>
+        </SelectField>
+        {model==="article"
+          ? <ArticleTrustSettings config={articleConfig} setConfig={setArticleConfig}
+              running={articleRunning} preset={articleView} onPreset={onArticlePreset}
+              claims={articleClaims} setClaims={setArticleClaims}/>
+          : <>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
         <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("n_byzantine")} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
         <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={10000} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
@@ -396,9 +411,14 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
              {config.record_source_events?<NumberField label="Максимум событий в журнале" value={config.source_event_limit} min={1} max={250000} onChange={set("source_event_limit")}/>:null}
           </div>
         </details>
+        </>}
       </div>
+      {model==="article"?<button className="run-button" onClick={onArticleRun}
+        disabled={articleRunning||Boolean(articleConfigError)}><Icon name="play"/>
+        {articleRunning?"Выполняется…":"Запустить эксперимент"}</button>:<>
       {configError?<p className="imas-validation-error" role="alert">{configError}. Исправьте параметры перед расчётом.</p>:null}
       <button className="run-button" onClick={onRun} disabled={running||Boolean(configError)}><Icon name="play" />{running ? "Выполняется…" : "Запустить эксперимент"}</button>
+      </>}
     </aside>
   );
 }
