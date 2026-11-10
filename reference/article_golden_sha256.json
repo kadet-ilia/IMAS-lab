@@ -1,0 +1,15 @@
+{
+  "modelVersion": "imas-article-1.0.0",
+  "source": "GitHub Actions Node 22 golden traces, scenario seeds 20260716, 42, 731991",
+  "fingerprints": {
+    "20260716/collusion": "f455d4a865082a80faca7900b6a56491e68d692492a1c627bb920d8921ef8511",
+    "20260716/subtle": "da349ea4631ff7470e3c3baa7c0f88a01aee080c58643e6d2e2cf2f527bb9e62",
+    "20260716/on_off": "67ca5f9edb4f23ee3030186b67bec4fde460c9b5d9502cc27048221fece9e2f5",
+    "42/collusion": "646f2d68aff385f501cba5f1b2b9af27610a437144ff5d69b8374bada44ef01e",
+    "42/subtle": "b358a4c57547e2648e2c099afe4d06e39c06b86af6ede78c83dd2fff5ad605e4",
+    "42/on_off": "d28649753bc2356912b747cd24c1e95d67293e928a258b6ed8bffd600a5a649b",
+    "731991/collusion": "cc27ec7c106ebea5b4f9b1391111704e71d153f2dbfccee1a2b6b3fa117718c0",
+    "731991/subtle": "5800c5cd2492492908329b3ab34a2b1960da4bc84be7e70e2935af278609445f",
+    "731991/on_off": "6526056c192abf1781eefa31ce588b294d5a30e6d27d0e63ce535e6aa034e993"
+  }
+}
