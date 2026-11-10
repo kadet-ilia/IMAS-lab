@@ -9,9 +9,10 @@ const close=(a,b,label)=>assert.ok(
  label+": "+String(a)+" versus "+String(b));
 test("independent Python/JS same-address keyed random streams and complete article run",{
  skip:!hasPython},()=>{
- for(const seed of [12,20260716,99991])for(const scenario of ["collusion","subtle","on_off"]){
+ for(const mode of ["synthetic","computed"])for(const seed of [12,20260716,99991])for(const scenario of ["collusion","subtle","on_off"]){
   const cfg=validateArticleConfig({...ARTICLE_DEFAULTS,seed,attack_scenario:scenario,
    n_agents:9,n_byzantine:2,trim_each_side:2,n_steps:10,n_runs:1,attack_start_step:2,
+   quality_mode:mode,observation_fraction:mode==="computed"?.75:1,
    resilience_window:10,quality_sigma:.03,bootstrap_samples:100});
   const py=spawnSync(bin,["../reference/imas_article.py"],{
    encoding:"utf8",input:JSON.stringify({config:cfg,run:0}),maxBuffer:10*1024*1024});
