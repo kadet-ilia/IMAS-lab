@@ -188,7 +188,7 @@ def evaluate(path: pathlib.Path | None,root: pathlib.Path) -> dict:
 def main(argv=None):
     parser=argparse.ArgumentParser(description="UP-36 evidence readiness, not an approval")
     parser.add_argument("--manifest",type=pathlib.Path,
-                        default=pathlib.Path("audit/remediation/05_validation/acceptance_manifest.json"))
+                        default=pathlib.Path("audit/scientific-integrity/05_validation/acceptance_manifest.json"))
     parser.add_argument("--evidence-root",type=pathlib.Path,default=pathlib.Path("."))
     parser.add_argument("--output",type=pathlib.Path)
     parser.add_argument("--strict-evidence",action="store_true",

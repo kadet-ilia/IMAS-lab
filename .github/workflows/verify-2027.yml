@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - 'IMAS_LaB_test'
-      - 'remediation/imas-lab-scientific-integrity'
     paths:
       - 'gui/**'
       - 'README.md'
@@ -13,7 +12,7 @@ on:
       - 'test_*.py'
       - 'requirements.txt'
       - '.github/workflows/verify-2027.yml'
-      - 'audit/remediation/**'
+      - 'audit/scientific-integrity/**'
   pull_request:
     paths:
       - 'gui/**'
@@ -23,7 +22,7 @@ on:
       - 'scientific_release_gate.py'
       - 'test_*.py'
       - 'requirements.txt'
-      - 'audit/remediation/**'
+      - 'audit/scientific-integrity/**'
       - '.gitignore'
       - 'test_repository_hygiene.py'
       - 'test_encoding.py'
