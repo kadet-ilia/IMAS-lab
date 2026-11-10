@@ -815,7 +815,7 @@ function App() {
   const runForTab=()=>{
     if(trustModel==="article"){
       try{validateArticleConfig(articleConfig);}catch(e){setArticleError(e.message);return;}
-      return requestArticle(activeTab==="sensitivity"||articleView==="table3");
+      return requestArticle(activeTab==="sensitivity");
     }
     return request(activeTab==="mc"?"monte_carlo":activeTab==="sensitivity"?"sensitivity":"trace",{sensitivityMode});
   };
@@ -829,7 +829,7 @@ function App() {
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
   const activeArticleResult=articleResult?.client_signature===JSON.stringify(articleConfig)
-    &&(activeTab!=="sensitivity"||articleResult?.article_kind==="table3")?articleResult:null;
+    &&(activeTab==="data"||(activeTab==="sensitivity") === (articleResult?.article_kind==="table3"))?articleResult:null;
   const exportVisibleCharts = () => {
     const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
