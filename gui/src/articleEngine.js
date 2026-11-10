@@ -127,7 +127,7 @@ export function runArticle(raw={},runIndex=0,attacked=true,detail=false){
    isolationFraction:c.n_byzantine?maliciousIsolations.length/c.n_byzantine:1,
    isolationTimes,meanIsolationTime:mean(isolationTimes),
    falseIsolations:honestIsolations.length,operatorFraction,correctFraction,
-   unsafeActions:trace.filter(r=>!r.choice.safe).length,
+   unsafeActions:trace.filter(r=>r.choice.action!=="refusal"&&!r.choice.safe).length,
    trimFallbacks:Object.fromEntries(ARTICLE_METHODS.map(m=>[m,trace.filter(r=>r.methods[m].trimFallback).length])),
    events:st.isolationEvents}};
 }
