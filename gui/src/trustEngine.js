@@ -608,6 +608,15 @@ export function distributionPayload(rows){
 }
 function factorialRanges(c){
  const maxF=Math.floor((c.n_agents-1)/2),lo=Math.max(0,Math.round(c.n_byzantine*.5)),hi=Math.min(maxF,Math.max(lo+1,Math.round(c.n_byzantine*1.5)));
+ if(c.trust_algorithm==="article"){
+  const isoHi=Math.min(c.admission_threshold,c.isolation_threshold+.10);
+  return {n_byzantine:[lo,hi],
+   isolation_threshold:[Math.max(0,c.isolation_threshold-.10),isoHi],
+   trust_memory:[Math.max(.05,c.trust_memory-.10),Math.min(.95,c.trust_memory+.10)],
+   trust_alpha:[Math.max(0,c.trust_alpha-.20),Math.min(1,c.trust_alpha+.20)],
+   attack_intensity_multiplier:[.6,1.4],
+   honest_noise_sigma:[Math.max(.01,c.honest_noise_sigma*.6),Math.min(2,c.honest_noise_sigma*1.4)]};
+ }
  return {n_byzantine:[lo,hi],isolation_threshold:[Math.max(.05,c.isolation_threshold-.10),Math.min(.9,c.isolation_threshold+.10)],trust_window_steps:[Math.max(2,Math.round(c.trust_window_steps*.6)),Math.min(100,Math.max(3,Math.round(c.trust_window_steps*1.4)))],
   forgetting_factor:[Math.max(.60,c.forgetting_factor-.05),Math.min(1,c.forgetting_factor+.04)],attack_intensity_multiplier:[.6,1.4],honest_noise_sigma:[Math.max(.01,c.honest_noise_sigma*.6),Math.min(2,c.honest_noise_sigma*1.4)]};
 }
