@@ -34,12 +34,20 @@ The state-dependent utilities and the concrete definitions of chi1–chi4 must b
 
 Run `cd gui && npm test` for seed reproducibility, validation constraints, closed-form direct trust, bounded D/tau, CUSUM, robustness of Trim_b, and the neutral Psi ratio. Run `npm run build` for the UI. The existing `verify-2027.yml` CI pipeline must pass before merging.
 
-## Remaining methodological tasks
+## Verification completed in the development branch
 
-1. Independent Python reference with complete cross-language bit-level PRNG and trajectory comparison;
-2. Scientific provenance for source Tables 2–3 and their unspecified parameters;
-3. Exhaustive multi-scenario Table 3 and falsification tests for claims 1–2;
-4. UI documentation displaying every formula in the source article, subject to the exact manuscript text;
-5. Experimental calibration and final manuscript/result reconciliation.
+- Independent reference `reference/imas_article.py` reproduces keyed random streams, observations, evidence, trust, isolation, action choice, and aggregation. A dedicated Node test runs Python across three seeds and three attack strategies in both synthetic and computed-quality modes, including partially observed vector inputs, and compares per-tick traces and Psi.
+- The reference archive `reference/article_golden_sha256.json` contains nine version-specific SHA-256 fingerprints from three seeds and three scenarios. Tests reject mathematical drift unless the model version and reference vectors are deliberately updated.
+- Article Table 3 workflow evaluates five attack classes, an on-off+CUSUM variant, and a no-attack false-isolation control. It is separate from the pre-existing E2–E6 datasets.
+- The graphical interface includes a numerical verification action for direct-trust decay (claim 1), bounded coordinate-wise trimming (claim 2), neutral Psi, and refusal/authorization safety. These are illustrative falsification tests and do not replace formal mathematical proofs.
+- Help sections under "Модель статьи (1–21)" contain indexed formulas and parameter explanations; formulas (4)–(7), which are not fully transcribed in the development plan, need inspection against the signed manuscript before declaring documentation complete.
 
-This staged record is not a claim that all six phases from the uploaded plan have been completed.
+## Open scientific and release blockers
+
+1. **Reproduction provenance.** Find the exact program version and missing configuration values used to calculate the original Tables 2–3. Currently published-table numerical parity is **not verified**; new values are reported as new simulation results.
+2. **Formal manuscript synchronization.** Confirm interpretations of self-ratings, isolated raters, chi indicators, safe actions, and quality source; incorporate these modeling assumptions in the manuscript.
+3. **Proof interpretation.** The numerical tests for claims 1–2 test specified conditions, not the universal correctness of the paper's statements.
+4. **Experimental validation.** Calibrate utility, safe action sets, chi1–chi4, transport behavior, and runtime characteristics on a representative protected system or digital twin.
+5. **Deployment.** Merge only after checks and manuscript decisions; follow the plan for preview and production Cloudflare rollout. This development PR has not been merged or deployed.
+
+This staged record does not claim that all six phases of the uploaded plan have been scientifically signed off.
