@@ -316,7 +316,7 @@ await page.screenshot({ path: dashboardScreenshot, fullPage: false });
 
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
-await page.locator(".r27-help-branch").count().then(count=>{if(count!==7)throw Error("Expected seven documentation tree groups");});
+await page.locator(".r27-help-branch").count().then(count=>{if(count!==8)throw Error("Expected eight documentation tree groups including the article model");});
 await page.getByRole("searchbox", {name:"Поиск по содержанию справки"}).fill("Модель доверия");
 if(!(await page.getByRole("link", {name:"Модель доверия"}).count()))throw Error("Baseline mathematical help not indexed");
 await page.getByRole("searchbox", {name:"Поиск по содержанию справки"}).fill("");
@@ -405,6 +405,15 @@ for (let i=0; i<researchTabs.length; i++) {
   }
 
 }
+await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("article");
+await page.getByRole("heading",{name:"Модель статьи · формулы (1)–(21)"}).waitFor();
+await page.getByLabel("R, прогонов").fill("2");
+await page.getByRole("button",{name:"Проверка утверждений 1–2"}).click();
+await page.locator(".article-claims").waitFor();
+await page.getByRole("button",{name:"Рассчитать · парные прогоны"}).click();
+await page.locator(".article-table tbody tr").first().waitFor({timeout:30000});
+if((await page.locator(".article-table tbody tr").count())!==4)throw Error("Article mode: expected four aggregation methods");
+if((await page.locator(".article-chart .recharts-surface").count())!==2)throw Error("Article mode: missing error/trust charts");
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
 const firstSeed = await seedInput.inputValue();
@@ -445,7 +454,7 @@ const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
-if((await page.locator(".r27-module-article").count())!==6)throw Error("Missing exactly six experiment manual articles");
+if((await page.locator(".r27-module-article").count())!==7)throw Error("Missing six experiment and one article-model manual chapters");
 if((await page.locator(".r27-manual-equation").count())<25)throw Error("Missing mathematical equations");
 if((await page.locator(".r27-doc-simple").count())!==6)throw Error("UI-help: all six plain-language guides must appear");
 if((await page.locator(".r27-experiment-navigation .r27-manual-return").count())!==1 ||
