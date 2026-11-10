@@ -1,3 +1,4 @@
+.workspace.article-workspace-shell{grid-template-columns:minmax(0,1fr)}
 .article-workspace{flex:1;min-width:0;padding:20px 24px;overflow:auto}
 .article-head{margin:16px 0 20px;max-width:1050px}.article-head h2{margin:0 0 8px}.article-head p{margin:6px 0;color:var(--text-secondary,#526071)}
 .article-warning{border-left:3px solid #b68944;padding:8px 12px;background:rgba(176,137,68,.07)}
