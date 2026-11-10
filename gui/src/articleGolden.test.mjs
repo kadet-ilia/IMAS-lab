@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
+import {readFileSync} from "node:fs";
 import {ARTICLE_DEFAULTS,runArticleTask,validateArticleConfig} from "./articleEngine.js";
 const cases=[20260716,42,731991].flatMap(seed=>["collusion","subtle","on_off"].map(scenario=>({seed,scenario})));
 const artifact=()=>Object.fromEntries(cases.map(({seed,scenario})=>{
@@ -16,5 +17,7 @@ const artifact=()=>Object.fromEntries(cases.map(({seed,scenario})=>{
 }));
 test("produce nine fixed article golden trace fingerprints",()=>{
  const once=artifact(),again=artifact();assert.deepEqual(once,again);
- console.log("ARTICLE_GOLDEN_FINGERPRINTS="+JSON.stringify(once));
+ const expected=JSON.parse(readFileSync(new URL("../../reference/article_golden_sha256.json",import.meta.url),"utf8"));
+ assert.equal(expected.modelVersion,"imas-article-1.0.0");
+ assert.deepEqual(once,expected.fingerprints);
 });
