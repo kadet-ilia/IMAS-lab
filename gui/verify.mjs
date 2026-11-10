@@ -405,18 +405,23 @@ for (let i=0; i<researchTabs.length; i++) {
   }
 
 }
-await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("article");
-await page.getByRole("heading",{name:"Модель статьи · формулы (1)–(21)"}).waitFor();
-await page.getByLabel("R, прогонов").fill("2");
+// The article engine is NOT a seventh experiment; it is the second model of E1.
+await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("trace");
+const trustModelControl=page.getByRole("combobox",{name:"Модель"});
+await trustModelControl.selectOption("article");
+if((await page.getByRole("combobox",{name:"Выбор эксперимента"}).inputValue())!=="trace")
+ throw Error("Selecting article model must preserve experiment E1");
+await page.getByLabel("Число прогонов R").fill("2");
 await page.getByRole("button",{name:"Проверка утверждений 1–2"}).click();
 await page.locator(".article-claims").waitFor();
-await page.getByRole("button",{name:"Рассчитать · парные прогоны"}).click();
+await page.locator(".sidebar").getByRole("button",{name:"Запустить эксперимент"}).click();
 await page.locator(".article-table tbody tr").first().waitFor({timeout:30000});
-if((await page.locator(".article-table tbody tr").count())!==4)throw Error("Article mode: expected four aggregation methods");
-await page.locator(".article-chart .recharts-surface").first().waitFor({timeout:10000});
-const articleChartCount=await page.locator(".article-chart .recharts-surface").count();
-console.log("Article model chart surfaces:",articleChartCount);
-if(articleChartCount<2)throw Error("Article mode: missing error/trust charts; found "+articleChartCount);
+if((await page.locator(".article-table tbody tr").count())!==4)
+ throw Error("E1 article model must display four aggregation methods");
+await trustModelControl.selectOption("legacy");
+await page.getByLabel("Число Sybil-идентичностей").count(); // original E1 controls are retained.
+if((await page.locator(".article-trust-settings").count())!==0)
+ throw Error("Article configuration must be hidden when legacy trust model is selected");
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
 const firstSeed = await seedInput.inputValue();
