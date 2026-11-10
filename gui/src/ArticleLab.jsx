@@ -2,6 +2,8 @@ import React,{useEffect,useImperativeHandle,useState,forwardRef} from "react";
 import {CartesianGrid,Legend,Line,LineChart,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {ARTICLE_DEFAULTS,ARTICLE_PRESETS,ARTICLE_MODEL_VERSION,ARTICLE_METHODS,validateArticleConfig} from "./articleLabApi.js";
 import {runArticleSeries,stopArticleSeries} from "./articleBrowserClient.js";
+import {runArticleTable3} from "./articleScenarios.js";
+import {verifyArticleClaims} from "./articleClaims.js";
 const LABELS={arithmetic_mean:"Обычное среднее",trust_mean:"Среднее после допуска",
  trimmed_mean:"Усечённое среднее",trust_trimmed_mean:"Доверительно-усечённое"};
 const S={collusion:"Смещение и манипулирование доверием",trust:"Манипулирование доверием и смещение",
@@ -16,10 +18,14 @@ function exportCsv(result){
  download("imas-article-results.csv","\ufeff"+lines.join("\n"),"text/csv;charset=utf-8");
 }
 const ARTICLE_FIELDS=[
+ ["seed","Сид",0,2147483647,1],
  ["n_agents","N, агентов",3,160,1],["n_byzantine","f, нарушителей",0,159,1],
+ ["decision_dim","d, размерность",1,32,1],
  ["n_steps","T, тактов",1,500,1],["n_runs","R, прогонов",1,10000,1],
  ["attack_start_step","tₐ, начало атаки (с нуля)",0,499,1],
- ["attack_shift","Δ, амплитуда",0,100,0.1],["honest_noise_sigma","σ, шум",0,10,.01],
+ ["attack_shift","Δ, амплитуда",0,100,0.1],
+ ["on_off_period","Период переключений",1,500,1],
+ ["on_off_attack_steps","Активных тактов в периоде",1,500,1],["honest_noise_sigma","σ, шум",0,10,.01],
  ["trust_memory","λ, память",.01,.99,.01],
  ["trust_alpha","α, прямое доверие",0,1,.05],
  ["isolation_threshold","ϑ_iso, порог изоляции",0,1,.01],
@@ -46,6 +52,7 @@ export const ArticleLab=forwardRef(function ArticleLab({navigation,onRuntimeChan
  const patch=(k,v)=>{setConfig(c=>({...c,[k]:v}));setResult(null);};
  const setVector=(k,index,v)=>setConfig(c=>({...c,[k]:c[k].map((x,i)=>i===index?v:x)}));
  const [view,setView]=useState("table2");
+ const [claims,setClaims]=useState(null);
  let invalid="";
  try{validateArticleConfig(config);}catch(e){invalid=e.message;}
  useEffect(()=>{onRuntimeChange?.({running,seed:config.seed,steps:config.n_steps,
@@ -53,19 +60,19 @@ export const ArticleLab=forwardRef(function ArticleLab({navigation,onRuntimeChan
   [running,config.seed,config.n_steps,config.n_runs,Boolean(result),progress?.completed,progress?.total]);
  const start=async()=>{
   if(running)return;
-  setError("");setRunning(true);setProgress(null);
+  setError("");setRunning(true);setProgress(null);setClaims(null);
   try{
-   const res=await runArticleSeries(config,setProgress);
+   const res=view==="table3"?await runArticleTable3(config,setProgress):await runArticleSeries(config,setProgress);
    setResult(res.result);setCacheHit(res.cache_hit);
   }catch(e){setError(String(e.message||e));}
   finally{setRunning(false);}
  };
  const stop=()=>stopArticleSeries();
- const reset=()=>{if(running)stop();setConfig({...ARTICLE_DEFAULTS});setResult(null);setError("");setProgress(null);setCacheHit(false);};
+ const reset=()=>{if(running)stop();setConfig({...ARTICLE_DEFAULTS});setResult(null);setError("");setProgress(null);setCacheHit(false);setClaims(null);};
  useImperativeHandle(ref,()=>({start,stop,reset,newSeed:()=>patch("seed",Math.floor(Math.random()*2147483647))}),[config,running]);
  const preset=name=>{
   if(running)return;
-  setConfig(c=>({...c,...ARTICLE_PRESETS[name]}));setResult(null);setError("");setView(name);
+  setConfig(c=>({...c,...ARTICLE_PRESETS[name]}));setResult(null);setError("");setClaims(null);setView(name);
  };
  const copy=async()=>{
   if(!result)return;
@@ -108,13 +115,17 @@ export const ArticleLab=forwardRef(function ArticleLab({navigation,onRuntimeChan
     </details>
     <p className="article-param-note">Такты нумеруются с 0. Атака включается при t ≥ tₐ. При 2b ≥ размер допущенного множества на такте применяется медиана с регистрацией замещения.</p>
     {invalid?<p className="imas-validation-error" role="alert">{invalid}</p>:null}
+    <button type="button" disabled={running||!!invalid} onClick={()=>{try{setClaims(verifyArticleClaims(config));setError("");}catch(e){setError(e.message);}}}>Проверка утверждений 1–2</button>
+    {claims?<div className="article-claims"><strong>Контрольные примеры: {claims.passed?"пройдены":"есть нарушения"}</strong>
+      {claims.checks.map((x,i)=><p key={i}>{x.passed?"✓":"×"} {x.name}: {x.observed??"не определено"} (ожидалось {x.expected??"не определено"}){x.checks?" / "+x.checks+" проверок":""}</p>)}
+    </div>:null}
     <button className="run-button" disabled={running||!!invalid} onClick={start}>Рассчитать · парные прогоны</button>
     {running?<button type="button" onClick={stop}>Остановить</button>:null}
    </aside>
    <main className="article-results">
     <h3>Результаты моделирования</h3>
     {error?<p role="alert" className="error-banner">{error}</p>:null}
-    {progress?<p>Выполнено {progress.completed} из {progress.total} прогонов ({int(progress.percent)} %)</p>:null}
+    {progress?<p>Выполнено {progress.overallCompleted??progress.completed} из {progress.overallTotal??progress.total} прогонов ({int(progress.percent)} % в текущем сценарии)</p>:null}
     {cacheHit?<p>Загружено из локального кэша по полной конфигурации и версии модели.</p>:null}
     {!result?<p>Для получения таблиц и графиков выберите конфигурацию и запустите вычисление.</p>:<>
      <div className="article-actions">
@@ -123,9 +134,9 @@ export const ArticleLab=forwardRef(function ArticleLab({navigation,onRuntimeChan
       <button onClick={copy}>Таблица для Word</button>
      </div>
      <div className="article-table-scroll"><table className="article-table">
-      <thead><tr><th>Метод</th><th>Средняя ошибка</th><th>СКО</th><th>Изоляция</th><th>Время изоляции</th><th>P95</th><th>Ψ_L</th><th>95 % ДИ Ψ</th><th>Ψ ≥ Ψ_min</th><th>Ложные изоляции</th><th>Замещения Trim</th></tr></thead>
+      <thead><tr><th>{result.table3Rows?"Сценарий":"Метод"}</th><th>Средняя ошибка</th><th>СКО</th><th>Изоляция</th><th>Время изоляции</th><th>P95</th><th>Ψ_L</th><th>95 % ДИ Ψ</th><th>Ψ ≥ Ψ_min</th><th>Ложные изоляции</th><th>Замещения Trim</th></tr></thead>
       <tbody>{result.rows.map(r=><tr key={r.method}>
-       <th>{LABELS[r.method]}</th><td>{int(r.meanError)}</td><td>{int(r.sdError)}</td>
+       <th>{r.scenarioName||LABELS[r.method]||r.method}</th><td>{int(r.meanError)}</td><td>{int(r.sdError)}</td>
        <td>{int(r.isolationFraction)}</td><td>{int(r.meanIsolationTime)}</td><td>{int(r.isolationTimeP95)}</td>
        <td>{int(r.meanPsi)}</td><td>{int(r.psiCI95Low)}…{int(r.psiCI95High)}</td>
        <td>{int(r.psiPassRate)}</td><td>{int(r.falseIsolations)}</td><td>{r.trimFallbacks}</td>
