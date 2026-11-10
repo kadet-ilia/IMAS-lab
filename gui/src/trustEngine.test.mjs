@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
- simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES,transport
+ simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,updateArticleTrust,articleInteractionQuality,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES,transport
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
@@ -429,4 +429,48 @@ test("UP-12 G(N,p) has no forced ring, independent undirected edge opportunities
  const expected=opportunities*p,sd=Math.sqrt(opportunities*p*(1-p));
  assert.ok(Math.abs(count-expected)<=6*sd,
   "empirical ER edge count "+count+" should agree with binomial "+expected+" ± "+(6*sd));
+});
+
+test("E1 article trust updates D, E, T and tau in-place (eqs. 9, 11-13)",()=>{
+ const c=validateConfig({trust_algorithm:"article",n_agents:3,n_byzantine:1,trim_each_side:1,
+  trust_memory:.8,trust_alpha:.7,reputation_eps:.01});
+ const mk=()=>Array.from({length:3},()=>Array(3).fill(.5));
+ const st={D:mk(),T:mk(),E:[.5,.5,.5],tau:[.5,.5,.5]};
+ const q=[[NaN,.9,.1],[.8,NaN,.4],[.2,.6,NaN]];
+ updateArticleTrust(st,q,c,[true,true,true]);
+ assert.ok(Math.abs(st.D[0][1]-.58)<1e-12);
+ assert.ok(Math.abs(st.D[2][1]-.52)<1e-12);
+ assert.ok(Math.abs(st.E[1]-.55)<1e-12);
+ assert.ok(Math.abs(st.T[0][1]-.571)<1e-12);
+ assert.ok(Math.abs(st.tau[1]-.55)<1e-12);
+ const saved=JSON.stringify(st);
+ updateArticleTrust(st,[[NaN,NaN,NaN],[NaN,NaN,NaN],[NaN,NaN,NaN]],c,[true,true,true]);
+ assert.equal(JSON.stringify(st),saved,"missing quality must not decay trust");
+});
+test("E1 interaction quality combines synthetic evidence, stability, signature (eq. 8)",()=>{
+ const c=validateConfig({trust_algorithm:"article"});
+ const e=[[NaN,.9],[.4,NaN]],now=[1,1.4],previous=[1,1];
+ const q=articleInteractionQuality(e,now,previous,c);
+ assert.ok(Math.abs(q[0][1]-(.85*.9+.1*.8+.05))<1e-12);
+ assert.ok(Number.isNaN(q[0][0]));
+ assert.throws(()=>validateConfig({trust_algorithm:"article",trust_memory:1}),/trust_memory/);
+ assert.throws(()=>validateConfig({trust_algorithm:"article",admission_threshold:.2}),/admission_threshold/);
+ assert.throws(()=>validateConfig({trust_algorithm:"article",quality_weights:[.8,.5,-.3]}),/quality_weights/);
+});
+test("E1 existing trace/MC path uses the new trust controller without a second experiment",()=>{
+ const c={...cfg,trust_algorithm:"article",trust_memory:.8,trust_alpha:.7,reputation_eps:.01,
+  admission_threshold:.4,cusum_enabled:true,cusum_mu:.6,cusum_limit:3,
+  isolation_cooldown_steps:0,quality_weights:[.85,.1,.05]};
+ const a=simulateRun(c,"collusion",1,0,true),b=simulateRun(c,"collusion",1,0,true);
+ assert.deepEqual(a.result.series,b.result.series);
+ assert.deepEqual(a.result.reputation,b.result.reputation);
+ assert.equal(a.result.configuration.trust_algorithm,"article");
+ assert.equal(a.result.reputation.length,c.n_steps*c.n_agents);
+ assert.ok(a.result.reputation.some(x=>Number.isFinite(x.integralTrust)));
+ assert.ok(a.result.reputation.every(x=>x.eigenReputation===null));
+ assert.equal(a.result.articleTrustState.D.length,c.n_agents);
+ assert.match(a.result.trustEquationSet,/D\(9\)/);
+ const mc=runActionSync({action:"monte_carlo",scenario:"collusion",config:{...c,n_runs:2}});
+ assert.equal(mc.configuration.trust_algorithm,"article");
+ assert.equal(mc.completed_runs,2);
 });

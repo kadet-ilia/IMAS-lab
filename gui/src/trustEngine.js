@@ -22,7 +22,10 @@ export const DEFAULTS={
  honest_quality:.92,byzantine_quality:.1,honest_noise_sigma:.2,observer_noise_sigma:.02,
  static_bias:4,subtle_bias:.65,collusion_bias:1.5,on_off_period:10,on_off_attack_steps:4,
  trust_window_steps:20,forgetting_factor:.95,initial_trust:.5,trust_prior_strength:2,
- minimum_weight:.05,reputation_damping:.85,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
+ minimum_weight:.05,reputation_damping:.85,
+ trust_algorithm:"legacy",trust_memory:.8,trust_alpha:.7,reputation_eps:.01,
+ admission_threshold:.4,cusum_enabled:false,cusum_mu:.5,cusum_limit:3,
+ quality_weights:[.85,.1,.05],quality_stability_scale:2,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
  minimum_evidence_steps:8,isolation_cooldown_steps:30,trim_each_side:10,
  clip_radius:1.25,safe_action_min:-2,safe_action_max:2,correctness_tolerance:.5,
  paired_exogenous_events:false,network_enabled:false,network_topology:"complete",network_edge_probability:.25,
@@ -60,7 +63,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.10.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.11.0-e1-inplace-trust";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,10000],n_sensitivity_runs:[1,100],
@@ -74,7 +77,7 @@ const numericRanges={
  desired_action:[-2,2],honest_quality:[0,1],byzantine_quality:[0,1],honest_noise_sigma:[0,10],
  observer_noise_sigma:[0,10],static_bias:[0,100],subtle_bias:[0,100],collusion_bias:[0,100],
  forgetting_factor:[0,1],initial_trust:[0,1],trust_prior_strength:[0,1000000],minimum_weight:[0,1],
- reputation_damping:[0,1],isolation_threshold:[0,1],clip_radius:[0,100],
+ reputation_damping:[0,1],trust_memory:[0,1],trust_alpha:[0,1],reputation_eps:[0,1],admission_threshold:[0,1],cusum_mu:[0,1],cusum_limit:[0,1000],quality_stability_scale:[0.000001,1000],isolation_threshold:[0,1],clip_radius:[0,100],
  safe_action_min:[-100,100],safe_action_max:[-100,100],correctness_tolerance:[0,100],
  network_edge_probability:[0,1],small_world_rewire_probability:[0,1],message_loss_probability:[0,1],
  partition_fraction:[0,1],attack_direction:[-1,1]
@@ -102,6 +105,15 @@ export function validateConfig(value={}){
  requireField(c.initial_trust>0&&c.initial_trust<1,"initial_trust","необходимо 0<w0<1");
  requireField(c.forgetting_factor>0,"forgetting_factor","необходимо 0<λ≤1");
  requireField(c.reputation_damping<1,"reputation_damping","коэффициент должен быть меньше 1");
+ requireField(["legacy","article"].includes(c.trust_algorithm),"trust_algorithm","неизвестный алгоритм доверия");
+ requireField(Array.isArray(c.quality_weights)&&c.quality_weights.length===3&&
+   c.quality_weights.every(w=>typeof w==="number"&&Number.isFinite(w)&&w>=0&&w<=1)&&
+   Math.abs(sum(c.quality_weights)-1)<1e-9,"quality_weights","β1+β2+β3=1, все веса в [0;1]");
+ if(c.trust_algorithm==="article"){
+  requireField(c.trust_memory>0&&c.trust_memory<1,"trust_memory","необходимо 0<λ<1");
+  requireField(c.reputation_eps>0,"reputation_eps","необходима положительная регуляризация");
+  requireField(c.admission_threshold>=c.isolation_threshold,"admission_threshold","порог допуска должен быть не ниже порога изоляции");
+ }
  requireField(c.trust_prior_strength>0,"trust_prior_strength","сила prior должна быть положительной");
  requireField(c.clip_radius>0,"clip_radius","радиус должен быть положительным");
  requireField(c.on_off_attack_steps<=c.on_off_period,"on_off_attack_steps","не превышать период");
@@ -172,6 +184,39 @@ export function eigenTrust(direct,active,damping){
  }
  const scale=Math.max(...v,1e-15);idx.forEach((i,j)=>scores[i]=v[j]/scale);return scores;
 }
+/**
+ * E1 direct trust D, reputation E, integral pair trust T and median tau:
+ * equations (9), (11)-(13). Evidence only updates observed pairs.
+ * Reputation weights use the previous-tick tau.
+ */
+export function updateArticleTrust(state,q,c,active){
+ const n=active.length,oldTau=[...state.tau];
+ for(let i=0;i<n;i++)if(active[i])for(let j=0;j<n;j++)
+  if(i!==j&&active[j]&&good(q[i]?.[j]))
+   state.D[i][j]=clamp(c.trust_memory*state.D[i][j]+(1-c.trust_memory)*clamp(q[i][j],0,1),0,1);
+ for(let j=0;j<n;j++)if(active[j]){
+  const raters=all(n).filter(i=>i!==j&&active[i]&&good(q[i]?.[j]));
+  if(!raters.length)continue;
+  const weights=raters.map(i=>oldTau[i]+c.reputation_eps),total=sum(weights);
+  state.E[j]=clamp(sum(raters.map((i,k)=>weights[k]*state.D[i][j]))/total,0,1);
+  for(const i of raters)state.T[i][j]=clamp(c.trust_alpha*state.D[i][j]+(1-c.trust_alpha)*state.E[j],0,1);
+  state.tau[j]=clamp(median(raters.map(i=>state.T[i][j])),0,1);
+ }
+ return state;
+}
+/** Eq. (8): q=β1*c+β2*s+β3*g, with synthetic correctness
+ * evidence c, relative temporal stability s and a valid-signature flag g=1.
+ */
+export function articleInteractionQuality(evidence,current,previous,c){
+ const n=evidence.length,q=makeMat(n,NaN),beta=c.quality_weights;
+ for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+  const e=evidence[i][j];if(i===j||!good(e))continue;
+  const stable=good(current[j])&&good(previous[j])
+   ?1-Math.min(1,Math.abs(current[j]-previous[j])/c.quality_stability_scale):1;
+  q[i][j]=clamp(beta[0]*e+beta[1]*stable+beta[2],0,1);
+ }
+ return q;
+}
 export function trimmedWeightedMean(values,weights,k){
  if(!values.length)throw Error("Не заданы значения для агрегирования");
  const order=all(values.length).sort((i,j)=>values[i]-values[j]||i-j);k=Math.min(k,Math.floor((order.length-1)/2));
@@ -179,9 +224,12 @@ export function trimmedWeightedMean(values,weights,k){
  return total<=1e-15?mean(keep.map(i=>values[i])):sum(keep.map((i,j)=>values[i]*w[j]))/total;
 }
 function aggregate(proposals,reputation,available,c,last){
- const idx=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
- if(!idx.length)return Object.fromEntries(METHODS.map(method=>[method,null]));
- const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight)),arithmetic=mean(v);
+ const everyone=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
+ if(!everyone.length)return Object.fromEntries(METHODS.map(method=>[method,null]));
+ const idx=c.trust_algorithm==="article"?everyone.filter(i=>reputation[i]>=c.admission_threshold):everyone;
+ const arithmetic=mean(everyone.map(i=>proposals[i]));
+ if(!idx.length)return {arithmetic_mean:arithmetic,trust_weighted_mean:null,proposed_robust:null};
+ const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight));
  const weighted=sum(v.map((x,i)=>x*w[i]))/sum(w),center=median(v),cv=v.map(x=>clamp(x,center-c.clip_radius,center+c.clip_radius));
  return {arithmetic_mean:arithmetic,trust_weighted_mean:weighted,proposed_robust:clamp(trimmedWeightedMean(cv,w,c.trim_each_side),c.safe_action_min,c.safe_action_max)};
 }
@@ -364,6 +412,12 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  let active=all(n).map(i=>!sybil[i]),low=Array(n).fill(0),isolatedAt=Array(n).fill(null),until=Array(n).fill(-1);
  const firstAttackIsolationAt=Array(n).fill(null);
  const hist=[],queue=[],lastValues=Array(n).fill(NaN),lastSteps=Array(n).fill(-1e9);
+ const articleMode=c.trust_algorithm==="article",articleTrust={
+  D:makeMat(n,c.initial_trust),E:Array(n).fill(c.initial_trust),
+  T:makeMat(n,c.initial_trust),tau:Array(n).fill(c.initial_trust),
+  z:Array(n).fill(0)
+ };
+ let precedingProposals=Array(n).fill(NaN);
  let previous=Object.fromEntries(METHODS.map(m=>[m,null]));
  const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
  let attempted=0,delivered=0,lost=0,dropped=0,expired=0,queued=0;
@@ -381,14 +435,28 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
-  const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
+  const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),
+     direct=articleMode?articleTrust.D:betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
    if(record)for(let i=0;i<n;i++)record({kind:"proposal_generated",step:t+1,source:i+1,value:proposed[i],
     active:running[i],byzantine:bad[i],sybil:sybil[i]});
-  for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
-  const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
+  if(articleMode)for(let i=0;i<n;i++)scores[i]=articleTrust.tau[i];
+  else for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
+  const eigen=articleMode?[...articleTrust.E]:eigenTrust(direct,running,c.reputation_damping),
+    rep=articleMode?[...articleTrust.tau]:scores.map((s,i)=>.7*s+.3*eigen[i]);
+  trustWallMs+=performance.now()-trustT0;
   const transportT0=performance.now();
   const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex,record);
   transportWallMs+=performance.now()-transportT0;
+  // Same E1 simulator, now with article trust updated from this tick's evidence.
+  const articleEvidence=articleMode?
+    observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record):null;
+  const articleQ=articleMode?
+    articleInteractionQuality(articleEvidence.matrix,tx.values,precedingProposals,c):null;
+  if(articleMode){
+   updateArticleTrust(articleTrust,articleQ,c,running);
+   for(let i=0;i<n;i++)rep[i]=articleTrust.tau[i];
+   precedingProposals=[...tx.values];
+  }
   const aggregateT0=performance.now();
   const decisions=aggregate(tx.values,rep,tx.available,c,previous);
   aggregateBundleWallMs+=performance.now()-aggregateT0;previous=decisions;
@@ -404,8 +472,8 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
   }
   const evidenceT0=performance.now();
-  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record);
-  hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
+  const evidence=articleMode?articleEvidence:observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record);
+  if(!articleMode){hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();}
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
    communicationState=accountCommunicationStep(communicationState,tx.stats,evidence.stats,queue.length,t+1);
    if(queued!==queue.length||communicationState.total.attempted!==attempted||
@@ -414,18 +482,27 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
      communicationState.total.expired!==expired||communicationState.total.pending!==queued)
     throw Error("Communication: disagreement between transport counters and channel ledger at tick "+(t+1));
    if(detail)messageLedger.push(communicationState);
-  const updated=betaTrust(hist,c,n),newScores=Array(n).fill(c.initial_trust);
-  for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
+  const updated=articleMode?articleTrust.D:betaTrust(hist,c,n),
+    newScores=articleMode?[...articleTrust.tau]:Array(n).fill(c.initial_trust);
+  if(!articleMode)for(const comp of comps)for(const j of comp)newScores[j]=median(comp.map(i=>updated[i][j]));
   trustWallMs+=performance.now()-evidenceT0;
   if(c.isolation_enabled&&t+1>=c.minimum_evidence_steps){
    for(let i=0;i<n;i++){
-    low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
-    if(running[i]&&low[i]>=c.isolation_patience){
+    const witnesses=articleMode?all(n).filter(k=>k!==i&&running[k]&&good(articleQ[k][i])):[];
+    if(articleMode&&witnesses.length&&c.cusum_enabled){
+     const qualityMedian=median(witnesses.map(k=>articleQ[k][i]));
+     articleTrust.z[i]=Math.max(0,articleTrust.z[i]+c.cusum_mu-qualityMedian);
+    }
+    if(!articleMode||witnesses.length)
+     low[i]=running[i]&&newScores[i]<c.isolation_threshold?low[i]+1:0;
+    const viaThreshold=low[i]>=c.isolation_patience,
+      viaCusum=articleMode&&c.cusum_enabled&&witnesses.length>0&&articleTrust.z[i]>c.cusum_limit;
+    if(running[i]&&(viaThreshold||viaCusum)){
      if(isolatedAt[i]===null)isolatedAt[i]=t+1;
      const postAttack=t+1>=c.attack_start_step;
      if(bad[i]&&postAttack&&firstAttackIsolationAt[i]===null)firstAttackIsolationAt[i]=t+1;
-     if(detail)events.push({step:t+1,agent:i+1,type:bad[i]&&postAttack?(sybil[i]?"sybil":"byzantine"):"false_positive",prematureByzantineIsolation:Boolean(bad[i]&&!postAttack),reason:"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold});
-     active[i]=false;until[i]=t+c.isolation_cooldown_steps;
+     if(detail)events.push({step:t+1,agent:i+1,type:bad[i]&&postAttack?(sybil[i]?"sybil":"byzantine"):"false_positive",prematureByzantineIsolation:Boolean(bad[i]&&!postAttack),reason:articleMode?(viaThreshold?"article_threshold":"article_cusum"):"local_post_evidence_below_threshold",confirmations:low[i],duration:c.isolation_cooldown_steps,reputation:rep[i],isolationScore:newScores[i],threshold:c.isolation_threshold,cusum:articleTrust.z[i]});
+     active[i]=false;until[i]=c.isolation_cooldown_steps===0?Infinity:t+c.isolation_cooldown_steps;
     }
    }
   }
@@ -436,7 +513,10 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   if(detail){
    network_series.push({...row,proposal_queue:tx.stats.queued,mean_message_delay:tx.stats.mean_delay,delivery_ratio:delivered/Math.max(1,attempted),message_balance:communicationState.total.balance,proposal_message_balance:communicationState.proposal.balance,evidence_message_balance:communicationState.evidence.balance});
    for(let i=0;i<n;i++){
-    reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],localTrust:scores[i],eigenReputation:eigen[i],isolationScore:newScores[i],isolationThreshold:c.isolation_threshold,byzantine:bad[i],sybil:sybil[i],active:active[i]});
+    reputationHistory.push({step:t+1,agent:i+1,reputation:rep[i],localTrust:scores[i],eigenReputation:articleMode?null:eigen[i],
+     directTrust:articleMode?median(all(n).filter(k=>k!==i&&running[k]).map(k=>articleTrust.D[k][i])):null,
+     groupReputation:articleMode?articleTrust.E[i]:null,integralTrust:articleMode?articleTrust.tau[i]:null,
+     cusum:articleMode?articleTrust.z[i]:null,isolationScore:newScores[i],isolationThreshold:c.isolation_threshold,byzantine:bad[i],sybil:sybil[i],active:active[i]});
     states.push({step:t+1,agent:i+1,state:sybil[i]&&!eligible[i]?"dormant":!active[i]?"isolated":sybil[i]?"sybil":bad[i]?"byzantine":"honest"});
    }
   }
@@ -444,7 +524,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
  // A pre-attack isolation of a latent Byzantine identity is not attack detection.
  const found=all(n).filter(i=>firstAttackIsolationAt[i]!==null),allBad=bad.filter(Boolean).length;
  const detectionRate=found.length/Math.max(1,allBad);
- const meanTime=found.length?mean(found.map(i=>firstAttackIsolationAt[i]-c.attack_start_step)):null;
+ const meanTime=found.length?mean(found.map(i=>firstAttackIsolationAt[i]-c.attack_start_step+(articleMode?1:0))):null;
  const prematureBad=all(n).filter(i=>bad[i]&&isolatedAt[i]!==null&&isolatedAt[i]<c.attack_start_step).length;
  const fp=all(n).filter(i=>isolatedAt[i]!==null&&!bad[i]).length+prematureBad;
  const preserved=all(n).filter(i=>active[i]&&!bad[i]).length/Math.max(1,bad.filter(x=>!x).length),ratio=delivered/Math.max(1,attempted);
@@ -474,7 +554,9 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,nominal_band_rate:rows[i].nominal_band_rate})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i],first_attack_isolation_at:firstAttackIsolationAt[i]})),
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:communicationState.total.balance,communication_channel_ledger:communicationState,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
-   configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
+   configuration:configDetail(c),scenario,run_index:runIndex,partial:false,
+   trustEquationSet:articleMode?"q(8),D(9),E(11),T(12),tau(13),z(14)":"Beta+EigenTrust",
+   articleTrustState:articleMode?{D:articleTrust.D,E:articleTrust.E,T:articleTrust.T,tau:articleTrust.tau,z:articleTrust.z}:null}};
 }
 const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","mean_detection_delay_steps","premature_byzantine_isolations","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
@@ -526,6 +608,15 @@ export function distributionPayload(rows){
 }
 function factorialRanges(c){
  const maxF=Math.floor((c.n_agents-1)/2),lo=Math.max(0,Math.round(c.n_byzantine*.5)),hi=Math.min(maxF,Math.max(lo+1,Math.round(c.n_byzantine*1.5)));
+ if(c.trust_algorithm==="article"){
+  const isoHi=Math.min(c.admission_threshold,c.isolation_threshold+.10);
+  return {n_byzantine:[lo,hi],
+   isolation_threshold:[Math.max(0,c.isolation_threshold-.10),isoHi],
+   trust_memory:[Math.max(.05,c.trust_memory-.10),Math.min(.95,c.trust_memory+.10)],
+   trust_alpha:[Math.max(0,c.trust_alpha-.20),Math.min(1,c.trust_alpha+.20)],
+   attack_intensity_multiplier:[.6,1.4],
+   honest_noise_sigma:[Math.max(.01,c.honest_noise_sigma*.6),Math.min(2,c.honest_noise_sigma*1.4)]};
+ }
  return {n_byzantine:[lo,hi],isolation_threshold:[Math.max(.05,c.isolation_threshold-.10),Math.min(.9,c.isolation_threshold+.10)],trust_window_steps:[Math.max(2,Math.round(c.trust_window_steps*.6)),Math.min(100,Math.max(3,Math.round(c.trust_window_steps*1.4)))],
   forgetting_factor:[Math.max(.60,c.forgetting_factor-.05),Math.min(1,c.forgetting_factor+.04)],attack_intensity_multiplier:[.6,1.4],honest_noise_sigma:[Math.max(.01,c.honest_noise_sigma*.6),Math.min(2,c.honest_noise_sigma*1.4)]};
 }
