@@ -1,0 +1,18 @@
+.article-workspace{flex:1;min-width:0;padding:20px 24px;overflow:auto}
+.article-head{margin:16px 0 20px;max-width:1050px}.article-head h2{margin:0 0 8px}.article-head p{margin:6px 0;color:var(--text-secondary,#526071)}
+.article-warning{border-left:3px solid #b68944;padding:8px 12px;background:rgba(176,137,68,.07)}
+.article-grid{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);gap:22px;align-items:start}
+.article-settings,.article-results{background:var(--panel-bg,#fff);border:1px solid var(--line,#dde3eb);border-radius:12px;padding:16px;min-width:0}
+.article-settings h3,.article-results h3{margin:2px 0 15px}.article-settings label{display:block;font-size:12px;margin:10px 0;color:var(--text,#28384d)}
+.article-settings input:not([type=checkbox]),.article-settings select{display:block;width:100%;margin-top:4px;padding:7px 8px;border:1px solid #cbd5df;border-radius:6px;background:white;color:#172433}
+.article-fields{max-height:390px;overflow:auto;padding:0 9px 0 0}.article-settings .article-check{display:flex;gap:8px;align-items:center}
+.article-settings .article-check input{width:auto}.article-presets{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.article-presets button,.article-actions button{border:1px solid #bbc9d8;background:#f5f8fc;border-radius:5px;padding:8px;cursor:pointer}
+.article-presets .active{background:#dcecf8;border-color:#2672ff}
+.article-vector{display:flex;gap:5px}.article-vector input{min-width:0}.article-settings details{margin-top:10px}
+.article-param-note{font-size:12px;line-height:1.45;color:#6a7380}
+.article-table-scroll{overflow-x:auto}.article-table{border-collapse:collapse;width:100%;min-width:900px;font-size:12px}
+.article-table th,.article-table td{text-align:left;padding:8px;border-bottom:1px solid #dce3ec}
+.article-table thead{background:#edf4fb}.article-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.article-chart{width:100%;margin-top:12px}.article-results pre{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:850px){.article-grid{grid-template-columns:1fr}.article-workspace{padding:10px}.article-fields{max-height:300px}}
