@@ -808,7 +808,7 @@ function App() {
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
 </div></header>
-    <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
+    <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")+(activeTab==="article"?" article-workspace-shell":"")}>
       {isArticle
         ? <ArticleLab ref={articleActionsRef} navigation={experimentNavigation} onRuntimeChange={setArticleRuntime}/>
         : isResearch
