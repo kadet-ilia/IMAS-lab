@@ -773,13 +773,15 @@ function App() {
   const requestArticle=async(table3=false)=>{
     if(articleRunningRef.current||runningRef.current)return;
     const signature=JSON.stringify(articleConfig);
+    const kind=table3?"table3":activeTab==="trace"?"single":"standard";
+    const runConfig=kind==="single"?{...articleConfig,n_runs:1}:articleConfig;
     articleRunningRef.current=true;
     setArticleRunning(true);setArticleError("");setArticleProgress(null);setArticleCacheHit(false);
     const started=performance.now();
     try{
-      const terminal=table3?await runArticleTable3(articleConfig,setArticleProgress)
-        :await runArticleSeries(articleConfig,setArticleProgress);
-      setArticleResult({...terminal.result,client_signature:signature,article_kind:table3?"table3":"standard"});
+      const terminal=table3?await runArticleTable3(runConfig,setArticleProgress)
+        :await runArticleSeries(runConfig,setArticleProgress);
+      setArticleResult({...terminal.result,client_signature:signature,article_kind:kind});
       setArticleCacheHit(Boolean(terminal.cache_hit));
       setLastRun({action:"article",mode:table3?"table3":"paired",seconds:(performance.now()-started)/1000,
         at:new Date(),log:"IndexedDB · imas-article",partial:false,cacheHit:terminal.cache_hit});
@@ -829,7 +831,7 @@ function App() {
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
   const activeArticleResult=articleResult?.client_signature===JSON.stringify(articleConfig)
-    &&(activeTab==="data"||(activeTab==="sensitivity") === (articleResult?.article_kind==="table3"))?articleResult:null;
+    &&(activeTab==="data"||activeTab==="trace"&&articleResult?.article_kind==="single"||activeTab==="mc"&&articleResult?.article_kind==="standard"||activeTab==="sensitivity"&&articleResult?.article_kind==="table3")?articleResult:null;
   const exportVisibleCharts = () => {
     const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
