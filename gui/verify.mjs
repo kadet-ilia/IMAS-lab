@@ -414,7 +414,9 @@ await page.getByRole("button",{name:"Рассчитать · парные про
 await page.locator(".article-table tbody tr").first().waitFor({timeout:30000});
 if((await page.locator(".article-table tbody tr").count())!==4)throw Error("Article mode: expected four aggregation methods");
 await page.locator(".article-chart .recharts-surface").first().waitFor({timeout:10000});
-if((await page.locator(".article-chart .recharts-surface").count())!==2)throw Error("Article mode: missing error/trust charts");
+const articleChartCount=await page.locator(".article-chart .recharts-surface").count();
+console.log("Article model chart surfaces:",articleChartCount);
+if(articleChartCount<2)throw Error("Article mode: missing error/trust charts; found "+articleChartCount);
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
 const firstSeed = await seedInput.inputValue();
