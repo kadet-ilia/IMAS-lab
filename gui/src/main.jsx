@@ -833,18 +833,17 @@ function App() {
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
   };
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-  const isArticle=activeTab==="article";
+  const isArticle=trustModel==="article"&&!activeTab.startsWith("study-")&&activeTab!=="help2027";
   const isResearch=activeTab.startsWith("study-");
   const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
-  const visibleRunning=isArticle?Boolean(articleRuntime?.running):(isResearch?(researchReady&&Boolean(researchRuntime.running)):running);
-  const visibleSeed=isArticle?(articleRuntime?.seed??"—"):(isResearch?(researchReady?researchRuntime.seed:"—"):config.seed);
-  const lastTimestamp=isArticle?(articleRuntime?.hasResult?"Результаты рассчитаны":"—"):(isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—"));
+  const visibleRunning=isArticle?articleRunning:(isResearch?(researchReady&&Boolean(researchRuntime.running)):running);
+  const visibleSeed=isArticle?articleConfig.seed:(isResearch?(researchReady?researchRuntime.seed:"—"):config.seed);
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at?lastRun.at.toLocaleString("ru-RU"):"—");
   const experimentNavigation = (
 <nav className={"r27-experiment-navigation"+(activeTab==="help2027"?" r27-help-navigation":"")} aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
-<select id="imas-experiment-select" aria-label="Выбор эксперимента" value={activeTab.startsWith("study-")||activeTab==="article"?activeTab:"trace"} onChange={e=>setActiveTab(e.target.value)}>
-<option value="trace">Beta + EigenTrust (trust-js-2.10)</option>
- <option value="article">Модель статьи (формулы 1–21)</option>
+<select id="imas-experiment-select" aria-label="Выбор эксперимента" value={activeTab.startsWith("study-")?activeTab:"trace"} onChange={e=>setActiveTab(e.target.value)}>
+<option value="trace">Расчёт доверия</option>
 <option value="study-uncertainty">Автоматические решения</option>
 <option value="study-probgraph">Коллективное решение</option>
 <option value="study-petri">Опасные состояния</option>
@@ -867,18 +866,16 @@ function App() {
 
   return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
 {activeTab!=="help2027"?<>
-<button onClick={isArticle?()=>articleActionsRef.current?.newSeed():isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isArticle?visibleRunning:isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={isArticle?()=>articleActionsRef.current?.start():isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isArticle?visibleRunning:isResearch?(!researchReady||visibleRunning):(running||activeTab==="data")}><Icon name="play"/>Запустить</button>
-<button onClick={isArticle?()=>articleActionsRef.current?.stop():isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isArticle?!visibleRunning:isResearch?(!researchReady||!visibleRunning):!running}><Icon name="stop"/>Остановить</button>
-<button onClick={isArticle?()=>articleActionsRef.current?.reset():isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isArticle?visibleRunning:isResearch?(!researchReady||visibleRunning):running}><Icon name="reset"/>Сбросить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="seed"/>Новый сид</button>
+<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(visibleRunning||activeTab==="data")}><Icon name="play"/>Запустить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!visibleRunning}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
 </div></header>
-    <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")+(activeTab==="article"?" article-workspace-shell":"")}>
-      {isArticle
-        ? <ArticleLab ref={articleActionsRef} navigation={experimentNavigation} onRuntimeChange={setArticleRuntime}/>
-        : isResearch
+    <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
+      {isResearch
         ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
