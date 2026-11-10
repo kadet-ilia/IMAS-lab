@@ -151,6 +151,8 @@ export function runArticleTask(raw,runIndex=0,includeTrace=false){
   trimFallbacks:attack.metrics.trimFallbacks[method]})),
   events:attack.metrics.events,
   trace:includeTrace?attack.trace:null,
+  trajectory:attack.trace.map(t=>({step:t.step,trustMedian:t.trustMedian,
+   ...Object.fromEntries(ARTICLE_METHODS.map(m=>[m,t.methods[m].error]))})),
   reference:c.reference_vector};
 }
 const quantile=(xs,p)=>{if(!xs.length)return null;const a=[...xs].sort((x,y)=>x-y),v=(a.length-1)*p,k=Math.floor(v);return a[k]+(a[Math.min(k+1,a.length-1)]-a[k])*(v-k);};
@@ -183,13 +185,17 @@ export function summarizeArticleTasks(raw,tasks){
    trimFallbacks:sample.reduce((s,r)=>s+r.trimFallbacks,0)});
  }
  const trace=runs.find(r=>r.trace)?.trace||null;
- const trajectory=trace?.map(t=>({step:t.step,trustMedian:t.trustMedian,
-   ...Object.fromEntries(ARTICLE_METHODS.map(m=>[m,t.methods[m].error]))}))||[];
+ const trajectory=Array.from({length:c.n_steps},(_,step)=>{
+  const all=runs.map(run=>run.trajectory?.[step]).filter(Boolean);
+  return {step,trustMedian:mean(valid(all.map(row=>row.trustMedian))),
+   ...Object.fromEntries(ARTICLE_METHODS.map(m=>[m,mean(valid(all.map(row=>row[m])))]))};
+ });
  return {modelVersion:ARTICLE_MODEL_VERSION,config:c,rows,trace,trajectory,
   completed_runs:runs.length,requested_runs:c.n_runs,
   metricPassport:{tickIndexing:"t=0..T-1",attackRule:"t >= attack_start_step",
    isolationTime:"isolation_step-attack_start_step+1",
    error:"mean Euclidean norm after attack_start_step, then sample mean/sd across runs",
+   figure1:"mean per-step trust and Euclidean error across independent paired runs",
    resilience:"paired J_attack/J_clean over last resilience_window steps",
    reproducibility:"keyed xorshift32/Box-Muller by seed, run, subsystem, tick, agent",
    limitations:"Synthetic quality and utilities are explicit assumptions, not empirical calibration."}};
