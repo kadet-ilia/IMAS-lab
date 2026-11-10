@@ -22,15 +22,24 @@ const combine=(vectors,method,b)=>{
 export function aggregateAll(st,c,generated,admitted){
  const live=st.alive(),output={};
  for(const method of ARTICLE_METHODS){
-  const selected=(method==="trust_mean"||method==="trust_trimmed_mean"?admitted:live)
-   .filter(i=>generated.messages[i].every(v=>v!==null)); // no invented coordinates
+  const eligible=(method==="trust_mean"||method==="trust_trimmed_mean"?admitted:live);
   const theta=st.theta[method]||Array(c.decision_dim).fill(0);
-  const updates=selected.map(i=>clipNorm(generated.messages[i].map((x,k)=>x-theta[k]),c.update_norm_bound));
-  const combined=combine(updates,method,c.trim_each_side);
-  const estimate=combined.value?theta.map((v,k)=>v+c.global_step*combined.value[k]):null;
-  if(estimate)st.theta[method]=estimate;
-  output[method]={value:estimate,error:estimate?distance(estimate,generated.reference):null,
-    selected:selected.length,trimFallback:combined.fallback};
+  // Missing H_i coordinates are excluded from their coordinate's estimate.
+  // Their zero contribution below is ONLY used in the norm of an observed update.
+  const updates=eligible.map(i=>clipNorm(generated.messages[i].map((x,k)=>x===null?0:x-theta[k]),c.update_norm_bound));
+  let fallback=false,observedCount=0;
+  const estimate=theta.map((v,k)=>{
+   const observed=eligible.map((i,n)=>generated.messages[i][k]===null?null:updates[n][k]).filter(x=>x!==null);
+   if(!observed.length)return v;
+   observedCount++;
+   const part=combine(observed.map(x=>[x]),method,c.trim_each_side);
+   fallback||=part.fallback;
+   return v+c.global_step*part.value[0];
+  });
+  const value=observedCount?estimate:null;
+  if(value)st.theta[method]=value;
+  output[method]={value,error:value?distance(value,generated.reference):null,
+    selected:eligible.length,observedCoordinates:observedCount,trimFallback:fallback};
  }
  return output;
 }
