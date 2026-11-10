@@ -2,6 +2,7 @@ import React,{useMemo,useState} from "react";
 import {STUDY_DEFS} from "./research2027.js";
 import {MODULE_MANUAL} from "./ResearchManual.js";
 import {SIMPLE_GUIDES} from "./SimpleGuides.js";
+import {ARTICLE_HELP_SECTIONS} from "./articleManual.js";
 
 const LEGACY_GROUPS={
  "Базовая модель":["purpose","agents"],
@@ -21,7 +22,7 @@ const mid=(id,key)=>"manual-"+id+"-"+key;
 function DocSection({id,title,paragraphs=[],equations=[],steps=[],terms=[],note}){
  return <section id={id} className={"r27-doc-section"+((id?.startsWith("simple-")||id?.endsWith("-simple"))?" r27-doc-simple":"")}><h2>{title}</h2>
   {paragraphs.map((p,i)=><p key={i}>{p}</p>)}
-  {equations.map((eq,i)=><div className="r27-manual-equation" role="math" key={i}><span className="r27-eq-num">{i+1}</span><span>{eq}</span></div>)}
+  {equations.map((eq,i)=><div className="r27-manual-equation" role="math" key={i}><span className="r27-eq-num">{typeof eq==="string"?i+1:eq.number}</span><span>{typeof eq==="string"?eq:eq.text}</span></div>)}
   {steps.length?<ol>{steps.map((st,i)=><li key={i}>{st}</li>)}</ol>:null}
   {terms.length?<dl className="glossary">{terms.map(([term,def])=><React.Fragment key={term}><dt>{term}</dt><dd>{def}</dd></React.Fragment>)}</dl>:null}
   {note?<p className="r27-document-caution">{note}</p>:null}
@@ -44,12 +45,12 @@ export function UnifiedHelp({baselineArticle,baselineSections=[],researchTheory}
  const [search,setSearch]=useState(""),[selected,setSelected]=useState("guide-purpose");
  const tree=useMemo(()=>{
   const base=baselineSections.map(([id,title])=>({id,title,group:Object.entries(LEGACY_GROUPS).find(([,list])=>list.includes(id))?.[0]||"Прочее"}));
-  return [{name:"Общая документация",nodes:INTRO},{name:"Расчет доверия",nodes:[{...SIMPLE_GUIDES.trust,id:"simple-trust"},...base]},...STUDY_DEFS.map(d=>({name:MODULE_MANUAL[d.id]?.name||d.short,nodes:[{...SIMPLE_GUIDES[d.id],id:mid(d.id,"simple")},...(MODULE_MANUAL[d.id]?.sections||[]).map(s=>({...s,id:mid(d.id,s.id)}))]}))];
+  return [{name:"Общая документация",nodes:INTRO},{name:"Расчет доверия",nodes:[{...SIMPLE_GUIDES.trust,id:"simple-trust"},...base]},{name:"Модель статьи (1–21)",nodes:ARTICLE_HELP_SECTIONS},...STUDY_DEFS.map(d=>({name:MODULE_MANUAL[d.id]?.name||d.short,nodes:[{...SIMPLE_GUIDES[d.id],id:mid(d.id,"simple")},...(MODULE_MANUAL[d.id]?.sections||[]).map(s=>({...s,id:mid(d.id,s.id)}))]}))];
  },[baselineSections]);
  return <div className="r27-manual-layout">
   <aside className="help-toc r27-help-tree"><h2>Содержание</h2>
    <label className="r27-help-search">Поиск раздела<input type="search" aria-label="Поиск по содержанию справки" placeholder="Название раздела" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-   <p className="r27-help-count">6 экспериментов · {tree.reduce((n,x)=>n+x.nodes.length,0)} разделов</p>
+   <p className="r27-help-count">6 экспериментов + модель статьи · {tree.reduce((n,x)=>n+x.nodes.length,0)} разделов</p>
    <nav aria-label="Дерево разделов справки">{tree.map(module=><HelpBranch key={module.name} {...module} selected={selected} setSelected={setSelected} search={search}/>)}</nav>
   </aside>
   <div className="r27-manual-body">
@@ -57,8 +58,10 @@ export function UnifiedHelp({baselineArticle,baselineSections=[],researchTheory}
    <header className="r27-manual-chapter" id="manual-trust"><h2>1. Расчет доверия</h2><p>Динамическое доверие, репутация, робастная агрегация и оценка защищённости.</p></header>
    <article className="help-article r27-module-article"><DocSection id="simple-trust" {...SIMPLE_GUIDES.trust}/></article>
    {baselineArticle}
+   <header className="r27-manual-chapter" id="manual-article"><h2>2. Модель статьи (формулы 1–21)</h2><p>Отдельный векторный движок, аналитические формулы и воспроизводимый статистический протокол.</p></header>
+   <article className="help-article r27-module-article">{ARTICLE_HELP_SECTIONS.map(x=><DocSection key={x.id} {...x}/>)}</article>
    {STUDY_DEFS.map((def,i)=>{const module=MODULE_MANUAL[def.id],theory=researchTheory[def.id];return <React.Fragment key={def.id}>
-    <header className="r27-manual-chapter" id={"manual-"+def.id}><h2>{i+2}. {module.name}</h2><p>{def.title}</p><p>{theory.goal}</p></header>
+    <header className="r27-manual-chapter" id={"manual-"+def.id}><h2>{i+3}. {module.name}</h2><p>{def.title}</p><p>{theory.goal}</p></header>
     <article className="help-article r27-module-article"><DocSection id={mid(def.id,"simple")} {...SIMPLE_GUIDES[def.id]}/>{module.sections.map(item=><DocSection key={item.id} {...item} id={mid(def.id,item.id)}/>)}</article>
    </React.Fragment>;})}
   </div>
