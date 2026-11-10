@@ -1,4 +1,5 @@
 import {ARTICLE_MODEL_VERSION,validateArticleConfig,summarizeArticleTasks} from "./articleEngine.js";
+import {withOriginStorageLock} from "./trustBrowserClient.js";
 let current=null;
 const dbName="imas-article-model-v1";
 function idb(key,writeValue){
@@ -16,7 +17,7 @@ function idb(key,writeValue){
   };
  });
 }
-export async function runArticleSeries(raw,onProgress=()=>{}){
+async function runArticleSeriesUnlocked(raw,onProgress=()=>{}){
  if(current)throw Error("Модель статьи: вычисление уже выполняется");
  const config=validateArticleConfig(raw);
  const key=JSON.stringify({modelVersion:ARTICLE_MODEL_VERSION,config});
@@ -56,5 +57,8 @@ export async function runArticleSeries(raw,onProgress=()=>{}){
   onProgress({stage:"article",completed:tasks.length,total:config.n_runs,percent:100*tasks.length/config.n_runs});
   worker.postMessage({type:"run",id:"article",payload:{config,model:"article"},indices:Array.from({length:config.n_runs-tasks.length},(_,i)=>tasks.length+i)});
  });
+}
+export async function runArticleSeries(raw,onProgress=()=>{}){
+ return withOriginStorageLock(()=>runArticleSeriesUnlocked(raw,onProgress));
 }
 export function stopArticleSeries(){if(!current)return false;current.cancel();return true;}
