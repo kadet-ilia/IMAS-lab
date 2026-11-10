@@ -345,10 +345,11 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
 
         <div className="sidebar-section">
           <h3>Параметры доверия</h3>
-          <NumberField label="Окно наблюдения (шагов)" value={config.trust_window_steps} min={2} max={100} onChange={set("trust_window_steps")} tooltip={PARAMETER_TOOLTIPS.trust_window_steps} />
-          <NumberField label="Скорость забывания (λ)" value={Number((1 - config.forgetting_factor).toFixed(3))} min={0} max={0.4} step={0.01} onChange={(value) => set("forgetting_factor")(1 - value)} tooltip={PARAMETER_TOOLTIPS.forgetting_factor} />
-          <NumberField label="Начальное доверие (w₀)" value={config.initial_trust} min={0.05} max={0.95} step={0.05} onChange={set("initial_trust")} tooltip={PARAMETER_TOOLTIPS.initial_trust} />
-          <NumberField label="Минимальный вес (wmin)" value={config.minimum_weight} min={0} max={0.5} step={0.01} onChange={set("minimum_weight")} tooltip={PARAMETER_TOOLTIPS.minimum_weight} />
+          <NumberField label="Коэффициент памяти λ (9)" value={config.trust_memory} min={0.01} max={0.99} step={0.01} onChange={set("trust_memory")} tooltip={PARAMETER_TOOLTIPS.trust_memory} />
+          <NumberField label="Вес прямого доверия α (12)" value={config.trust_alpha} min={0} max={1} step={0.05} onChange={set("trust_alpha")} tooltip={PARAMETER_TOOLTIPS.trust_alpha} />
+          <NumberField label="Регуляризация εE (11)" value={config.reputation_eps} min={0.001} max={1} step={0.001} onChange={set("reputation_eps")} tooltip={PARAMETER_TOOLTIPS.reputation_eps} />
+          <NumberField label="Начальное доверие D₀" value={config.initial_trust} min={0.05} max={0.95} step={0.05} onChange={set("initial_trust")} tooltip={PARAMETER_TOOLTIPS.initial_trust} />
+          <NumberField label="Порог допуска ϑin" value={config.admission_threshold} min={config.isolation_threshold} max={0.99} step={0.01} onChange={set("admission_threshold")} tooltip={PARAMETER_TOOLTIPS.admission_threshold} />
         </div>
 
         <div className="sidebar-section">
@@ -356,7 +357,9 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
           <BoolField label="Включить управляющую изоляцию" checked={config.isolation_enabled} onChange={set("isolation_enabled")} tooltip={PARAMETER_TOOLTIPS.isolation_enabled} />
           <NumberField label="Порог изоляции (τiso)" value={config.isolation_threshold} min={0.05} max={0.9} step={0.01} onChange={set("isolation_threshold")} tooltip={PARAMETER_TOOLTIPS.isolation_threshold} />
           <NumberField label="Подтверждений для изоляции (k)" value={config.isolation_patience} min={1} max={20} onChange={set("isolation_patience")} tooltip={PARAMETER_TOOLTIPS.isolation_patience} />
-          <NumberField label="Охлаждение изоляции (шагов)" value={config.isolation_cooldown_steps} min={1} max={100} onChange={set("isolation_cooldown_steps")} tooltip={PARAMETER_TOOLTIPS.isolation_cooldown_steps} />
+          <BoolField label="Накопительная изоляция z (14)" checked={config.cusum_enabled} onChange={set("cusum_enabled")} hint="Дополнительный критерий изоляции по качеству взаимодействий." />
+          {config.cusum_enabled ? <><NumberField label="Опорное качество μq" value={config.cusum_mu} min={0} max={1} step={0.05} onChange={set("cusum_mu")} tooltip={PARAMETER_TOOLTIPS.cusum_mu} /><NumberField label="Порог накопления zlim" value={config.cusum_limit} min={0} max={30} step={0.1} onChange={set("cusum_limit")} tooltip={PARAMETER_TOOLTIPS.cusum_limit} /></> : null}
+          <NumberField label="Возврат после изоляции (0 — нет)" value={config.isolation_cooldown_steps} min={0} max={100} onChange={set("isolation_cooldown_steps")} tooltip={PARAMETER_TOOLTIPS.isolation_cooldown_steps} />
         </div>
 
         <details className="advanced network-settings">
@@ -396,7 +399,10 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
           <div className="advanced-body">
             <NumberField label="Желаемое действие x*" value={config.desired_action} min={-2} max={2} step={0.05} onChange={set("desired_action")} tooltip={PARAMETER_TOOLTIPS.desired_action} />
             <NumberField label="СКО шума корректного агента" value={config.honest_noise_sigma} min={0.01} max={1} step={0.01} onChange={set("honest_noise_sigma")} tooltip={PARAMETER_TOOLTIPS.honest_noise_sigma} />
-            <NumberField label="Коэффициент EigenTrust γ" value={config.reputation_damping} min={0} max={0.99} step={0.01} onChange={set("reputation_damping")} tooltip={PARAMETER_TOOLTIPS.reputation_damping} />
+            <NumberField label="Вес синтетического свидетельства β₁ (8)" value={config.quality_weights[0]} min={0} max={Number((1-config.quality_weights[1]).toFixed(3))} step={0.01} onChange={v=>setConfig(c=>({...c,quality_weights:[v,c.quality_weights[1],Number((1-v-c.quality_weights[1]).toFixed(6))]}))} tooltip={PARAMETER_TOOLTIPS.quality_weights} />
+            <NumberField label="Вес устойчивости β₂ (8)" value={config.quality_weights[1]} min={0} max={Number((1-config.quality_weights[0]).toFixed(3))} step={0.01} onChange={v=>setConfig(c=>({...c,quality_weights:[c.quality_weights[0],v,Number((1-c.quality_weights[0]-v).toFixed(6))]}))} tooltip={PARAMETER_TOOLTIPS.quality_weights} />
+            <p className="field-hint">Вес подписи β₃ = {config.quality_weights[2].toFixed(3)}</p>
+            <NumberField label="Нормирующий масштаб устойчивости" value={config.quality_stability_scale} min={0.01} max={10} step={0.1} onChange={set("quality_stability_scale")} />
             <NumberField label="Минимум наблюдений" value={config.minimum_evidence_steps} min={1} max={100} onChange={set("minimum_evidence_steps")} tooltip={PARAMETER_TOOLTIPS.minimum_evidence_steps} />
             <NumberField label="Усечение с каждой стороны" value={config.trim_each_side} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("trim_each_side")} tooltip={PARAMETER_TOOLTIPS.trim_each_side} />
             <NumberField label="Радиус ограничения выбросов" value={config.clip_radius} min={0.05} max={10} step={0.05} onChange={set("clip_radius")} tooltip={PARAMETER_TOOLTIPS.clip_radius} />
