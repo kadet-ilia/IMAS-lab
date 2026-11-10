@@ -18,7 +18,7 @@ from experiment import (
 )
 
 FIXTURE = json.loads((Path(__file__).resolve().parent /
-                      "audit/remediation/03_parity/primitive_vectors.json").read_text(encoding="utf-8"))
+                      "audit/scientific-integrity/03_parity/primitive_vectors.json").read_text(encoding="utf-8"))
 
 
 class PrimitiveParity(unittest.TestCase):

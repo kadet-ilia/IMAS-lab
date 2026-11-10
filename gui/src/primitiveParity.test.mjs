@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {betaTrust,eigenTrust,trimmedWeightedMean,validateConfig} from "./trustEngine.js";
-const fixture=JSON.parse(fs.readFileSync(new URL("../../audit/remediation/03_parity/primitive_vectors.json",import.meta.url),"utf8"));
+const fixture=JSON.parse(fs.readFileSync(new URL("../../audit/scientific-integrity/03_parity/primitive_vectors.json",import.meta.url),"utf8"));
 const close=(actual,expected,location="")=>{
  if(Array.isArray(expected)){
   assert.ok(Array.isArray(actual),location);
