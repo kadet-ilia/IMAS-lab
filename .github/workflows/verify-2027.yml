@@ -63,6 +63,7 @@ jobs:
             gui/dashboard.png
             gui/help.png
             gui/research2027.png
+            gui/article-trust.png
           if-no-files-found: warn
           retention-days: 14
   existing-python:
