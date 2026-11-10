@@ -495,7 +495,7 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
     const a = clampStep(from), b = clampStep(to);
     if (a <= b) setZoomRange([a, b]);
   };
-  const zoomSelection = dragRange && dragRange[0] !== dragRange[1] ? 
+  const zoomSelection = dragRange && dragRange[0] !== dragRange[1] ?
     <ReferenceArea x1={Math.min(...dragRange)} x2={Math.max(...dragRange)} strokeOpacity={0.2} fill="#5195cf" fillOpacity={0.22} /> : null;
 
   const metricChart = [
@@ -509,7 +509,7 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
     <div className="trust-overview-grid">
       <TopologyPlayback replay={trustReplay} compact />
       <Panel title="Сводная таблица результатов расчёта доверия" subtitle="Результаты одного прогона для всех методов агрегирования">
-        <div className="table-wrap trust-summary-table"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>|Смещение|</th><th title="Доля шагов с |x−x*| ≤ 1,96σ/√n; это не доверительный интервал оценивателя">Номинальная полоса</th></tr></thead>
+        <div className="table-wrap trust-summary-table"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>Смещение</th><th title="Доля шагов с |x−x*| ≤ 1,96σ/√n; это не доверительный интервал оценивателя">Номинальная полоса</th></tr></thead>
         <tbody>{data.metrics.map(item=><tr key={item.method}><td>{METHODS[item.method]||item.method}</td><td>{metricNumber(item.rmse,4)}</td><td>{metricNumber(item.mae,4)}</td><td>{metricNumber(Number.isFinite(item.bias)?Math.abs(item.bias):null,4)}</td><td>{metricPercent(item.nominal_band_rate,2)}</td></tr>)}</tbody></table></div>
       </Panel>
     </div>

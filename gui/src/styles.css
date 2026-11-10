@@ -97,7 +97,7 @@ svg { display: block; }
 .chart-tools label { display: inline-flex; align-items: center; gap: 4px; color: #5c6975; font-size: 11px; white-space: nowrap; }
 .chart-tools input { width: 12px; height: 12px; margin: 0; accent-color: var(--blue); }
 .stat-badge { display: inline-flex; align-items: center; min-height: 23px; padding: 0 7px; border: 1px solid #cdd9e4; border-radius: 2px; background: #f7fafc; color: #526474; font-size: 11px; white-space: nowrap; }
-.inline-action { height: 25px; border: 1px solid #afbdca; border-radius: 2px; background: #fff; color: var(--navy); padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 8px; font-weight: 600; white-space: nowrap; }
+.inline-action { height: 25px; border: 1px solid #afbdca; border-radius: 2px; background: #fff; color: var(--navy); padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; white-space: nowrap; }
 .inline-action:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
 .inline-action svg { width: 13px; height: 13px; }
 .panel-body { padding: 0 9px 9px; }
