@@ -721,8 +721,16 @@ function App() {
   const [cacheHit, setCacheHit] = useState(false);
   const runningRef = useRef(false);
   const researchActionsRef = useRef(null);
-  const articleActionsRef = useRef(null);
-  const [articleRuntime,setArticleRuntime] = useState(null);
+  const [trustModel,setTrustModel] = useState("legacy");
+  const [articleConfig,setArticleConfig] = useState(()=>({...ARTICLE_DEFAULTS}));
+  const [articleView,setArticleView] = useState("table2");
+  const [articleResult,setArticleResult] = useState(null);
+  const [articleProgress,setArticleProgress] = useState(null);
+  const [articleError,setArticleError] = useState("");
+  const [articleRunning,setArticleRunning] = useState(false);
+  const [articleCacheHit,setArticleCacheHit] = useState(false);
+  const [articleClaims,setArticleClaims] = useState(null);
+  const articleRunningRef=useRef(false);
   const [researchRuntime,setResearchRuntime] = useState(null);
   useEffect(()=>{if(activeTab!=="help2027")lastExperimentRef.current=activeTab;},[activeTab]);
 
@@ -755,9 +763,38 @@ function App() {
     finally{runningRef.current=false;setRunning(false);}
   };
   useEffect(()=>{request("trace");},[]);
-  const stop=()=>stopBrowserExperiment();
+  const articlePreset=(preset)=>{
+    if(articleRunningRef.current)return;
+    setArticleConfig(c=>({...c,...ARTICLE_PRESETS[preset]}));
+    setArticleView(preset);setArticleResult(null);setArticleClaims(null);
+    setArticleError("");
+    setActiveTab(preset==="table3"?"sensitivity":preset==="figure1"?"trace":"mc");
+  };
+  const requestArticle=async(table3=false)=>{
+    if(articleRunningRef.current||runningRef.current)return;
+    const signature=JSON.stringify(articleConfig);
+    articleRunningRef.current=true;
+    setArticleRunning(true);setArticleError("");setArticleProgress(null);setArticleCacheHit(false);
+    const started=performance.now();
+    try{
+      const terminal=table3?await runArticleTable3(articleConfig,setArticleProgress)
+        :await runArticleSeries(articleConfig,setArticleProgress);
+      setArticleResult({...terminal.result,client_signature:signature,article_kind:table3?"table3":"standard"});
+      setArticleCacheHit(Boolean(terminal.cache_hit));
+      setLastRun({action:"article",mode:table3?"table3":"paired",seconds:(performance.now()-started)/1000,
+        at:new Date(),log:"IndexedDB · imas-article",partial:false,cacheHit:terminal.cache_hit});
+    }catch(reason){setArticleError(reason.message||String(reason));}
+    finally{articleRunningRef.current=false;setArticleRunning(false);}
+  };
+  const stop=()=>trustModel==="article"?stopArticleSeries():stopBrowserExperiment();
 
   const reset = () => {
+    if(trustModel==="article"){
+      stopArticleSeries();
+      setArticleConfig({...ARTICLE_DEFAULTS});setArticleResult(null);setArticleError("");
+      setArticleProgress(null);setArticleCacheHit(false);setArticleClaims(null);
+      setArticleView("table2");setActiveTab("trace");return;
+    }
     stop();
     setConfig(DEFAULT_CONFIG);
     setScenario("collusion");
@@ -770,8 +807,18 @@ function App() {
     setError("");
     setActiveTab("trace");
   };
-  const newSeed = () => setConfig((current) => ({ ...current, seed: Math.floor((Date.now() + Math.random() * 100000) % 2147483647) }));
-  const runForTab = () => request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
+  const newSeed=()=>{
+    const seed=Math.floor((Date.now()+Math.random()*100000)%2147483647);
+    if(trustModel==="article"){setArticleConfig(c=>({...c,seed}));setArticleResult(null);}
+    else setConfig(c=>({...c,seed}));
+  };
+  const runForTab=()=>{
+    if(trustModel==="article"){
+      try{validateArticleConfig(articleConfig);}catch(e){setArticleError(e.message);return;}
+      return requestArticle(activeTab==="sensitivity"||articleView==="table3");
+    }
+    return request(activeTab==="mc"?"monte_carlo":activeTab==="sensitivity"?"sensitivity":"trace",{sensitivityMode});
+  };
   const experimentSignature = JSON.stringify({ scenario, config });
   const currentTrace = trace?.client_signature === experimentSignature ? trace : null;
   const currentMonteCarlo = monteCarlo?.client_signature === experimentSignature ? monteCarlo : null;
