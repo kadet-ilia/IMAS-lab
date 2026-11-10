@@ -22,7 +22,10 @@ export const DEFAULTS={
  honest_quality:.92,byzantine_quality:.1,honest_noise_sigma:.2,observer_noise_sigma:.02,
  static_bias:4,subtle_bias:.65,collusion_bias:1.5,on_off_period:10,on_off_attack_steps:4,
  trust_window_steps:20,forgetting_factor:.95,initial_trust:.5,trust_prior_strength:2,
- minimum_weight:.05,reputation_damping:.85,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
+ minimum_weight:.05,reputation_damping:.85,
+ trust_algorithm:"legacy",trust_memory:.8,trust_alpha:.7,reputation_eps:.01,
+ admission_threshold:.4,cusum_enabled:false,cusum_mu:.5,cusum_limit:3,
+ quality_weights:[.85,.1,.05],quality_stability_scale:2,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
  minimum_evidence_steps:8,isolation_cooldown_steps:30,trim_each_side:10,
  clip_radius:1.25,safe_action_min:-2,safe_action_max:2,correctness_tolerance:.5,
  paired_exogenous_events:false,network_enabled:false,network_topology:"complete",network_edge_probability:.25,
@@ -60,7 +63,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.10.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.11.0-e1-inplace-trust";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,10000],n_sensitivity_runs:[1,100],
@@ -74,7 +77,7 @@ const numericRanges={
  desired_action:[-2,2],honest_quality:[0,1],byzantine_quality:[0,1],honest_noise_sigma:[0,10],
  observer_noise_sigma:[0,10],static_bias:[0,100],subtle_bias:[0,100],collusion_bias:[0,100],
  forgetting_factor:[0,1],initial_trust:[0,1],trust_prior_strength:[0,1000000],minimum_weight:[0,1],
- reputation_damping:[0,1],isolation_threshold:[0,1],clip_radius:[0,100],
+ reputation_damping:[0,1],trust_memory:[0,1],trust_alpha:[0,1],reputation_eps:[0,1],admission_threshold:[0,1],cusum_mu:[0,1],cusum_limit:[0,1000],quality_stability_scale:[0.000001,1000],isolation_threshold:[0,1],clip_radius:[0,100],
  safe_action_min:[-100,100],safe_action_max:[-100,100],correctness_tolerance:[0,100],
  network_edge_probability:[0,1],small_world_rewire_probability:[0,1],message_loss_probability:[0,1],
  partition_fraction:[0,1],attack_direction:[-1,1]
@@ -102,6 +105,15 @@ export function validateConfig(value={}){
  requireField(c.initial_trust>0&&c.initial_trust<1,"initial_trust","необходимо 0<w0<1");
  requireField(c.forgetting_factor>0,"forgetting_factor","необходимо 0<λ≤1");
  requireField(c.reputation_damping<1,"reputation_damping","коэффициент должен быть меньше 1");
+ requireField(["legacy","article"].includes(c.trust_algorithm),"trust_algorithm","неизвестный алгоритм доверия");
+ requireField(Array.isArray(c.quality_weights)&&c.quality_weights.length===3&&
+   c.quality_weights.every(w=>typeof w==="number"&&Number.isFinite(w)&&w>=0&&w<=1)&&
+   Math.abs(sum(c.quality_weights)-1)<1e-9,"quality_weights","β1+β2+β3=1, все веса в [0;1]");
+ if(c.trust_algorithm==="article"){
+  requireField(c.trust_memory>0&&c.trust_memory<1,"trust_memory","необходимо 0<λ<1");
+  requireField(c.reputation_eps>0,"reputation_eps","необходима положительная регуляризация");
+  requireField(c.admission_threshold>=c.isolation_threshold,"admission_threshold","порог допуска должен быть не ниже порога изоляции");
+ }
  requireField(c.trust_prior_strength>0,"trust_prior_strength","сила prior должна быть положительной");
  requireField(c.clip_radius>0,"clip_radius","радиус должен быть положительным");
  requireField(c.on_off_attack_steps<=c.on_off_period,"on_off_attack_steps","не превышать период");
@@ -171,6 +183,39 @@ export function eigenTrust(direct,active,damping){
   const err=sum(next.map((x,i)=>Math.abs(x-v[i])));v=next;if(err<1e-10)break;
  }
  const scale=Math.max(...v,1e-15);idx.forEach((i,j)=>scores[i]=v[j]/scale);return scores;
+}
+/**
+ * E1 direct trust D, reputation E, integral pair trust T and median tau:
+ * equations (9), (11)-(13). Evidence only updates observed pairs.
+ * Reputation weights use the previous-tick tau.
+ */
+export function updateArticleTrust(state,q,c,active){
+ const n=active.length,oldTau=[...state.tau];
+ for(let i=0;i<n;i++)if(active[i])for(let j=0;j<n;j++)
+  if(i!==j&&active[j]&&good(q[i]?.[j]))
+   state.D[i][j]=clamp(c.trust_memory*state.D[i][j]+(1-c.trust_memory)*clamp(q[i][j],0,1),0,1);
+ for(let j=0;j<n;j++)if(active[j]){
+  const raters=all(n).filter(i=>i!==j&&active[i]&&good(q[i]?.[j]));
+  if(!raters.length)continue;
+  const weights=raters.map(i=>oldTau[i]+c.reputation_eps),total=sum(weights);
+  state.E[j]=clamp(sum(raters.map((i,k)=>weights[k]*state.D[i][j]))/total,0,1);
+  for(const i of raters)state.T[i][j]=clamp(c.trust_alpha*state.D[i][j]+(1-c.trust_alpha)*state.E[j],0,1);
+  state.tau[j]=clamp(median(raters.map(i=>state.T[i][j])),0,1);
+ }
+ return state;
+}
+/** Eq. (8): q=β1*c+β2*s+β3*g, with synthetic correctness
+ * evidence c, relative temporal stability s and a valid-signature flag g=1.
+ */
+export function articleInteractionQuality(evidence,current,previous,c){
+ const n=evidence.length,q=makeMat(n,NaN),beta=c.quality_weights;
+ for(let i=0;i<n;i++)for(let j=0;j<n;j++){
+  const e=evidence[i][j];if(i===j||!good(e))continue;
+  const stable=good(current[j])&&good(previous[j])
+   ?1-Math.min(1,Math.abs(current[j]-previous[j])/c.quality_stability_scale):1;
+  q[i][j]=clamp(beta[0]*e+beta[1]*stable+beta[2],0,1);
+ }
+ return q;
 }
 export function trimmedWeightedMean(values,weights,k){
  if(!values.length)throw Error("Не заданы значения для агрегирования");
