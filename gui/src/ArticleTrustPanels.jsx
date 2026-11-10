@@ -10,15 +10,18 @@ const SETS=[
  ["n_agents","N — число агентов",3,160,1],["n_byzantine","f — число нарушителей",0,159,1],
  ["decision_dim","d — размерность решения",1,32,1],["n_steps","Число тактов T",1,500,1],
  ["n_runs","Число прогонов R",1,10000,1],["attack_start_step","Начало атаки tₐ (с нуля)",0,499,1],
- ["attack_shift","Смещение Δ",0,100,.1],["honest_noise_sigma","Шум σ",0,10,.01],
+ ["attack_shift","Смещение Δ",0,100,.1],["subtle_shift","Малозаметное смещение",0,100,.01],
+ ["reference_drift","Дрейф эталона",0,100,.001],["honest_noise_sigma","Шум σ",0,10,.01],
  ["trust_memory","Коэффициент памяти λ",.01,.99,.01],
  ["trust_alpha","Доля прямого доверия α",0,1,.01],
+ ["initial_trust","Начальное доверие D₀",0,1,.01],
  ["isolation_threshold","Порог изоляции ϑ_iso",0,1,.01],
  ["admission_threshold","Порог допуска ϑ_in",0,1,.01],
  ["isolation_patience","Подтверждений n_iso",1,100,1],
  ["trim_each_side","Усечение b",0,79,1],
  ["honest_quality","Качество честных q_h",0,1,.01],
  ["byzantine_quality","Качество нарушителей q_a",0,1,.01],
+ ["mask_quality","Качество при маскировке",0,1,.01],
  ["quality_sigma","СКО качества σ_q",0,1,.01],
  ["reputation_eps","Регуляризация ε_E",0,1,.001],
  ["cusum_mu","Накопление μ_q",0,1,.01],["cusum_limit","Порог z_lim",0,100,.1],
@@ -56,6 +59,10 @@ export function ArticleTrustSettings({config,setConfig,running,preset,onPreset,c
       value={config.reference_vector.join("; ")} onChange={e=>{
        const v=e.target.value.split(";").map(x=>Number(x.trim().replace(",",".")));
        update("reference_vector",v);}}/></label>
+    <label className="field">Направление смещения u (через ;)<input aria-label="Направление смещения атаки"
+      value={config.attack_vector.join("; ")} onChange={e=>{
+       const v=e.target.value.split(";").map(x=>Number(x.trim().replace(",",".")));
+       update("attack_vector",v);}}/></label>
     <label className="field">Доля наблюдаемых компонент Hᵢ<input type="number" min=".01" max="1" step=".05" value={config.observation_fraction} onChange={e=>update("observation_fraction",Number(e.target.value))}/></label>
     <p>Веса качества β₁–β₃ (сумма 1)</p><div className="article-vector">{config.quality_weights.map((v,i)=><input aria-label={"β"+(i+1)} key={i} type="number" step=".01" value={v} onChange={e=>updateVector("quality_weights",i,Number(e.target.value))}/>)}</div>
     <p>Веса киберустойчивости γ₁–γ₄ (сумма 1)</p><div className="article-vector">{config.resilience_weights.map((v,i)=><input aria-label={"γ"+(i+1)} key={i} type="number" step=".01" value={v} onChange={e=>updateVector("resilience_weights",i,Number(e.target.value))}/>)}</div>
