@@ -81,3 +81,14 @@ test("complete experiment compares identical random realizations across methods"
  assert.deepEqual(result.series.slice(1).map(row=>row.attack_intensity),[0,0,1,1,0,0,2,2]);
  for(const m of result.summary)assert.ok(m.state_rmse.mean>=0);
 });
+
+
+test("representative 50-agent 30-step dynamic study returns a finite output",()=>{
+ const start=performance.now();
+ const study=runLyapunovStudy({n_steps:30,n_agents:50,n_byzantine:10,attack_start_step:20},
+  {runs:1,gain:.5,initialError:1,tolerance:.1,
+   phases:[{start:1,intensity:0},{start:20,intensity:1},{start:22,intensity:1.5},{start:23,intensity:0}]});
+ assert.equal(study.series.length,31);
+ assert.ok(Number.isFinite(study.summary[0].decision_rmse.mean));
+ assert.ok(performance.now()-start<20000,"one representative run is unexpectedly slow");
+});
