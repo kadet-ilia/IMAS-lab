@@ -438,5 +438,5 @@ test("dynamic engine applies phase-specific intensity curves",()=>{
  const exponential={...c,attack_schedule:phases.map((p,i)=>i===1?{...p,curve:"exponential"}:p)};
  const values=[3,4,5,6,7].map(step=>attackIntensity(step-1,"dynamic",exponential));
  assert.equal(values[0],0);assert.equal(values.at(-1),4);
- assert.ok(values[1]>1);
+ assert.ok(values[1]>0&&values[1]<1);
 });
