@@ -228,6 +228,12 @@ for(const [id,name] of trustModes){
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
 await stepInput.fill("30");await stepInput.press("Tab");
+const phaseCards=page.locator(".lyapunov-phase");
+if(await phaseCards.count()!==5)throw Error("Stability editor must display five attack phases in one row");
+const rampPhase=phaseCards.nth(1);
+await rampPhase.locator("input").first().fill("5");
+await rampPhase.locator("select").selectOption("linear");
+if((await rampPhase.locator("select").inputValue())!=="linear")throw Error("Linear attack ramp selector did not persist");
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 await page.getByRole("button",{name:"Выполнить исследование"}).click();
 try{
@@ -248,6 +254,19 @@ if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
   !lyapData.series.some(row=>row.attack_intensity===0)){
  throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
 }
+if(!lyapData.series.some(row=>row.attack_intensity>0&&row.attack_intensity<1))
+ throw Error("Linear ramp was not applied to simulated attack intensity");
+const [svgFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ page.locator(".lyapunov-export-tools").filter({has:page.locator("button[name='SVG']")}).first().getByRole("button",{name:"SVG"}).click()
+]);
+if(!svgFile.suggestedFilename().endsWith(".svg"))throw Error("Individual graph SVG export failed");
+const tablePanel=page.locator(".lyapunov-export-tools").filter({has:page.getByRole("button",{name:"CSV"})}).first();
+const [csvFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ tablePanel.getByRole("button",{name:"CSV"}).click()
+]);
+if(!csvFile.suggestedFilename().endsWith(".csv"))throw Error("Individual table CSV export failed");
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
