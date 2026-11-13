@@ -256,12 +256,16 @@ if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
 }
 if(!lyapData.series.some(row=>row.attack_intensity>0&&row.attack_intensity<1))
  throw Error("Linear ramp was not applied to simulated attack intensity");
+const svgPanel=page.locator(".lyapunov-export-tools").first();
 const [svgFile]=await Promise.all([
- page.waitForEvent("download",{timeout:15000}),
- page.locator(".lyapunov-export-tools").filter({has:page.locator("button[name='SVG']")}).first().getByRole("button",{name:"SVG"}).click()
+ page.waitForEvent("download",{timeout:15000}),svgPanel.getByRole("button",{name:"SVG"}).click()
 ]);
 if(!svgFile.suggestedFilename().endsWith(".svg"))throw Error("Individual graph SVG export failed");
-const tablePanel=page.locator(".lyapunov-export-tools").filter({has:page.getByRole("button",{name:"CSV"})}).first();
+const [pngFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),svgPanel.getByRole("button",{name:"PNG"}).click()
+]);
+if(!pngFile.suggestedFilename().endsWith(".png"))throw Error("Individual graph PNG export failed");
+const tablePanel=page.locator(".lyapunov-export-tools").nth(1);
 const [csvFile]=await Promise.all([
  page.waitForEvent("download",{timeout:15000}),
  tablePanel.getByRole("button",{name:"CSV"}).click()
