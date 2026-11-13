@@ -129,7 +129,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   </Panel>
   {!valid?<p role="alert" className="imas-validation-error">{validationError}</p>:null}
   {error?<p role="alert" className="error-banner">{error}</p>:null}
-  {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Состояние вычислительного потока: {workerStage}.</p>:null}
+  {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Состояние вычислительного потока: {({idle:"готов",launched:"запуск",worker_imported:"загружен",computing:"вычисление",result:"завершён",error:"ошибка",stopped:"остановлен"}[workerStage]||workerStage)}.</p>:null}
   {result?<React.Fragment>
    <div className="kpi-grid">
     <Kpi label="Номинальное сокращение |e|" value={n(nominal.rho,3)} note="ρ = |1 − k|, при отсутствии возмущений"/>
