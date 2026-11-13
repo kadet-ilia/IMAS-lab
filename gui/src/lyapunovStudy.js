@@ -111,7 +111,7 @@ export function feedbackTrajectory(trajectory,config,options){
    max_delta_v:maxDelta,
    settling_step:settling<0?null:settling,
    max_observed_disturbance:maxD,
-   sampled_input_ultimate_radius:o.gain*maxD/(1-rho),
+   sampled_input_ultimate_radius:valid===c.n_steps?o.gain*maxD/(1-rho):null,
    sampled_iss_bound_final:bound,
    missing_decisions:c.n_steps-valid
   };
