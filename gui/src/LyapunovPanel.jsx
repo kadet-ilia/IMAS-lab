@@ -44,6 +44,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
  const [tolerance,setTolerance]=useState(.1);
  const [runs,setRuns]=useState(12);
  const [running,setRunning]=useState(false);
+ const [workerStage,setWorkerStage]=useState("idle");
  const [progress,setProgress]=useState({completed:0,total:0});
  const [error,setError]=useState("");
  const [saved,setSaved]=useState(null);
@@ -57,21 +58,23 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
  try{validateLyapunovOptions(config,options);}catch(reason){valid=false;validationError=reason.message||String(reason);}
  const stop=()=>{
   workerRef.current?.terminate();workerRef.current=null;
-  setRunning(false);setError("Расчёт остановлен пользователем. Частичные результаты не интерпретируются.");
+  setRunning(false);setWorkerStage("stopped");setError("Расчёт остановлен пользователем. Частичные результаты не интерпретируются.");
  };
  const start=()=>{
   if(workerRef.current)return;
   try{validateLyapunovOptions(config,options);}
   catch(reason){setError(reason.message||String(reason));return;}
-  setError("");setSaved(null);setRunning(true);setProgress({completed:0,total:runs});
+  setError("");setSaved(null);setRunning(true);setWorkerStage("launched");setProgress({completed:0,total:runs});
   const worker=new Worker(new URL("./lyapunovWorker.js",import.meta.url),{type:"module"});
   workerRef.current=worker;
   const runSignature=signature;
   worker.onmessage=event=>{
    if(workerRef.current!==worker)return;
    const message=event.data||{};
+   if(message.type==="status")setWorkerStage(message.stage);
    if(message.type==="progress")setProgress({completed:message.completed,total:message.total});
    if(message.type==="result"||message.type==="error"){
+    setWorkerStage(message.type);
     worker.terminate();workerRef.current=null;setRunning(false);
     if(message.type==="result"){setSaved({signature:runSignature,value:message.result});setProgress({completed:runs,total:runs});}
     else setError(message.message||"Ошибка вычислительного потока");
@@ -125,7 +128,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   </Panel>
   {!valid?<p role="alert" className="imas-validation-error">{validationError}</p>:null}
   {error?<p role="alert" className="error-banner">{error}</p>:null}
-  {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Расчёт выполняется в отдельном браузерном потоке.</p>:null}
+  {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Состояние вычислительного потока: {workerStage}.</p>:null}
   {result?<React.Fragment>
    <div className="kpi-grid">
     <Kpi label="Номинальное сокращение |e|" value={n(nominal.rho,3)} note="ρ = |1 − k|, при отсутствии возмущений"/>
