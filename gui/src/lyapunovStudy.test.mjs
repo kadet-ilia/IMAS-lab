@@ -92,3 +92,23 @@ test("representative 50-agent 30-step dynamic study returns a finite output",()=
  assert.ok(Number.isFinite(study.summary[0].decision_rmse.mean));
  assert.ok(performance.now()-start<20000,"one representative run is unexpectedly slow");
 });
+
+test("attack intensity curves interpolate from previous phase level to target",()=>{
+ const profile=(curve)=>[{start:1,intensity:0,curve:"constant"},{start:3,intensity:4,curve},{start:8,intensity:0,curve:"constant"}];
+ assert.deepEqual([3,4,5,6,7].map(step=>attackIntensityAt(step,profile("linear"),10)),[0,1,2,3,4]);
+ const exponential=[3,4,5,6,7].map(step=>attackIntensityAt(step,profile("exponential"),10));
+ const parabolic=[3,4,5,6,7].map(step=>attackIntensityAt(step,profile("parabolic"),10));
+ const hyperbolic=[3,4,5,6,7].map(step=>attackIntensityAt(step,profile("hyperbolic"),10));
+ for(const values of [exponential,parabolic,hyperbolic]){
+  assert.equal(values[0],0);assert.equal(values.at(-1),4);
+  assert.ok(values.every((value,i)=>i===0||value>=values[i-1]));
+ }
+ assert.ok(hyperbolic[1]>linearMid(profile("linear")));
+ function linearMid(p){return attackIntensityAt(4,p,10);}
+});
+test("attack profile is limited to five phases and validates curve names",()=>{
+ const five=Array.from({length:5},(_,i)=>({start:i+1,intensity:i,curve:"constant"}));
+ assert.equal(validateAttackPhases(five,10).length,5);
+ assert.throws(()=>validateAttackPhases([...five,{start:6,intensity:1}],10),/1 до 5/);
+ assert.throws(()=>validateAttackPhases([{start:1,intensity:1,curve:"sine"}],10),/неизвестный закон/);
+});
