@@ -15,15 +15,24 @@ const finite=x=>typeof x==="number"&&Number.isFinite(x);
 const mean=x=>x.length?x.reduce((s,v)=>s+v,0)/x.length:null;
 const sd=x=>x.length<2?null:Math.sqrt(x.reduce((s,v)=>s+(v-mean(x))**2,0)/(x.length-1));
 const roundStart=(x,t)=>Math.max(1,Math.min(t,Math.round(x)));
+export const ATTACK_CURVES=[["constant","Постоянная"],["linear","Линейное нарастание"],["exponential","Экспоненциальное"],["parabolic","Параболическое"],["hyperbolic","Гиперболическое"]];
+const curveProgress=(u,curve)=>{
+ const x=Math.max(0,Math.min(1,u));
+ if(curve==="linear")return x;
+ if(curve==="exponential"){const a=4;return (Math.exp(a*x)-1)/(Math.exp(a)-1);}
+ if(curve==="parabolic")return x*x;
+ if(curve==="hyperbolic"){const a=4;return a*x/(1+(a-1)*x);}
+ return 1;
+};
 
 export function defaultAttackPhases(steps,attackStart=20){
  const t=Math.max(1,Math.round(steps)),start=roundStart(attackStart,t);
  const candidates=[
-  {start:1,intensity:0},
-  {start,intensity:1},
-  {start:roundStart(Math.max(start+1,Math.floor(t*.40)),t),intensity:0},
-  {start:roundStart(Math.max(start+2,Math.floor(t*.58)),t),intensity:1.5},
-  {start:roundStart(Math.max(start+3,Math.floor(t*.78)),t),intensity:0}
+  {start:1,intensity:0,curve:"constant"},
+  {start,intensity:1,curve:"constant"},
+  {start:roundStart(Math.max(start+1,Math.floor(t*.40)),t),intensity:0,curve:"constant"},
+  {start:roundStart(Math.max(start+2,Math.floor(t*.58)),t),intensity:1.5,curve:"constant"},
+  {start:roundStart(Math.max(start+3,Math.floor(t*.78)),t),intensity:0,curve:"constant"}
  ];
  const distinct=new Map();
  for(const p of candidates)if(!distinct.has(p.start)||p.start===1&&start===1)distinct.set(p.start,p);
@@ -31,23 +40,32 @@ export function defaultAttackPhases(steps,attackStart=20){
 }
 
 export function validateAttackPhases(phases,steps){
- if(!Array.isArray(phases)||!phases.length||phases.length>30)throw Error("Профиль атаки: требуется от 1 до 30 фаз");
+ if(!Array.isArray(phases)||!phases.length||phases.length>5)throw Error("Профиль атаки: требуется от 1 до 5 фаз");
  let previous=0;
  for(const [i,p] of phases.entries()){
   if(!p||!Number.isInteger(p.start)||p.start<=previous||p.start>steps)
    throw Error("Профиль атаки: начала фаз должны возрастать и лежать в пределах 1…T (фаза "+(i+1)+")");
   if(!finite(p.intensity)||p.intensity<0||p.intensity>5)
    throw Error("Профиль атаки: множитель интенсивности должен лежать в пределах 0…5");
+  if(!ATTACK_CURVES.some(([id])=>id===(p.curve||"constant")))throw Error("Профиль атаки: неизвестный закон изменения интенсивности");
   previous=p.start;
  }
  if(phases[0].start!==1)throw Error("Профиль атаки: первая фаза должна начинаться с шага 1");
- return phases.map(p=>({start:p.start,intensity:p.intensity}));
+ return phases.map(p=>({start:p.start,intensity:p.intensity,curve:p.curve||"constant"}));
 }
 
 export function attackIntensityAt(step,phases){
  let value=0;
- for(const p of phases){if(p.start>step)break;value=p.intensity;}
- return value;
+ for(let i=0;i<phases.length;i++){
+  const p=phases[i],next=phases[i+1];
+  if(p.start>step)break;
+  const curve=p.curve||"constant";
+  if(curve==="constant"){value=p.intensity;continue;}
+  const end=next?next.start-1:Math.max(p.start,step);
+  const u=end<=p.start?1:(step-p.start)/(end-p.start);
+  value=value+(p.intensity-value)*curveProgress(u,curve);
+ }
+ return Math.max(0,Math.min(5,value));
 }
 
 export function validateLyapunovOptions(config,options={}){
