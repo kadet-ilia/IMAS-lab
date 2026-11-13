@@ -49,6 +49,39 @@ function ExportPanel({title,children,...props}){
  </ExportPanel>;
 }
 
+
+function fileBase(value){return (value||"imas-export").toLowerCase().replace(/[^a-zа-яё0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,70)||"imas-export";}
+function ExportActions({targetRef,title}){
+ const saveSvg=()=>{
+  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
+  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");
+  download(fileBase(title)+".svg",new XMLSerializer().serializeToString(clone),"image/svg+xml;charset=utf-8");
+ };
+ const savePng=()=>{
+  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
+  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  const box=svg.getBoundingClientRect();clone.setAttribute("width",Math.ceil(box.width)||1200);clone.setAttribute("height",Math.ceil(box.height)||600);
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));
+  const image=new Image();image.onload=()=>{const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;canvas.getContext("2d").drawImage(image,0,0);canvas.toBlob(blob=>{if(blob){const a=document.createElement("a");const png=URL.createObjectURL(blob);a.href=png;a.download=fileBase(title)+".png";a.click();URL.revokeObjectURL(png);}URL.revokeObjectURL(url);});};image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
+ };
+ const saveCsv=()=>{
+  const table=targetRef.current?.querySelector("table");if(!table)return;
+  const rows=[...table.rows].map(row=>[...row.cells].map(cell=>'"'+cell.innerText.replace(/"/g,'""').replace(/\s+/g," ").trim()+'"').join(";"));
+  download(fileBase(title)+".csv","\uFEFF"+rows.join("\r\n"),"text/csv;charset=utf-8");
+ };
+ return <div className="lyapunov-export-tools">
+  <button type="button" className="inline-action" onClick={saveSvg} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в SVG">SVG</button>
+  <button type="button" className="inline-action" onClick={savePng} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в PNG">PNG</button>
+  <button type="button" className="inline-action" onClick={saveCsv} disabled={!targetRef.current?.querySelector("table")} title="Сохранить таблицу в CSV">CSV</button>
+ </div>;
+}
+function ExportPanel({title,children,...props}){
+ const targetRef=useRef(null);
+ return <ExportPanel title={title} headerAside={<ExportActions targetRef={targetRef} title={title}/>} {...props}>
+  <div ref={targetRef} className="lyapunov-export-content">{children}</div>
+ </ExportPanel>;
+}
+
 function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
  const edit=(index,key,value)=>setPhases(prev=>prev.map((p,i)=>i===index?{...p,[key]:value}:p));
  const add=()=>{
@@ -60,8 +93,9 @@ function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
    {phases.map((phase,i)=><div className="lyapunov-phase" key={i}>
     <label>Начало, шаг<input type="number" min={i?2:1} max={steps} step="1" disabled={disabled||i===0}
       value={phase.start} onChange={e=>edit(i,"start",e.target.value===""?NaN:Number(e.target.value))}/></label>
-    <label>Интенсивность<input type="number" min="0" max="5" step=".1" disabled={disabled}
+    <label>Интенсивность, до<input type="number" min="0" max="5" step=".1" disabled={disabled}
       value={phase.intensity} onChange={e=>edit(i,"intensity",e.target.value===""?NaN:Number(e.target.value))}/></label>
+    <label>Закон изменения<select disabled={disabled} value={phase.curve||"constant"} onChange={e=>edit(i,"curve",e.target.value)}>{ATTACK_CURVES.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
     {i>0?<button className="inline-action" type="button" disabled={disabled} onClick={()=>setPhases(prev=>prev.filter((_,j)=>i!==j))}>Удалить</button>:<span className="lyapunov-fixed-phase">Первая фаза</span>}
    </div>)}
   </div>
