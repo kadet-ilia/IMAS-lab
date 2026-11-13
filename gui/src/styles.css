@@ -484,3 +484,25 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 /* Explicit feedback for out-of-domain mathematical parameters. */
 .imas-validation-error{display:block;margin:6px 10px;color:#a52d2d;font-size:11px;font-weight:600;line-height:1.35}
 .field input[aria-invalid="true"]{outline:2px solid #aa3f3f;outline-offset:1px}
+
+
+/* Trust research: controlled attack profile and Lyapunov indicators. */
+.lyapunov-study .lyapunov-inputs,
+.lyapunov-phase-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.lyapunov-inputs {padding:13px 16px;background:#fff;border:1px solid var(--border);}
+.lyapunov-inputs label,.lyapunov-phase label {display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--muted);min-width:0;}
+.lyapunov-inputs input,.lyapunov-phase input {width:100%;min-width:0;padding:7px 9px;border:1px solid #cbd5df;border-radius:4px;color:var(--navy);font-size:12px;background:white;}
+.lyapunov-phase-grid {grid-template-columns:repeat(3,minmax(0,1fr));}
+.lyapunov-phase {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;align-items:end;padding:9px;border:1px solid #e4e9ef;border-radius:5px;}
+.lyapunov-phase button,.lyapunov-fixed-phase {grid-column:1 / -1;font-size:11px;}
+.lyapunov-fixed-phase {color:var(--muted);padding:5px 0;}
+.lyapunov-phase-actions {display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.lyapunov-study .table-wrap th {white-space:normal;line-height:1.3;}
+.lyapunov-study .table-wrap td {font-variant-numeric:tabular-nums;}
+@media(max-width:1250px) {
+ .lyapunov-study .lyapunov-inputs {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .lyapunov-phase-grid {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:780px) {
+ .lyapunov-study .lyapunov-inputs,.lyapunov-phase-grid {grid-template-columns:1fr;}
+}
