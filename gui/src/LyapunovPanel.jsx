@@ -17,8 +17,10 @@ function download(name,body,type){
 
 function fileBase(value){return (value||"imas-export").toLowerCase().replace(/[^a-zа-яё0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,70)||"imas-export";}
 function ExportActions({targetRef,title}){
- const hasSvg=()=>Boolean(targetRef.current?.querySelector("svg"));
- const hasTable=()=>Boolean(targetRef.current?.querySelector("table"));
+ const [ready,setReady]=useState(false);
+ useEffect(()=>{setReady(true);},[targetRef,title]);
+ const hasSvg=()=>ready&&Boolean(targetRef.current?.querySelector("svg"));
+ const hasTable=()=>ready&&Boolean(targetRef.current?.querySelector("table"));
  const saveSvg=()=>{
   const svg=targetRef.current?.querySelector("svg");if(!svg)return;
   const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");
