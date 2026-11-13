@@ -228,7 +228,12 @@ for(const [id,name] of trustModes){
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 await page.getByRole("button",{name:"Выполнить исследование"}).click();
-await page.locator(".lyapunov-study .kpi-grid .kpi").first().waitFor({timeout:120000});
+try{
+ await page.locator(".lyapunov-study .kpi-grid .kpi").first().waitFor({timeout:20000});
+}catch(cause){
+ const status=await page.locator(".lyapunov-study").innerText();
+ throw Error("Lyapunov browser diagnosis: "+JSON.stringify({status:status.slice(0,1500),consoleErrors:errors.slice(-5)}),{cause});
+}
 const [lyapFile]=await Promise.all([
  page.waitForEvent("download",{timeout:15000}),
  page.getByRole("button",{name:"Экспорт JSON"}).click()
