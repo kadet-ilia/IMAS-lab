@@ -708,9 +708,9 @@ await page.locator(".sensitivity-action select").selectOption("ablation");
 await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
 await page.getByText("Абляционный эксперимент: режим атаки × управляющая изоляция",{exact:true}).waitFor({timeout:45000});
 report.ablationRows=await page.locator("section.panel").filter({hasText:"Абляционный эксперимент: режим атаки × управляющая изоляция"}).locator("tbody tr").count();
-report.ablationWorkerSmoke=report.ablationRows===12;
+report.ablationWorkerSmoke=report.ablationRows===16;
 
-if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×3 ablation rows from Web Workers, got "+report.ablationRows);
+if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×4 ablation rows from Web Workers, got "+report.ablationRows);
 
 // A repeated call must read the complete scientific result from the cache.
 await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();

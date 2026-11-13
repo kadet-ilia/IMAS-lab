@@ -550,10 +550,10 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
       isolation_enabled:c.isolation_enabled,detection_rate:detectionRate,mean_detection_time_steps:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,
       communication_messages:delivered,communication_attempted:attempted,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,
       delivery_ratio:ratio,
-      aggregation_available_mean:mean(series.map(row=>row.available_proposals)),
-      aggregation_inputs_mean:mean(series.map(row=>method==="coordinate_trimmed_mean"?row.coordinate_trimmed_retained:method==="proposed_robust"?row.trust_trimmed_retained:row.available_proposals)),
-      trust_filtered_agents_mean:method==="proposed_robust"?mean(series.map(row=>row.trust_filter_rejected)):0,
-      trimmed_agents_mean:method==="coordinate_trimmed_mean"?mean(series.map(row=>row.coordinate_trimmed_count)):method==="proposed_robust"?mean(series.map(row=>row.trust_trimmed_count)):0,
+      aggregation_available_agents:mean(series.map(row=>row.available_proposals)),
+      aggregation_used_agents:mean(series.map(row=>method==="coordinate_trimmed_mean"?row.coordinate_trimmed_retained:method==="proposed_robust"?row.trust_trimmed_retained:row.available_proposals)),
+      trust_filtered_agents:method==="proposed_robust"?mean(series.map(row=>row.trust_filter_rejected)):0,
+      trimmed_agents:method==="coordinate_trimmed_mean"?mean(series.map(row=>row.coordinate_trimmed_count)):method==="proposed_robust"?mean(series.map(row=>row.trust_trimmed_count)):0,
       simulation_wall_ms:performance.now()-startWall,aggregation_bundle_wall_ms:aggregateBundleWallMs,trust_evidence_wall_ms:trustWallMs,transport_wall_ms:transportWallMs,completed_steps:c.n_steps};
  });
  if(!detail)return{rows,trajectory:series};
@@ -567,13 +567,13 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   throw Error("Сбой проверки журнала исходных событий: "+sourceEventLog.audit.issues.join(", "));
  return{rows,trajectory:series,result:{modelVersion:TRUST_MODEL_VERSION,series,network_series,message_ledger:messageLedger,source_event_log:sourceEventLog,reputation:reputationHistory,states,events,
    metrics:METHODS.map((method,i)=>({method,probability_correct:rows[i].probability_correct,mae:rows[i].mae_to_truth,rmse:rows[i].rmse_to_truth,bias:rows[i].bias,nominal_band_rate:rows[i].nominal_band_rate,
-    aggregation_available_mean:rows[i].aggregation_available_mean,aggregation_inputs_mean:rows[i].aggregation_inputs_mean,
-    trust_filtered_agents_mean:rows[i].trust_filtered_agents_mean,trimmed_agents_mean:rows[i].trimmed_agents_mean})),
+    aggregation_available_agents:rows[i].aggregation_available_agents,aggregation_used_agents:rows[i].aggregation_used_agents,
+    trust_filtered_agents:rows[i].trust_filtered_agents,trimmed_agents:rows[i].trimmed_agents})),
    agents:all(n).map(i=>({agent:i+1,byzantine:bad[i],sybil:sybil[i],active:active[i],isolated_at:isolatedAt[i],first_attack_isolation_at:firstAttackIsolationAt[i]})),
    summary:{detection_rate:detectionRate,mean_detection_time:meanTime,mean_detection_delay_steps:meanTime,premature_byzantine_isolations:prematureBad,false_isolations:fp,preserved_functionality:preserved,delivery_ratio:ratio,communication_attempted:attempted,communication_delivered:delivered,communication_lost:lost,communication_bandwidth_dropped:dropped,communication_expired:expired,communication_queued:queued,message_balance:communicationState.total.balance,communication_channel_ledger:communicationState,honest_majority_with_sybils:n>2*allBad,completed_steps:c.n_steps},
    configuration:configDetail(c),scenario,run_index:runIndex,partial:false}};
 }
-const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","mean_detection_delay_steps","premature_byzantine_isolations","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","aggregation_available_mean","aggregation_inputs_mean","trust_filtered_agents_mean","trimmed_agents_mean","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
+const metrics=["probability_correct","mae_to_truth","rmse_to_truth","bias","nominal_band_rate","consensus_error","detection_rate","mean_detection_time_steps","mean_detection_delay_steps","premature_byzantine_isolations","false_isolations","preserved_functionality","communication_messages","communication_attempted","communication_lost","communication_bandwidth_dropped","communication_expired","communication_queued","delivery_ratio","aggregation_available_agents","aggregation_used_agents","trust_filtered_agents","trimmed_agents","simulation_wall_ms","aggregation_bundle_wall_ms","trust_evidence_wall_ms","transport_wall_ms","completed_steps"];
 export function summaryFromRuns(rows){
  const out=[];for(const method of METHODS){const group=rows.filter(x=>x.method===method);if(!group.length)continue;
  const row={scenario:group[0].scenario,method};for(const m of metrics){const v=valid(group.map(x=>x[m]));row[m+"_mean"]=v.length?mean(v):null;row[m+"_std"]=v.length>1?stdev(v):null;row[m+"_ci95"]=v.length>1?1.96*stdev(v)/Math.sqrt(v.length):null;row[m+"_n"]=v.length;}out.push(row);}
