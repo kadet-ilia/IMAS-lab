@@ -224,6 +224,25 @@ for(const [id,name] of trustModes){
     throw Error("Stability tab must expose an attack phase editor");
   }
 }
+// Lyapunov: real Web Worker run and export, not merely static JSX verification.
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
+await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
+await page.getByRole("button",{name:"Выполнить исследование"}).click();
+await page.locator(".lyapunov-study .kpi-grid .kpi").first().waitFor({timeout:120000});
+const [lyapFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ page.getByRole("button",{name:"Экспорт JSON"}).click()
+]);
+const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
+if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
+  lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
+  !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
+  !lyapData.series.some(row=>row.attack_intensity>1) ||
+  !lyapData.series.some(row=>row.attack_intensity===0)){
+ throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
+}
+report.lyapunovStudy={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
+await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
 const ablationMode=page.locator(".sensitivity-action select");
 await ablationMode.selectOption("ablation");
@@ -770,24 +789,6 @@ try{
  await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
  await secondTab.close();
 }
-// Lyapunov: real Web Worker run and export, not merely static JSX verification.
-await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
-await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
-await page.getByRole("button",{name:"Выполнить исследование"}).click();
-await page.locator(".lyapunov-study .kpi-grid .kpi").first().waitFor({timeout:120000});
-const [lyapFile]=await Promise.all([
- page.waitForEvent("download",{timeout:15000}),
- page.getByRole("button",{name:"Экспорт JSON"}).click()
-]);
-const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
-if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
-  lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
-  !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
-  !lyapData.series.some(row=>row.attack_intensity>1) ||
-  !lyapData.series.some(row=>row.attack_intensity===0)){
- throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
-}
-report.lyapunovStudy={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();
