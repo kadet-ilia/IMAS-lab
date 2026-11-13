@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
  createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
- simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES,transport
+ simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,attackIntensity,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES,transport
 } from "./trustEngine.js";
 
 const cfg={seed:20260716,n_agents:11,n_byzantine:2,n_steps:18,attack_start_step:3,
@@ -429,4 +429,14 @@ test("UP-12 G(N,p) has no forced ring, independent undirected edge opportunities
  const expected=opportunities*p,sd=Math.sqrt(opportunities*p*(1-p));
  assert.ok(Math.abs(count-expected)<=6*sd,
   "empirical ER edge count "+count+" should agree with binomial "+expected+" ± "+(6*sd));
+});
+
+test("dynamic engine applies phase-specific intensity curves",()=>{
+ const phases=[{start:1,intensity:0,curve:"constant"},{start:3,intensity:4,curve:"linear"},{start:8,intensity:0,curve:"constant"}];
+ const c={n_steps:10,attack_schedule:phases};
+ assert.deepEqual([2,3,4,5,6,7,8].map(step=>attackIntensity(step-1,"dynamic",c)),[0,0,1,2,3,4,0]);
+ const exponential={...c,attack_schedule:phases.map((p,i)=>i===1?{...p,curve:"exponential"}:p)};
+ const values=[3,4,5,6,7].map(step=>attackIntensity(step-1,"dynamic",exponential));
+ assert.equal(values[0],0);assert.equal(values.at(-1),4);
+ assert.ok(values[1]>1);
 });
