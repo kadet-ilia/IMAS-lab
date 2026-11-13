@@ -81,6 +81,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
    }
   };
   worker.onerror=e=>{if(workerRef.current!==worker)return;worker.terminate();workerRef.current=null;setRunning(false);setError(e.message||"Ошибка вычислительного потока");};
+  worker.postMessage({type:"run",config,options});
  };
  useImperativeHandle(ref,()=>({start,stop,reset:()=>{stop();setSaved(null);setError("");setPhases(defaultAttackPhases(config.n_steps,config.attack_start_step));}}));
  useEffect(()=>{
