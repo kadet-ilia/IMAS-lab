@@ -17,41 +17,8 @@ function download(name,body,type){
 
 function fileBase(value){return (value||"imas-export").toLowerCase().replace(/[^a-zа-яё0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,70)||"imas-export";}
 function ExportActions({targetRef,title}){
- const saveSvg=()=>{
-  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
-  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
-  clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");
-  const source=new XMLSerializer().serializeToString(clone);
-  download(fileBase(title)+".svg",source,"image/svg+xml;charset=utf-8");
- };
- const savePng=()=>{
-  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
-  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
-  const box=svg.getBoundingClientRect();clone.setAttribute("width",Math.ceil(box.width)||1200);clone.setAttribute("height",Math.ceil(box.height)||600);
-  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));
-  const image=new Image();image.onload=()=>{const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;canvas.getContext("2d").drawImage(image,0,0);canvas.toBlob(blob=>{if(blob){const a=document.createElement("a");const png=URL.createObjectURL(blob);a.href=png;a.download=fileBase(title)+".png";a.click();URL.revokeObjectURL(png);}URL.revokeObjectURL(url);});};image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
- };
- const saveCsv=()=>{
-  const table=targetRef.current?.querySelector("table");if(!table)return;
-  const rows=[...table.rows].map(row=>[...row.cells].map(cell=>'"'+cell.innerText.replace(/"/g,'""').replace(/\s+/g," ").trim()+'"').join(";"));
-  download(fileBase(title)+".csv","\uFEFF"+rows.join("\r\n"),"text/csv;charset=utf-8");
- };
- return <div className="lyapunov-export-tools">
-  <button type="button" className="inline-action" onClick={saveSvg} title="Сохранить график или схему в SVG">SVG</button>
-  <button type="button" className="inline-action" onClick={savePng} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в PNG">PNG</button>
-  <button type="button" className="inline-action" onClick={saveCsv} title="Сохранить таблицу в CSV">CSV</button>
- </div>;
-}
-function ExportPanel({title,children,...props}){
- const targetRef=useRef(null);
- return <ExportPanel title={title} headerAside={<ExportActions targetRef={targetRef} title={title}/>} {...props}>
-  <div ref={targetRef} className="lyapunov-export-content">{children}</div>
- </ExportPanel>;
-}
-
-
-function fileBase(value){return (value||"imas-export").toLowerCase().replace(/[^a-zа-яё0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,70)||"imas-export";}
-function ExportActions({targetRef,title}){
+ const hasSvg=()=>Boolean(targetRef.current?.querySelector("svg"));
+ const hasTable=()=>Boolean(targetRef.current?.querySelector("table"));
  const saveSvg=()=>{
   const svg=targetRef.current?.querySelector("svg");if(!svg)return;
   const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");
@@ -62,24 +29,23 @@ function ExportActions({targetRef,title}){
   const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
   const box=svg.getBoundingClientRect();clone.setAttribute("width",Math.ceil(box.width)||1200);clone.setAttribute("height",Math.ceil(box.height)||600);
   const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));
-  const image=new Image();image.onload=()=>{const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;canvas.getContext("2d").drawImage(image,0,0);canvas.toBlob(blob=>{if(blob){const a=document.createElement("a");const png=URL.createObjectURL(blob);a.href=png;a.download=fileBase(title)+".png";a.click();URL.revokeObjectURL(png);}URL.revokeObjectURL(url);});};image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
+  const image=new Image();image.onload=()=>{const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;canvas.getContext("2d").drawImage(image,0,0);canvas.toBlob(blob=>{if(blob){const png=URL.createObjectURL(blob),a=document.createElement("a");a.href=png;a.download=fileBase(title)+".png";a.click();URL.revokeObjectURL(png);}URL.revokeObjectURL(url);});};image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
  };
  const saveCsv=()=>{
   const table=targetRef.current?.querySelector("table");if(!table)return;
-  const rows=[...table.rows].map(row=>[...row.cells].map(cell=>'"'+cell.innerText.replace(/"/g,'""').replace(/\s+/g," ").trim()+'"').join(";"));
-  download(fileBase(title)+".csv","\uFEFF"+rows.join("\r\n"),"text/csv;charset=utf-8");
+  const rows=[...table.rows].map(row=>[...row.cells].map(cell=>'"'+cell.innerText.replace(/"/g,'""').replace(/\\s+/g," ").trim()+'"').join(";"));
+  download(fileBase(title)+".csv","\\uFEFF"+rows.join("\\r\\n"),"text/csv;charset=utf-8");
  };
  return <div className="lyapunov-export-tools">
-  <button type="button" className="inline-action" onClick={saveSvg} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в SVG">SVG</button>
-  <button type="button" className="inline-action" onClick={savePng} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в PNG">PNG</button>
-  <button type="button" className="inline-action" onClick={saveCsv} disabled={!targetRef.current?.querySelector("table")} title="Сохранить таблицу в CSV">CSV</button>
+  {hasSvg()?<><button type="button" className="inline-action" onClick={saveSvg} title="Сохранить график или схему в SVG">SVG</button><button type="button" className="inline-action" onClick={savePng} title="Сохранить график или схему в PNG">PNG</button></>:null}
+  {hasTable()?<button type="button" className="inline-action" onClick={saveCsv} title="Сохранить таблицу в CSV">CSV</button>:null}
  </div>;
 }
 function ExportPanel({title,children,...props}){
  const targetRef=useRef(null);
- return <ExportPanel title={title} headerAside={<ExportActions targetRef={targetRef} title={title}/>} {...props}>
+ return <Panel title={title} headerAside={<ExportActions targetRef={targetRef} title={title}/>} {...props}>
   <div ref={targetRef} className="lyapunov-export-content">{children}</div>
- </ExportPanel>;
+ </Panel>;
 }
 
 function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
@@ -193,9 +159,9 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
    <label>Число независимых прогонов R<input aria-label="Число прогонов устойчивости" type="number" min="1" max="200" step="1" value={runs} onChange={e=>setRuns(Number(e.target.value))} disabled={running}/></label>
   </div>
   <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} disabled={running}/>
-  <Panel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
+  <ExportPanel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
    <ResponsiveContainer width="100%" height={215}><LineChart data={timeline}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis domain={[0,5]} tick={{fontSize:10}}/><Tooltip/><Line name="Множитель атаки" dataKey="intensity" stroke="#c75c4d" strokeWidth={2.4} dot={false} type="stepAfter" isAnimationActive={false}/></LineChart></ResponsiveContainer>
-  </Panel>
+  </ExportPanel>
   {!valid?<p role="alert" className="imas-validation-error">{validationError}</p>:null}
   {error?<p role="alert" className="error-banner">{error}</p>:null}
   {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Состояние вычислительного потока: {({idle:"готов",launched:"запуск",worker_imported:"загружен",computing:"вычисление",result:"завершён",error:"ошибка",stopped:"остановлен"}[workerStage]||workerStage)}.</p>:null}
@@ -206,7 +172,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
     <Kpi label="RMSE коллективной оценки" value={n(proposed?.decision_rmse.mean,4)} note="Робастный метод, только принятые решения"/>
     <Kpi label="RMSE состояния объекта" value={n(proposed?.state_rmse.mean,4)} note="Относительно x*, все шаги"/>
    </div>
-   <Panel title="Сравнение показателей достижения цели исследования" subtitle={"R="+result.runs.length+"; средние по независимым прогонам, интервалы ±1,96·s/√R (без поправки на множественность)." }>
+   <ExportPanel title="Сравнение показателей достижения цели исследования" subtitle={"R="+result.runs.length+"; средние по независимым прогонам, интервалы ±1,96·s/√R (без поправки на множественность)." }>
     <div className="table-wrap large"><table><thead><tr>
      <th>Метод</th><th>P(прав.)</th><th>При атаке</th><th>При паузе</th><th>RMSE решения</th><th>RMSE состояния</th><th>|e(T)|</th><th>ΔV&gt;0 (доля)</th><th>Отказы</th>
     </tr></thead><tbody>{metrics.map(row=><tr key={row.method}>
@@ -215,8 +181,8 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
      <td>{n(row.decision_rmse.mean,4)}</td><td>{n(row.state_rmse.mean,4)}</td><td>{n(row.final_abs_error.mean,4)}</td>
      <td>{percent(row.positive_delta_v_fraction.mean)}</td><td>{n(row.missing_decisions.mean,1)}</td>
     </tr>)}</tbody></table></div>
-   </Panel>
-   <Panel title="Диагностика устойчивости и ограниченности отклонений" subtitle="Описательные показатели выбранного горизонта; оценка ISS не доказывает устойчивость динамики доверия и всех компонентов ИМАС.">
+   </ExportPanel>
+   <ExportPanel title="Диагностика устойчивости и ограниченности отклонений" subtitle="Описательные показатели выбранного горизонта; оценка ISS не доказывает устойчивость динамики доверия и всех компонентов ИМАС.">
     <div className="table-wrap large"><table><thead><tr><th>Метод</th><th>max ΔV</th><th>max |δ|</th><th>Радиус по выборке</th><th>Граница |e(T)|</th><th>Шаг установления</th></tr></thead><tbody>{metrics.map(row=><tr key={row.method}>
      <td>{METHODS.find(x=>x[0]===row.method)?.[1]}</td>
      <td>{n(row.max_delta_v.mean,5)}</td>
@@ -225,25 +191,25 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
      <td>{n(row.sampled_iss_bound_final.mean,5)}</td>
      <td>{row.settling_step.n?n(row.settling_step.mean,1):"Не достигнуто"}</td>
     </tr>)}</tbody></table></div>
-   </Panel>
-   <Panel title="Точность коллективных решений в динамике" subtitle="RMSE на каждом шаге по R прогонам с выданными решениями. Пропуски означают, что решения не формировались.">
+   </ExportPanel>
+   <ExportPanel title="Точность коллективных решений в динамике" subtitle="RMSE на каждом шаге по R прогонам с выданными решениями. Пропуски означают, что решения не формировались.">
     <ResponsiveContainer width="100%" height={315}><LineChart data={result.series.slice(1)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_decision_rmse"} stroke={color} dot={false} connectNulls={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Функция Ляпунова по методам" subtitle="Средняя V(t)=e(t)² по R прогонам; логарифмическая шкала, нулевые значения отображаются на уровне 10⁻¹⁶.">
+   </ExportPanel>
+   <ExportPanel title="Функция Ляпунова по методам" subtitle="Средняя V(t)=e(t)² по R прогонам; логарифмическая шкала, нулевые значения отображаются на уровне 10⁻¹⁶.">
     <ResponsiveContainer width="100%" height={360}><LineChart data={meanGraph}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis scale="log" domain={[1e-16,"auto"]} tick={{fontSize:10}}/><Tooltip formatter={v=>n(v,8)}/><Legend/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_V_mean"} stroke={color} dot={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Отклонение состояния от целевого равновесия" subtitle="Первый прогон: положительное/отрицательное отклонение; пунктиром показан заданный допуск ±ε.">
+   </ExportPanel>
+   <ExportPanel title="Отклонение состояния от целевого равновесия" subtitle="Первый прогон: положительное/отрицательное отклонение; пунктиром показан заданный допуск ±ε.">
     <ResponsiveContainer width="100%" height={315}><LineChart data={traceForGraph}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><ReferenceLine y={tolerance} stroke="#8898a8" strokeDasharray="4 4"/><ReferenceLine y={-tolerance} stroke="#8898a8" strokeDasharray="4 4"/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_e"} stroke={color} dot={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Одношаговое изменение функции Ляпунова ΔV" subtitle="Первый прогон. Положительное ΔV указывает на рост V на данном шаге, но само по себе не является доказательством неустойчивости.">
+   </ExportPanel>
+   <ExportPanel title="Одношаговое изменение функции Ляпунова ΔV" subtitle="Первый прогон. Положительное ΔV указывает на рост V на данном шаге, но само по себе не является доказательством неустойчивости.">
     <ResponsiveContainer width="100%" height={310}><LineChart data={traceForGraph.slice(1)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><ReferenceLine y={0} stroke="#54677b"/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_deltaV"} stroke={color} dot={false} strokeWidth={1.8} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Парные эффекты робастного метода относительно альтернатив" subtitle="Разность внутри одинаковых случайных реализаций; положительное значение соответствует улучшению.">
+   </ExportPanel>
+   <ExportPanel title="Парные эффекты робастного метода относительно альтернатив" subtitle="Разность внутри одинаковых случайных реализаций; положительное значение соответствует улучшению.">
     <div className="table-wrap large"><table><thead><tr><th>Базовый метод</th><th>Показатель</th><th>Средний эффект</th><th>95%-й интервал</th><th>Пар</th></tr></thead><tbody>{result.comparison.map((x,i)=><tr key={i}>
      <td>{METHODS.find(m=>m[0]===x.baseline)?.[1]}</td><td>{x.metric}</td><td>{n(x.benefit.mean,5)}</td>
      <td>{x.benefit.ci95_half_width===null?"Не определён":n(x.benefit.mean-x.benefit.ci95_half_width,5)+" … "+n(x.benefit.mean+x.benefit.ci95_half_width,5)}</td>
      <td>{x.benefit.n}</td></tr>)}</tbody></table></div>
-   </Panel>
+   </ExportPanel>
    <Panel title="Условия интерпретации устойчивости">
     <p>В частной модели e(t+1) = (1−k)e(t) − kδ(t), где δ(t) — ошибка коллективной оценки из ядра доверия. При отказе в выдаче решения применяется удержание e(t+1)=e(t). V(t)=e(t)²; при δ=0 и 0&lt;k&lt;2 выполняется V(t+1)=(1−k)²V(t) и номинальная асимптотическая устойчивость.</p>
     <p>При произвольном ненулевом δ(t) точка e=0, как правило, перестаёт быть равновесием. Для принятых решений справедливо |e(t+1)| ≤ ρ|e(t)| + k|δ(t)|, ρ=|1−k|&lt;1. Это оценка вход–состояние (ISS) для введённой скалярной модели, а не доказательство устойчивости полного контура ИМАС.</p>
