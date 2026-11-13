@@ -249,6 +249,7 @@ if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
  throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
 }
 report.lyapunovStudy={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
+await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
 const ablationMode=page.locator(".sensitivity-action select");
