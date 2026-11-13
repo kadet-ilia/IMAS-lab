@@ -143,6 +143,19 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
      <td>{percent(row.positive_delta_v_fraction.mean)}</td><td>{n(row.missing_decisions.mean,1)}</td>
     </tr>)}</tbody></table></div>
    </Panel>
+   <Panel title="Диагностика устойчивости и ограниченности отклонений" subtitle="Описательные показатели выбранного горизонта; оценка ISS не доказывает устойчивость динамики доверия и всех компонентов ИМАС.">
+    <div className="table-wrap large"><table><thead><tr><th>Метод</th><th>max ΔV</th><th>max |δ|</th><th>Радиус по выборке</th><th>Граница |e(T)|</th><th>Шаг установления</th></tr></thead><tbody>{metrics.map(row=><tr key={row.method}>
+     <td>{METHODS.find(x=>x[0]===row.method)?.[1]}</td>
+     <td>{n(row.max_delta_v.mean,5)}</td>
+     <td>{n(row.max_observed_disturbance.mean,5)}</td>
+     <td>{n(row.sampled_input_ultimate_radius.mean,5)}</td>
+     <td>{n(row.sampled_iss_bound_final.mean,5)}</td>
+     <td>{row.settling_step.n?n(row.settling_step.mean,1):"Не достигнуто"}</td>
+    </tr>)}</tbody></table></div>
+   </Panel>
+   <Panel title="Точность коллективных решений в динамике" subtitle="RMSE на каждом шаге по R прогонам с выданными решениями. Пропуски означают, что решения не формировались.">
+    <ResponsiveContainer width="100%" height={315}><LineChart data={result.series.slice(1)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_decision_rmse"} stroke={color} dot={false} connectNulls={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
+   </Panel>
    <Panel title="Функция Ляпунова по методам" subtitle="Средняя V(t)=e(t)² по R прогонам; логарифмическая шкала, нулевые значения отображаются на уровне 10⁻¹⁶.">
     <ResponsiveContainer width="100%" height={360}><LineChart data={meanGraph}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis scale="log" domain={[1e-16,"auto"]} tick={{fontSize:10}}/><Tooltip formatter={v=>n(v,8)}/><Legend/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_V_mean"} stroke={color} dot={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
    </Panel>
