@@ -24,7 +24,7 @@ export const DEFAULTS={
  trust_window_steps:20,forgetting_factor:.95,initial_trust:.5,trust_prior_strength:2,
  minimum_weight:.05,aggregation_trust_threshold:.25,reputation_damping:.85,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
  minimum_evidence_steps:8,isolation_cooldown_steps:30,trim_each_side:10,
- clip_radius:1.25, // legacy configuration field; not used by the four current aggregators
+ clip_radius:1.25, // legacy compatibility field for older external configurations; not used by the four current aggregators
  safe_action_min:-2,safe_action_max:2,correctness_tolerance:.5,
  paired_exogenous_events:false,network_enabled:false,network_topology:"complete",network_edge_probability:.25,
  small_world_neighbors:4,small_world_rewire_probability:.1,
