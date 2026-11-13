@@ -199,8 +199,21 @@ export function attackIntensity(t,scenario,c){
  if(scenario==="dynamic"){
   if(!c.attack_schedule)throw Error("Для динамического сценария требуется attack_schedule");
   let intensity=0;
-  for(const phase of c.attack_schedule){if(phase.start>t+1)break;intensity=phase.intensity;}
-  return intensity;
+  const step=t+1,phases=c.attack_schedule;
+  for(let i=0;i<phases.length;i++){
+   const p=phases[i],next=phases[i+1];
+   if(p.start>step)break;
+   const curve=p.curve||"constant";
+   if(curve==="constant"){intensity=p.intensity;continue;}
+   const end=next?next.start-1:c.n_steps;
+   const u=end<=p.start?1:Math.max(0,Math.min(1,(step-p.start)/(end-p.start)));
+   let q=u;
+   if(curve==="exponential"){const a=4;q=(Math.exp(a*u)-1)/(Math.exp(a)-1);}
+   else if(curve==="parabolic")q=u*u;
+   else if(curve==="hyperbolic"){const a=4;q=a*u/(1+(a-1)*u);}
+   intensity=intensity+(p.intensity-intensity)*q;
+  }
+  return Math.max(0,Math.min(5,intensity));
  }
  return t+1>=c.attack_start_step&&(scenario!=="on_off"||((t+1-c.attack_start_step)%Math.max(1,c.on_off_period))<c.on_off_attack_steps)?1:0;
 }
