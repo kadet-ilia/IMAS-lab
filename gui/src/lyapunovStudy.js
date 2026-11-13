@@ -170,7 +170,7 @@ export function buildLyapunovResult(runs,config,options){
 
 export function runLyapunovStudy(config,options,onProgress=()=>{}){
  const {config:c,options:o}=validateLyapunovOptions(config,options),runs=[];
- const dynamicConfig={...c,attack_schedule:o.phases,paired_exogenous_events:true};
+ const dynamicConfig={...c,attack_schedule:o.phases,paired_exogenous_events:false};
  for(let i=0;i<o.runs;i++){
   const run=simulateRun(dynamicConfig,"dynamic",i,0,false);
   runs.push(run.trajectory);
