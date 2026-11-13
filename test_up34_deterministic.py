@@ -333,7 +333,7 @@ def reconstruct_no_network_trust_trace(result):
     low=[0]*n
     hist=[]
     decisions={name:[] for name in
-               ("arithmetic_mean","trust_weighted_mean","proposed_robust")}
+               ("arithmetic_mean","trust_weighted_mean","coordinate_trimmed_mean","proposed_robust")}
     expected_isolations=[]
     expected_attempted=0
     for t in range(c["n_steps"]):
@@ -376,16 +376,26 @@ def reconstruct_no_network_trust_trace(result):
         values=[prop[i] for i in indices]
         weights=[max(rep[i],c["minimum_weight"]) for i in indices]
         if values:
+            project=lambda x:min(c["safe_action_max"],max(c["safe_action_min"],x))
             average=sum(values)/len(values)
             weighted=sum(x*w for x,w in zip(values,weights))/sum(weights)
-            center=quantile(values,.5)
-            clipped=[max(center-c["clip_radius"],
-                         min(center+c["clip_radius"],x)) for x in values]
-            robust=trim_reference({"values":clipped,"weights":weights,
-                                   "k":c["trim_each_side"]})
-            robust=min(c["safe_action_max"],max(c["safe_action_min"],robust))
-            tick_results={"arithmetic_mean":average,"trust_weighted_mean":weighted,
-                          "proposed_robust":robust}
+            coordinate=trim_reference({"values":values,"weights":[1.0]*len(values),
+                                       "k":c["trim_each_side"]})
+            trusted_positions=[j for j,i in enumerate(indices)
+                               if rep[i]>=c["aggregation_trust_threshold"]]
+            if trusted_positions:
+                trusted_values=[values[j] for j in trusted_positions]
+                trusted_weights=[weights[j] for j in trusted_positions]
+                combined=project(trim_reference({"values":trusted_values,
+                    "weights":trusted_weights,"k":c["trim_each_side"]}))
+            else:
+                combined=None
+            tick_results={
+                "arithmetic_mean":project(average),
+                "trust_weighted_mean":project(weighted),
+                "coordinate_trimmed_mean":project(coordinate),
+                "proposed_robust":combined
+            }
         else:
             tick_results={key:None for key in decisions}
         for method,value in tick_results.items():

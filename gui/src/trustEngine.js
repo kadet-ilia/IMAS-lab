@@ -24,6 +24,7 @@ export const DEFAULTS={
  trust_window_steps:20,forgetting_factor:.95,initial_trust:.5,trust_prior_strength:2,
  minimum_weight:.05,aggregation_trust_threshold:.25,reputation_damping:.85,isolation_enabled:true,isolation_threshold:.25,isolation_patience:3,
  minimum_evidence_steps:8,isolation_cooldown_steps:30,trim_each_side:10,
+ clip_radius:1.25, // legacy configuration field; not used by the four current aggregators
  safe_action_min:-2,safe_action_max:2,correctness_tolerance:.5,
  paired_exogenous_events:false,network_enabled:false,network_topology:"complete",network_edge_probability:.25,
  small_world_neighbors:4,small_world_rewire_probability:.1,
@@ -74,7 +75,7 @@ const numericRanges={
  desired_action:[-2,2],honest_quality:[0,1],byzantine_quality:[0,1],honest_noise_sigma:[0,10],
  observer_noise_sigma:[0,10],static_bias:[0,100],subtle_bias:[0,100],collusion_bias:[0,100],
  forgetting_factor:[0,1],initial_trust:[0,1],trust_prior_strength:[0,1000000],minimum_weight:[0,1],
- reputation_damping:[0,1],aggregation_trust_threshold:[0,1],isolation_threshold:[0,1],
+ reputation_damping:[0,1],aggregation_trust_threshold:[0,1],isolation_threshold:[0,1],clip_radius:[0,100],
  safe_action_min:[-100,100],safe_action_max:[-100,100],correctness_tolerance:[0,100],
  network_edge_probability:[0,1],small_world_rewire_probability:[0,1],message_loss_probability:[0,1],
  partition_fraction:[0,1],attack_direction:[-1,1]
@@ -710,7 +711,7 @@ function summarizeAblation(plan,rows,partial,completed){
  for(const schedule of ["on_off","persistent"])for(const iso of ["with_isolation","no_isolation"]){
   const a=schedule+"_"+iso;
   for(let i=0;i<METHODS.length;i++)for(let j=i+1;j<METHODS.length;j++)
-   add("aggregation",a,METHODS[i],a,METHODS[j],"probability_correct","Метод B минус метод A при фиксированной политике изоляции");
+   add("aggregation",a,METHODS[i],a,METHODS[j],"probability_correct","Метод A минус метод B при фиксированной политике изоляции");
  }
  for(const iso of ["with_isolation","no_isolation"])for(const method of METHODS)
   add("attack_schedule","on_off_"+iso,method,"persistent_"+iso,method,
