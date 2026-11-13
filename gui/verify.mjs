@@ -759,7 +759,7 @@ for(const pool of [4,1]){
  poolResults[pool]=await readAblationExport();
  if(poolResults[pool].parallel_workers_used!==pool)
   throw Error("UP-35: requested "+pool+" workers, got "+poolResults[pool].parallel_workers_used);
- if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==12)
+ if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==16)
   throw Error("UP-35: incomplete real browser calculation at pool size "+pool);
 }
 report.workerPool4=poolResults[4].parallel_workers_used;

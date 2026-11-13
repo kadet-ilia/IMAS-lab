@@ -80,7 +80,7 @@ test("honest-only baseline is near reference, adversarial mean is affected",()=>
 });
 test("Monte Carlo contract, confidence bands, distributions and bootstrap",()=>{
  const result=runActionSync({action:"monte_carlo",scenario:"collusion",config:cfg});
- assert.equal(result.runs.length,12);
+ assert.equal(result.runs.length,16);
  assert.equal(result.summary.length,4);
  assert.equal(result.trajectory_statistics.length,18);
  assert.ok(result.trajectory_statistics[0].proposed_robust_band90.length===2);
