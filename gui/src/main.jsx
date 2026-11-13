@@ -21,6 +21,7 @@ import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
+import LyapunovPanel from "./LyapunovPanel.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig} from "./trustEngine.js";
 import {passportForStudy,METRIC_PASSPORT_VERSION} from "./metricPassport.js";
@@ -699,6 +700,8 @@ function App() {
   const [cacheHit, setCacheHit] = useState(false);
   const runningRef = useRef(false);
   const researchActionsRef = useRef(null);
+  const lyapunovActionsRef = useRef(null);
+  const [lyapunovRuntime,setLyapunovRuntime] = useState(null);
   const [researchRuntime,setResearchRuntime] = useState(null);
   useEffect(()=>{if(activeTab!=="help2027")lastExperimentRef.current=activeTab;},[activeTab]);
 
@@ -735,6 +738,8 @@ function App() {
 
   const reset = () => {
     stop();
+    lyapunovActionsRef.current?.stop();
+    setLyapunovRuntime(null);
     setConfig(DEFAULT_CONFIG);
     setScenario("collusion");
     setAttackLevel("high");
@@ -747,7 +752,7 @@ function App() {
     setActiveTab("trace");
   };
   const newSeed = () => setConfig((current) => ({ ...current, seed: Math.floor((Date.now() + Math.random() * 100000) % 2147483647) }));
-  const runForTab = () => request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
+  const runForTab = () => activeTab==="stability" ? lyapunovActionsRef.current?.start() : request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
   const experimentSignature = JSON.stringify({ scenario, config });
   const currentTrace = trace?.client_signature === experimentSignature ? trace : null;
   const currentMonteCarlo = monteCarlo?.client_signature === experimentSignature ? monteCarlo : null;
@@ -764,9 +769,9 @@ function App() {
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   const isResearch=activeTab.startsWith("study-");
   const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
-  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):running;
+  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):activeTab==="stability"?Boolean(lyapunovRuntime?.running):running;
   const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
-  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—");
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(activeTab==="stability"?(lyapunovRuntime?.hasResult?"Результат расчёта":"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—"));
   const experimentNavigation = (
 <nav className={"r27-experiment-navigation"+(activeTab==="help2027"?" r27-help-navigation":"")} aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
@@ -779,8 +784,8 @@ function App() {
 <option value="study-misinformation">Нарушение коллективного решения</option>
 </select></label>
 <div className="r27-mode-tabs" role="group" aria-label="Режим эксперимента">
- {["trace","mc","sensitivity","data"].includes(activeTab)
-   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=>
+ {["trace","mc","sensitivity","stability","data"].includes(activeTab)
+   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["data","Данные"]].map(([id,name])=>
       <button type="button" key={id} className={"r27-mode-tab"+(activeTab===id?" active":"")} aria-pressed={activeTab===id} onClick={()=>setActiveTab(id)}>{name}</button>)
    : <span className="r27-mode-placeholder">Основной режим</span>}
 </div>
@@ -795,9 +800,9 @@ function App() {
   return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
 {activeTab!=="help2027"?<>
 <button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(running||activeTab==="data")}><Icon name="play"/>Запустить</button>
-<button onClick={isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!running}><Icon name="stop"/>Остановить</button>
-<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="reset"/>Сбросить</button>
+<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(visibleRunning||activeTab==="data")}><Icon name="play"/>Запустить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():activeTab==="stability"?()=>lyapunovActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!visibleRunning}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
@@ -808,15 +813,16 @@ function App() {
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
-              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={runForTab} running={visibleRunning}/>}
               navigation={experimentNavigation}
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
               title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
               description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
-              progress={<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+              progress={activeTab==="stability"?null:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
               error={error?<div className="error-banner">{error}</div>:null}
             >
+              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime}/>:null}
               {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
@@ -824,7 +830,7 @@ function App() {
             </ExperimentLayout>}
     </div>
     <footer className="statusbar">
-      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):activeTab==="stability"?(lyapunovRuntime?.completed??0)+" прогонов / "+(lyapunovRuntime?.total??0):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
       <span>Время: {isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
       <span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
       <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
