@@ -37,9 +37,9 @@ function ExportActions({targetRef,title}){
   download(fileBase(title)+".csv","\uFEFF"+rows.join("\r\n"),"text/csv;charset=utf-8");
  };
  return <div className="lyapunov-export-tools">
-  <button type="button" className="inline-action" onClick={saveSvg} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в SVG">SVG</button>
+  <button type="button" className="inline-action" onClick={saveSvg} title="Сохранить график или схему в SVG">SVG</button>
   <button type="button" className="inline-action" onClick={savePng} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в PNG">PNG</button>
-  <button type="button" className="inline-action" onClick={saveCsv} disabled={!targetRef.current?.querySelector("table")} title="Сохранить таблицу в CSV">CSV</button>
+  <button type="button" className="inline-action" onClick={saveCsv} title="Сохранить таблицу в CSV">CSV</button>
  </div>;
 }
 function ExportPanel({title,children,...props}){
