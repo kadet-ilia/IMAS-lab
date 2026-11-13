@@ -1,7 +1,7 @@
 import React, {forwardRef,useEffect,useImperativeHandle,useRef,useState} from "react";
 import {CartesianGrid,Line,LineChart,ReferenceLine,ResponsiveContainer,Tooltip,XAxis,YAxis,Legend} from "recharts";
 import {ExperimentPanel as Panel,ExperimentKpi as Kpi} from "./ExperimentLayout.jsx";
-import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION} from "./lyapunovStudy.js";
+import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION,ATTACK_CURVES} from "./lyapunovStudy.js";
 
 const METHODS=[
  ["arithmetic_mean","Арифметическое среднее","#2672ff"],
@@ -14,13 +14,48 @@ function download(name,body,type){
  const blob=new Blob([body],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
  link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);
 }
+
+function fileBase(value){return (value||"imas-export").toLowerCase().replace(/[^a-zа-яё0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,70)||"imas-export";}
+function ExportActions({targetRef,title}){
+ const saveSvg=()=>{
+  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
+  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");
+  const source=new XMLSerializer().serializeToString(clone);
+  download(fileBase(title)+".svg",source,"image/svg+xml;charset=utf-8");
+ };
+ const savePng=()=>{
+  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
+  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  const box=svg.getBoundingClientRect();clone.setAttribute("width",Math.ceil(box.width)||1200);clone.setAttribute("height",Math.ceil(box.height)||600);
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));
+  const image=new Image();image.onload=()=>{const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;canvas.getContext("2d").drawImage(image,0,0);canvas.toBlob(blob=>{if(blob){const a=document.createElement("a");const png=URL.createObjectURL(blob);a.href=png;a.download=fileBase(title)+".png";a.click();URL.revokeObjectURL(png);}URL.revokeObjectURL(url);});};image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
+ };
+ const saveCsv=()=>{
+  const table=targetRef.current?.querySelector("table");if(!table)return;
+  const rows=[...table.rows].map(row=>[...row.cells].map(cell=>'"'+cell.innerText.replace(/"/g,'""').replace(/\s+/g," ").trim()+'"').join(";"));
+  download(fileBase(title)+".csv","\uFEFF"+rows.join("\r\n"),"text/csv;charset=utf-8");
+ };
+ return <div className="lyapunov-export-tools">
+  <button type="button" className="inline-action" onClick={saveSvg} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в SVG">SVG</button>
+  <button type="button" className="inline-action" onClick={savePng} disabled={!targetRef.current?.querySelector("svg")} title="Сохранить график или схему в PNG">PNG</button>
+  <button type="button" className="inline-action" onClick={saveCsv} disabled={!targetRef.current?.querySelector("table")} title="Сохранить таблицу в CSV">CSV</button>
+ </div>;
+}
+function ExportPanel({title,children,...props}){
+ const targetRef=useRef(null);
+ return <ExportPanel title={title} headerAside={<ExportActions targetRef={targetRef} title={title}/>} {...props}>
+  <div ref={targetRef} className="lyapunov-export-content">{children}</div>
+ </ExportPanel>;
+}
+
 function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
  const edit=(index,key,value)=>setPhases(prev=>prev.map((p,i)=>i===index?{...p,[key]:value}:p));
  const add=()=>{
   const last=phases.at(-1).start;
-  if(last<steps)setPhases(prev=>[...prev,{start:last+1,intensity:0}]);
+  if(last<steps&&phases.length<5)setPhases(prev=>[...prev,{start:last+1,intensity:0,curve:"constant"}]);
  };
- return <Panel title="Динамическая активность атаки" subtitle="Множитель 0 — атака отключена; 1 — номинальное смещение; 2 — удвоенная амплитуда. Значение сохраняется до начала следующей фазы.">
+ return <Panel title="Динамическая активность атаки" subtitle="До пяти фаз в одной строке. Интенсивность 0…5; выбранный закон изменяет её от уровня предыдущей фазы к заданному значению в пределах текущей фазы.">
   <div className="lyapunov-phase-grid">
    {phases.map((phase,i)=><div className="lyapunov-phase" key={i}>
     <label>Начало, шаг<input type="number" min={i?2:1} max={steps} step="1" disabled={disabled||i===0}
@@ -31,7 +66,7 @@ function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
    </div>)}
   </div>
   <div className="action-controls lyapunov-phase-actions">
-   <button className="secondary-button" type="button" disabled={disabled||phases.length>=30||phases.at(-1).start>=steps} onClick={add}>Добавить фазу</button>
+   <button className="secondary-button" type="button" disabled={disabled||phases.length>=5||phases.at(-1).start>=steps} onClick={add}>Добавить фазу</button>
    <button className="secondary-button" type="button" disabled={disabled} onClick={()=>setPhases(defaultAttackPhases(steps,attackStart))}>Типовой профиль on–off–усиление</button>
   </div>
  </Panel>;
