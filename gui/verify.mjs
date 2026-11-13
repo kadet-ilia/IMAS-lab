@@ -204,10 +204,10 @@ const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigatio
 const trustNavigation=await navSignature();
 const toolbarSignature=()=>page.locator(".topbar .toolbar").evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:child.className||"",title:child.title||""})));
 const trustToolbar=await toolbarSignature();
-// Restore the original four visible trust modes while preserving the shared page shell.
+// All five trust modes must preserve the shared page shell.
 const modeGroup=page.getByRole("group",{name:"Режим эксперимента"});
-const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]];
-if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Four trust mode buttons must be visible");
+const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["data","Данные"]];
+if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Five trust mode buttons must be visible");
 for(const [id,name] of trustModes){
   const button=modeGroup.getByRole("button",{name,exact:true});
   await button.click();
@@ -216,6 +216,13 @@ for(const [id,name] of trustModes){
   if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error("Main navigation changed when switching trust mode: "+name);
   if((await page.locator("main[data-study='trust'] > .imas-experiment-heading").count())!==1)throw Error("Trust heading missing after mode switch: "+name);
   await assertStandardWorkspace(name);
+  if(id==="stability"){
+   await page.getByText("Устойчивость по Ляпунову и точность коллективных оценок").waitFor();
+   if((await page.getByRole("spinbutton",{name:"Коэффициент обратной связи k"}).count())!==1)
+    throw Error("Stability tab must expose Lyapunov feedback control");
+   if((await page.getByText("Динамическая активность атаки").count())!==1)
+    throw Error("Stability tab must expose an attack phase editor");
+  }
 }
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
 const ablationMode=page.locator(".sensitivity-action select");
