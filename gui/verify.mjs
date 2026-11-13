@@ -204,10 +204,10 @@ const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigatio
 const trustNavigation=await navSignature();
 const toolbarSignature=()=>page.locator(".topbar .toolbar").evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:child.className||"",title:child.title||""})));
 const trustToolbar=await toolbarSignature();
-// Restore the original four visible trust modes while preserving the shared page shell.
+// All five trust modes must preserve the shared page shell.
 const modeGroup=page.getByRole("group",{name:"Режим эксперимента"});
-const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]];
-if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Four trust mode buttons must be visible");
+const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["data","Данные"]];
+if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Five trust mode buttons must be visible");
 for(const [id,name] of trustModes){
   const button=modeGroup.getByRole("button",{name,exact:true});
   await button.click();
@@ -216,7 +216,41 @@ for(const [id,name] of trustModes){
   if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error("Main navigation changed when switching trust mode: "+name);
   if((await page.locator("main[data-study='trust'] > .imas-experiment-heading").count())!==1)throw Error("Trust heading missing after mode switch: "+name);
   await assertStandardWorkspace(name);
+  if(id==="stability"){
+   await page.getByText("Устойчивость по Ляпунову и точность коллективных оценок").waitFor();
+   if((await page.getByRole("spinbutton",{name:"Коэффициент обратной связи k"}).count())!==1)
+    throw Error("Stability tab must expose Lyapunov feedback control");
+   if((await page.getByText("Динамическая активность атаки").count())!==1)
+    throw Error("Stability tab must expose an attack phase editor");
+  }
 }
+// Lyapunov: real Web Worker run and export, not merely static JSX verification.
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
+const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
+await stepInput.fill("30");await stepInput.press("Tab");
+await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
+await page.getByRole("button",{name:"Выполнить исследование"}).click();
+try{
+ await page.locator(".lyapunov-study .kpi-grid .kpi").first().waitFor({timeout:20000});
+}catch(cause){
+ const status=await page.locator(".lyapunov-study").innerText();
+ throw Error("Lyapunov browser diagnosis: "+JSON.stringify({status:status.slice(0,1500),consoleErrors:errors.slice(-5)}),{cause});
+}
+const [lyapFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ page.getByRole("button",{name:"Экспорт JSON"}).click()
+]);
+const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
+if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
+  lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
+  !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
+  !lyapData.series.some(row=>row.attack_intensity>1) ||
+  !lyapData.series.some(row=>row.attack_intensity===0)){
+ throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
+}
+const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
+await stepInput.fill("200");await stepInput.press("Tab");
+await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
 const ablationMode=page.locator(".sensitivity-action select");
 await ablationMode.selectOption("ablation");
@@ -763,6 +797,7 @@ try{
  await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
  await secondTab.close();
 }
+report.lyapunovStudy=lyapunovVerification;
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 await browser.close();

@@ -21,6 +21,7 @@ import "./styles.css";
 import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
+import LyapunovPanel from "./LyapunovPanel.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig} from "./trustEngine.js";
 import {passportForStudy,METRIC_PASSPORT_VERSION} from "./metricPassport.js";
@@ -654,7 +655,7 @@ function Formula({ number, children }) {
 }
 
 const HELP_SECTIONS = [
-  ["purpose", "Назначение и постановка задачи"], ["agents", "Агенты и модель нарушителя"], ["trust", "Модель доверия"], ["reputation", "Глобальная репутация"], ["isolation", "Изоляция и восстановление"], ["aggregation", "Робастное агрегирование"], ["network", "Сетевая модель"], ["sybil", "Sybil-атака"], ["statistics", "Межпрогонная статистика"], ["bootstrap", "Bootstrap-сравнение"], ["distributions", "Распределения"], ["sensitivity", "Анализ чувствительности"], ["parallel", "Параллельный расчет и кэш"], ["process", "Порядок эксперимента"], ["software", "Программный комплекс"], ["interpretation", "Интерпретация"], ["glossary", "Термины"], ["limits", "Ограничения"],
+  ["purpose", "Назначение и постановка задачи"], ["agents", "Агенты и модель нарушителя"], ["trust", "Модель доверия"], ["reputation", "Глобальная репутация"], ["isolation", "Изоляция и восстановление"], ["aggregation", "Робастное агрегирование"], ["network", "Сетевая модель"], ["sybil", "Sybil-атака"], ["lyapunov", "Устойчивость по Ляпунову и точность"], ["statistics", "Межпрогонная статистика"], ["bootstrap", "Bootstrap-сравнение"], ["distributions", "Распределения"], ["sensitivity", "Анализ чувствительности"], ["parallel", "Параллельный расчет и кэш"], ["process", "Порядок эксперимента"], ["software", "Программный комплекс"], ["interpretation", "Интерпретация"], ["glossary", "Термины"], ["limits", "Ограничения"],
 ];
 
 function TrustHelpArticle() {
@@ -667,6 +668,18 @@ function TrustHelpArticle() {
     <section id="aggregation"><h2>Робастное агрегирование</h2><p>Реализованы арифметическое, доверительно-взвешенное и предлагаемый робастный методы. Робастный метод использует медианный центр, ограничение выбросов, симметричное усечение и проекцию на безопасный интервал. При отсутствии доставленных предложений формируется отказ (null), а не эталонное решение. MAE и RMSE вычисляются только для выданных решений, доля отказов учитывается отдельно.</p><Formula number="9">c(t)=median{'{'}x<sub>i</sub>(t){'}'}.</Formula><Formula number="10">x′<sub>i</sub>=clip(x<sub>i</sub>,c−R,c+R).</Formula><Formula number="11">x<sub>rob</sub>=Π<sub>S</sub>[Σ<sub>i∈T</sub>w̃<sub>i</sub>x′<sub>i</sub>/Σ<sub>i∈T</sub>w̃<sub>i</sub>].</Formula></section>
     <section id="network"><h2>Сетевая модель</h2><p>Поддерживаются полносвязная, кольцевая, случайная G(N,p) без обязательного кольцевого остова и small-world-топологии. Случайный граф неориентированный: каждое ребро между различными агентами появляется независимо с вероятностью p только до дополнительного Sybil-воздействия. При наличии Sybil-идентичностей поверх базовой топологии принудительно добавляются их взаимные связи и связи с первыми min(N,f+2) легитимными агентами. В таком режиме полная сеть не является чистым G(N,p); в экспорте фиксируется topology_semantics. На каждом шаге определяются связные компоненты, для доставки рассматривается крупнейшая компонента. Попытки доставки делятся на успешно доставленные, потерянные и отклонённые при ограничении пропускной способности. Недоставленные предложения сохраняются в очереди, не считаются потерянными и после истечения допустимой давности переходят в класс просроченных. Сумма доставленных, потерянных, отклонённых, просроченных и ожидающих сообщений равна числу попыток с начала расчёта. Доля доставки рассчитывается накопительно, не смешивая сообщения от разных тактов.</p><Formula number="12">A(t)=A₀⊙M<sub>active</sub>(t)⊙M<sub>partition</sub>(t).</Formula><Formula number="13">P(delivery)=1−p<sub>loss</sub>, d∈[d<sub>min</sub>,d<sub>max</sub>].</Formula><p>При отсутствии свежего значения допускается использование последнего доставленного сообщения не старше заданного числа шагов.</p></section>
     <section id="sybil"><h2>Sybil-атака</h2><p>Sybil-идентичности добавляются сверх N легитимных агентов, образуют плотный кластер и совместно поддерживают ложные оценки. Базовое условие N&gt;2f проверяется для легитимных идентичностей; после появления Sybil-узлов эффективное честное большинство может быть нарушено, что является предметом исследования.</p><Formula number="14">N<sub>eff</sub>=N+N<sub>sybil</sub>, f<sub>eff</sub>=f+N<sub>sybil</sub>.</Formula></section>
+    <section id="lyapunov"><h2>Оценка устойчивости по Ляпунову и точности коллективных решений</h2>
+     <p>Режим «Устойчивость и точность» исследует частную одномерную модель с обратной связью, использующую погрешности коллективных оценок действующего ядра доверия. По аналогии с иллюстративным скриптом lyapunov_imas.py целевой объект имеет постоянное равновесие x*=0 в координатах ошибки e=x−x*. Этот вспомогательный объект не отождествляется с полной ИМАС: устойчивость обучения доверия, изменения топологии, сети и общей модели поддержки принятия решений требует отдельного исследования.</p>
+     <Formula number="21">δ<sub>m</sub>(t)=ŷ<sub>m</sub>(t)−y*, e<sub>m</sub>(t+1)=(1−k)e<sub>m</sub>(t)−kδ<sub>m</sub>(t), 0&lt;k&lt;2.</Formula>
+     <p>Здесь ŷ<sub>m</sub> — результат одного из трёх агрегаторов, y* — фиксированная эталонная оценка. При отсутствии решения объект удерживает состояние e(t+1)=e(t); такой шаг включается в статистику отказов и не считается корректным решением.</p>
+     <Formula number="22">V(e)=e², ΔV(t)=V(e(t+1))−V(e(t)).</Formula>
+     <Formula number="23">δ(t)=0 ⇒ V(t+1)=(1−k)²V(t), ρ=|1−k|&lt;1.</Formula>
+     <Formula number="24">|e(t+1)|≤ρ|e(t)|+k|δ(t)|; |e(t)|≤ρ<sup>t</sup>|e(0)|+kΣ<sub>j=0</sub><sup>t−1</sup>ρ<sup>t−1−j</sup>|δ(j)|.</Formula>
+     <p>Формула (24) применима при наличии решения на каждом шаге. При отказе сохраняется предыдущее состояние и вычисленная рекуррентная граница. В отсутствие возмущений и отказов номинальная модель асимптотически устойчива. При ненулевом постоянном смещении целевая точка обычно не является равновесием, поэтому заключение об асимптотической устойчивости в этой точке недопустимо. Для ограниченных возмущений скалярная модель обладает свойством «вход–состояние» (ISS); оценка предельного радиуса k·D/(1−ρ), построенная по максимальному |δ| в конечной выборке, характеризует только исследованные прогоны.</p>
+     <p>Профиль атаки задаётся фазами (первый шаг и множитель интенсивности от 0 до 5). Интенсивность 0 означает отсутствие воздействия; положительное значение масштабирует смещение византийских предложений и влияет на статистическую достоверность свидетельств. Можно исследовать включение атаки, отключение, повторное воздействие и изменение интенсивности. На каждом шаге сохраняются активность атаки, решения всех методов, ошибка δ, состояние e, значения V и ΔV, а также проверяемая верхняя оценка |e|.</p>
+     <p>Показатели достижения цели: эмпирическая вероятность правильного коллективного решения (все такты, включая отказы), RMSE оценок на шагах выдачи решений, точность в фазах действия и отсутствия атаки, RMSE состояния, конечная ошибка |e(T)|, доля шагов с ΔV&gt;0 среди выданных решений, число отказов и время окончательного попадания в допуск. Метрики сравниваются на парных экзогенных данных одних и тех же прогонов. Для средних эффектов выводятся описательные приближённые интервалы ±1,96·s/√R; они не корректируются на множественные проверки.</p>
+     <p>Алгоритм: 1) задать k, e(0), ε, R и фазы активности атаки; 2) получить траектории динамического доверия, агрегирования и изоляции; 3) использовать последовательность δ каждого метода как возмущение замкнутой модели; 4) рассчитать e, V, ΔV и ограничивающую последовательность ISS; 5) сопоставить методы по точности и показателям состояния; 6) экспортировать JSON и CSV. Принципиальное ограничение: методика даёт доказанное свойство введённой скалярной обратной связи и вычислительные характеристики выбранной ИМАС, но не является доказательством устойчивости всего сложного объекта.</p>
+    </section>
     <section id="statistics"><h2>Межпрогонная статистика</h2><p>Диагностическая метрика <code>nominal_band_rate</code> — доля шагов, на которых отклонение оценки от эталона не превосходит 1,96σ/√n, где n — число доступных честных наблюдений. Это условная полоса при известных параметрах генератора, <strong>не является 95%-м доверительным интервалом робастного оценивателя</strong> и не доказывает заявленную вероятность покрытия.</p><p>Для каждого шага сохраняются траектории независимых прогонов. Отказы без выданного решения исключаются из условных средних, СКО и квантилей; число доступных наблюдений сохраняется отдельно. Помимо среднего и выборочного СКО рассчитываются медиана и квантили. Квантильные области предпочтительны при асимметрии и мультимодальности.</p><Formula number="15">s(t)=√[(R−1)<sup>−1</sup>Σ<sub>r</sub>(x<sup>(r)</sup>(t)−x̄(t))²].</Formula><Formula number="16">B<sub>σ,k</sub>(t)=[x̄(t)−ks(t),x̄(t)+ks(t)], k∈{'{'}1,2{'}'}.</Formula><Formula number="17">B<sub>90</sub>(t)=[Q<sub>0.05</sub>(t),Q<sub>0.95</sub>(t)], B<sub>50</sub>(t)=[Q<sub>0.25</sub>(t),Q<sub>0.75</sub>(t)].</Formula></section>
     <section id="bootstrap"><h2>Парный bootstrap различий методов</h2><p>Сравнение выполняется по одним и тем же случайным прогонам, поэтому сохраняется парность наблюдений. На каждой bootstrap-итерации с возвращением выбираются индексы прогонов и вычисляется средняя разность. Для ошибок знак преобразуется так, чтобы положительный эффект всегда означал преимущество робастного метода.</p><Formula number="18">Δ<sub>b</sub>=R<sup>−1</sup>Σ<sub>r∈S<sub>b</sub></sub>[L<sub>base</sub><sup>(r)</sup>−L<sub>rob</sub><sup>(r)</sup>].</Formula><p>95%-й интервал задается эмпирическими квантилями 2.5% и 97.5% bootstrap-распределения.</p></section>
     <section id="distributions"><h2>Распределения результатов</h2><p>Для RMSE, MAE, вероятности правильного решения, полноты и времени обнаружения формируются гистограммы и сводки min, P5, P25, медиана, P75, P95, max. Это позволяет выявить выбросы, асимметрию и несколько режимов функционирования, которые скрываются за средним значением.</p></section>
@@ -675,7 +688,7 @@ function TrustHelpArticle() {
     <section id="parallel"><h2>Параллельное выполнение, прогресс и кэш</h2><p>Независимые прогоны распределяются между браузерными Web Workers (до четырёх). Прогресс передаётся в React-интерфейс, результаты завершённых заданий сохраняются в IndexedDB. После остановки вычисления можно продолжить в том же браузере при неизменных параметрах. Для опубликованной версии внешний Node.js/Python-сервер и API заданий не требуются. Контрольные точки E1 относятся к завершённым задачам Web Workers. E2, E3, E5 и E6 сохраняют завершённые сценарии с состоянием генератора псевдослучайных чисел; E4 сохраняет фронт поиска BFS после блока до 8192 обработанных маркировок. Стадия продолжается только после подтверждения записи в IndexedDB. Параметры и версии моделей входят в ключ контрольной точки.</p></section>
     <section id="process"><h2>Порядок проведения эксперимента</h2><ol><li>Проверка параметров и построение топологии.</li><li>Выбор византийских агентов и создание Sybil-идентичностей.</li><li>Формирование предложений и сетевая доставка.</li><li>Расчет доверия и репутации по доступным свидетельствам.</li><li>Агрегирование решения и расчет ошибок.</li><li>Обновление свидетельств, изоляция и восстановление.</li><li>Повторение T шагов и R независимых прогонов.</li><li>Расчет σ-, квантильных и bootstrap-интервалов, распределений и чувствительности.</li></ol></section>
     <section id="up34-parity"><h2>Независимая межъязыковая проверка и границы сравнения</h2><p>JavaScript-ядро контролируется независимой Python-реализацией на 174 наборах общих численных исходных данных: Beta-доверие, EigenTrust, робастное усечение, наблюдаемые веса, графовое распространение, верхнехвостовой ущерб и 12-тактовый транспорт с очередью. Для E1 выполнено независимое восстановление по журналу исходных событий трёх полных трасс по 17 тактов без сетевых ограничений и пяти трасс по 19 тактов с сетью, включая связность, очереди, потери, задержки, репутации, решения и изоляцию. Топология и случайные исходы сообщений рассматриваются как заданные экзогенные входы. Эти испытания подтверждают согласованность проверенных алгоритмов на заданных входах, а не достоверность стохастических распределений и не применимость синтетических угроз к реальной системе.</p><p>Историческая программа experiment.py не является математически эквивалентной текущей JavaScript-версии: она добавляет кольцевой остов при случайном графе с p=0, иначе обрабатывает свидетельства неактивных агентов и может сохранять последнее решение при отсутствии новых сообщений. Также отличаются правила транспортной просрочки, определения обнаружения и генераторы случайных чисел. Поэтому перенос численных результатов между версиями без повторного моделирования и согласования допущений недопустим. В E2 и E6 доступно ограниченное по объёму архивирование всей серии первичных наблюдений и исходных графовых событий соответственно. Контроль итоговых долей и оценок проводится по записям архива; выборочные усечённые архивы запрещены. Исчерпывающая научная приёмка UP-36 не завершена.</p></section>
-    <section id="software"><h2>Описание программного комплекса</h2><table className="help-table"><thead><tr><th>Компонент</th><th>Назначение</th></tr></thead><tbody><tr><td><code>gui/src/trustEngine.js</code></td><td>Расчёт доверия, сеть, изоляция и статистика на JavaScript; версия trust-js-2.10.0-remediation.</td></tr><tr><td><code>gui/src/trustWorker.js</code></td><td>Независимые фоновые прогоны в Web Workers.</td></tr><tr><td><code>gui/src/trustBrowserClient.js</code></td><td>Пул потоков, контрольные точки и кэш IndexedDB в браузере.</td></tr><tr><td><code>gui/src/research2027.js</code></td><td>Пять синтетических исследовательских моделей с явной версией.</td></tr><tr><td><code>experiment.py</code></td><td>Архивный Python-эталон: не запускается опубликованным интерфейсом и ещё не подтверждён как эквивалент новой версии.</td></tr></tbody></table></section>
+    <section id="software"><h2>Описание программного комплекса</h2><table className="help-table"><thead><tr><th>Компонент</th><th>Назначение</th></tr></thead><tbody><tr><td><code>gui/src/trustEngine.js</code></td><td>Расчёт доверия, сеть, изоляция и статистика на JavaScript; версия trust-js-2.11.0-dynamic-attack.</td></tr><tr><td><code>gui/src/lyapunovStudy.js</code> и <code>gui/src/lyapunovWorker.js</code></td><td>Анализ модели обратной связи по Ляпунову, динамический профиль атаки и независимые серии прогонов.</td></tr><tr><td><code>gui/src/trustWorker.js</code></td><td>Независимые фоновые прогоны в Web Workers.</td></tr><tr><td><code>gui/src/trustBrowserClient.js</code></td><td>Пул потоков, контрольные точки и кэш IndexedDB в браузере.</td></tr><tr><td><code>gui/src/research2027.js</code></td><td>Пять синтетических исследовательских моделей с явной версией.</td></tr><tr><td><code>experiment.py</code></td><td>Архивный Python-эталон: не запускается опубликованным интерфейсом и ещё не подтверждён как эквивалент новой версии.</td></tr></tbody></table></section>
     <section id="interpretation"><h2>Интерпретация результатов</h2><ul><li>Узкие σ- и квантильные области означают воспроизводимость решения.</li><li>Различие между средним и медианой указывает на асимметрию распределения.</li><li>Bootstrap-интервал выше нуля свидетельствует о преимуществе по выбранной метрике в данном сценарии, но не доказывает универсальное превосходство и требует учёта множественных проверок.</li><li>Снижение крупнейшей компоненты и доли доставки показывает влияние разделения, потерь и пропускной способности.</li><li>Сильный главный эффект определяет параметр, наиболее существенно изменяющий отклик в исследованном диапазоне.</li></ul></section>
     <section id="glossary"><h2>Термины и обозначения</h2><dl className="glossary"><dt>ИМАС</dt><dd>Интеллектуальная мультиагентная система.</dd><dt>Византийский агент</dt><dd>Участник, способный передавать произвольные или согласованно ложные данные.</dd><dt>Sybil-атака</dt><dd>Создание одним нарушителем множества ложных идентичностей.</dd><dt>Квантильная область</dt><dd>Интервал между заданными квантилями эмпирического распределения.</dd><dt>Парный bootstrap</dt><dd>Повторная выборка общих индексов прогонов для сравниваемых методов.</dd><dt>Контрольная точка</dt><dd>Сохраненное промежуточное состояние серии, позволяющее возобновить расчет.</dd><dt>Факторный эффект</dt><dd>Изменение среднего отклика между верхним и нижним уровнями фактора.</dd><dt>Компонента связности</dt><dd>Максимальное множество узлов, между которыми существуют сетевые пути.</dd></dl></section>
     <section id="limits"><h2>Ограничения применимости</h2><p>Время обнаружения измеряется в тактах от начала атаки до первой последующей изоляции нарушителя; предатаковая изоляция учитывается как ложное срабатывание. В однофакторном и факторном анализе число нарушителей изменяется при фиксированном числе усечённых значений с каждой стороны. Сетевая модель является дискретной и агрегированной: не моделируются конкретные протоколы маршрутизации, очереди пакетов каждого канала и криптографические затраты. Скалярное решение не заменяет предметную многомерную модель объекта. Bootstrap и факторные эффекты характеризуют только заданные диапазоны и сценарии. Практические выводы требуют калибровки на цифровом двойнике или стенде конкретного объекта.</p></section>
@@ -699,6 +712,8 @@ function App() {
   const [cacheHit, setCacheHit] = useState(false);
   const runningRef = useRef(false);
   const researchActionsRef = useRef(null);
+  const lyapunovActionsRef = useRef(null);
+  const [lyapunovRuntime,setLyapunovRuntime] = useState(null);
   const [researchRuntime,setResearchRuntime] = useState(null);
   useEffect(()=>{if(activeTab!=="help2027")lastExperimentRef.current=activeTab;},[activeTab]);
 
@@ -735,6 +750,8 @@ function App() {
 
   const reset = () => {
     stop();
+    lyapunovActionsRef.current?.stop();
+    setLyapunovRuntime(null);
     setConfig(DEFAULT_CONFIG);
     setScenario("collusion");
     setAttackLevel("high");
@@ -747,7 +764,7 @@ function App() {
     setActiveTab("trace");
   };
   const newSeed = () => setConfig((current) => ({ ...current, seed: Math.floor((Date.now() + Math.random() * 100000) % 2147483647) }));
-  const runForTab = () => request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
+  const runForTab = () => activeTab==="stability" ? lyapunovActionsRef.current?.start() : request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
   const experimentSignature = JSON.stringify({ scenario, config });
   const currentTrace = trace?.client_signature === experimentSignature ? trace : null;
   const currentMonteCarlo = monteCarlo?.client_signature === experimentSignature ? monteCarlo : null;
@@ -764,9 +781,9 @@ function App() {
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   const isResearch=activeTab.startsWith("study-");
   const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
-  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):running;
+  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):activeTab==="stability"?Boolean(lyapunovRuntime?.running):running;
   const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
-  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—");
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(activeTab==="stability"?(lyapunovRuntime?.hasResult?"Результат расчёта":"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—"));
   const experimentNavigation = (
 <nav className={"r27-experiment-navigation"+(activeTab==="help2027"?" r27-help-navigation":"")} aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
@@ -779,8 +796,8 @@ function App() {
 <option value="study-misinformation">Нарушение коллективного решения</option>
 </select></label>
 <div className="r27-mode-tabs" role="group" aria-label="Режим эксперимента">
- {["trace","mc","sensitivity","data"].includes(activeTab)
-   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["data","Данные"]].map(([id,name])=>
+ {["trace","mc","sensitivity","stability","data"].includes(activeTab)
+   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["data","Данные"]].map(([id,name])=>
       <button type="button" key={id} className={"r27-mode-tab"+(activeTab===id?" active":"")} aria-pressed={activeTab===id} onClick={()=>setActiveTab(id)}>{name}</button>)
    : <span className="r27-mode-placeholder">Основной режим</span>}
 </div>
@@ -795,9 +812,9 @@ function App() {
   return <div className="app-shell"><header className="topbar"><div className="brand"><h1>IMAS_LaB_test · Лабораторный стенд ИМАС</h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&lastRun?.cacheHit?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
 {activeTab!=="help2027"?<>
 <button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
-<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(running||activeTab==="data")}><Icon name="play"/>Запустить</button>
-<button onClick={isResearch?()=>researchActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!running}><Icon name="stop"/>Остановить</button>
-<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="reset"/>Сбросить</button>
+<button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(visibleRunning||activeTab==="data")}><Icon name="play"/>Запустить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():activeTab==="stability"?()=>lyapunovActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!visibleRunning}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
@@ -808,15 +825,16 @@ function App() {
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
-              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={() => request("trace")} running={running}/>}
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={runForTab} running={visibleRunning}/>}
               navigation={experimentNavigation}
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
               title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
               description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
-              progress={<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+              progress={activeTab==="stability"?null:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
               error={error?<div className="error-banner">{error}</div>:null}
             >
+              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime}/>:null}
               {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
@@ -824,7 +842,7 @@ function App() {
             </ExperimentLayout>}
     </div>
     <footer className="statusbar">
-      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):activeTab==="stability"?(lyapunovRuntime?.completed??0)+" прогонов / "+(lyapunovRuntime?.total??0):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
       <span>Время: {isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
       <span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
       <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
