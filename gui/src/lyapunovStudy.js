@@ -26,7 +26,7 @@ export function defaultAttackPhases(steps,attackStart=20){
   {start:roundStart(Math.max(start+3,Math.floor(t*.78)),t),intensity:0}
  ];
  const distinct=new Map();
- for(const p of candidates)distinct.set(p.start,p);
+ for(const p of candidates)if(!distinct.has(p.start)||p.start===1&&start===1)distinct.set(p.start,p);
  return [...distinct.values()].sort((a,b)=>a.start-b.start);
 }
 
@@ -74,7 +74,7 @@ export function feedbackTrajectory(trajectory,config,options){
   let e=o.initialError,bound=Math.abs(e),valid=0,deltaVPositive=0;
   const points=[{step:0,e,V:e*e,deltaV:null,iss_bound:bound,decision_error:null,attack_intensity:0,decision_available:false}];
   const decisionErrors=[],stateErrors=[],correctOn=[],correctOff=[],onSteps=[],offSteps=[];
-  let maxDelta=0,maxD=0;
+  let maxDelta=-Infinity,maxD=0;
   for(let i=0;i<trajectory.length;i++){
    const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases);
    if(row.step!==i+1)throw Error("Нарушена последовательность тактов при оценке устойчивости");
