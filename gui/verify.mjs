@@ -226,6 +226,8 @@ for(const [id,name] of trustModes){
 }
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
+const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
+await stepInput.fill("30");await stepInput.press("Tab");
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 await page.getByRole("button",{name:"Выполнить исследование"}).click();
 try{
