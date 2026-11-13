@@ -54,14 +54,14 @@ export function validateAttackPhases(phases,steps){
  return phases.map(p=>({start:p.start,intensity:p.intensity,curve:p.curve||"constant"}));
 }
 
-export function attackIntensityAt(step,phases){
+export function attackIntensityAt(step,phases,totalSteps=null){
  let value=0;
  for(let i=0;i<phases.length;i++){
   const p=phases[i],next=phases[i+1];
   if(p.start>step)break;
   const curve=p.curve||"constant";
   if(curve==="constant"){value=p.intensity;continue;}
-  const end=next?next.start-1:Math.max(p.start,step);
+  const end=next?next.start-1:(Number.isInteger(totalSteps)?totalSteps:p.start);
   const u=end<=p.start?1:(step-p.start)/(end-p.start);
   value=value+(p.intensity-value)*curveProgress(u,curve);
  }
@@ -94,7 +94,7 @@ export function feedbackTrajectory(trajectory,config,options){
   const decisionErrors=[],stateErrors=[],correctOn=[],correctOff=[],onSteps=[],offSteps=[];
   let maxDelta=-Infinity,maxD=0;
   for(let i=0;i<trajectory.length;i++){
-   const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases);
+   const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases,c.n_steps);
    if(row.step!==i+1)throw Error("Нарушена последовательность тактов при оценке устойчивости");
    const decision=row[method],accepted=finite(decision),d=accepted?decision-c.desired_action:null;
    const eNext=accepted?(1-o.gain)*e-o.gain*d:e;
@@ -163,7 +163,7 @@ export function buildLyapunovResult(runs,config,options){
   }
  }
  const series=Array.from({length:c.n_steps+1},(_,i)=>{
-  const row={step:i,attack_intensity:i===0?0:attackIntensityAt(i,o.phases)};
+  const row={step:i,attack_intensity:i===0?0:attackIntensityAt(i,o.phases,c.n_steps)};
   for(const method of METHODS){
    row[method+"_V_mean"]=mean(evaluated.map(x=>x.data[method].points[i].V));
    row[method+"_e_mean"]=mean(evaluated.map(x=>x.data[method].points[i].e));
