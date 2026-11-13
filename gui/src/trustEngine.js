@@ -60,7 +60,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.10.0-remediation";
+export const TRUST_MODEL_VERSION="trust-js-2.11.0-dynamic-attack";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,10000],n_sensitivity_runs:[1,100],
@@ -109,6 +109,16 @@ export function validateConfig(value={}){
  requireField(c.trim_each_side<=Math.floor((c.n_agents-1)/2),"trim_each_side","нельзя удалить все наблюдения");
  requireField(c.message_delay_max_steps>=c.message_delay_min_steps,"message_delay_max_steps","меньше минимальной задержки");
  requireField(c.attack_direction===-1||c.attack_direction===1,"attack_direction","допустимы -1 или 1");
+ if(c.attack_schedule!==undefined){
+  requireField(Array.isArray(c.attack_schedule)&&c.attack_schedule.length>0&&c.attack_schedule.length<=30,"attack_schedule","требуется от 1 до 30 фаз");
+  let previous=0;
+  for(const p of c.attack_schedule){
+   requireField(p&&Number.isInteger(p.start)&&p.start>previous&&p.start<=c.n_steps,"attack_schedule","начала фаз должны возрастать и не превышать T");
+   requireField(typeof p.intensity==="number"&&Number.isFinite(p.intensity)&&p.intensity>=0&&p.intensity<=5,"attack_schedule","интенсивность должна лежать в пределах 0…5");
+   previous=p.start;
+  }
+  requireField(c.attack_schedule[0].start===1,"attack_schedule","первая фаза должна начинаться с шага 1");
+ }
  requireField(["complete","ring","random","small_world"].includes(c.network_topology),"network_topology","неизвестная топология");
  if(c.network_enabled&&c.network_topology==="small_world")
   requireField(c.small_world_neighbors<c.n_agents+c.n_sybil_agents,"small_world_neighbors","недопустимое число соседей");
@@ -185,21 +195,30 @@ function aggregate(proposals,reputation,available,c,last){
  const weighted=sum(v.map((x,i)=>x*w[i]))/sum(w),center=median(v),cv=v.map(x=>clamp(x,center-c.clip_radius,center+c.clip_radius));
  return {arithmetic_mean:arithmetic,trust_weighted_mean:weighted,proposed_robust:clamp(trimmedWeightedMean(cv,w,c.trim_each_side),c.safe_action_min,c.safe_action_max)};
 }
-const activeAttack=(t,scenario,c)=>t+1>=c.attack_start_step&&(scenario!=="on_off"||((t+1-c.attack_start_step)%Math.max(1,c.on_off_period))<c.on_off_attack_steps);
+export function attackIntensity(t,scenario,c){
+ if(scenario==="dynamic"){
+  if(!c.attack_schedule)throw Error("Для динамического сценария требуется attack_schedule");
+  let intensity=0;
+  for(const phase of c.attack_schedule){if(phase.start>t+1)break;intensity=phase.intensity;}
+  return intensity;
+ }
+ return t+1>=c.attack_start_step&&(scenario!=="on_off"||((t+1-c.attack_start_step)%Math.max(1,c.on_off_period))<c.on_off_attack_steps)?1:0;
+}
+const activeAttack=(t,scenario,c)=>attackIntensity(t,scenario,c)>0;
 function samples(t,scenario,c,bad,sybil,r){
- const n=bad.length,x=all(n).map(()=>c.desired_action+c.honest_noise_sigma*r.normal());if(!activeAttack(t,scenario,c))return x;
+ const n=bad.length,x=all(n).map(()=>c.desired_action+c.honest_noise_sigma*r.normal()),scale=attackIntensity(t,scenario,c);if(scale<=0)return x;
  const b=all(n).filter(i=>bad[i]),v=c.desired_action;
- if(scenario==="collusion"){const common=v+c.attack_direction*c.collusion_bias+.02*r.normal();for(const i of b)x[i]=common+.01*r.normal();}
- else {const bias=scenario==="subtle_bias"?c.subtle_bias:c.static_bias;for(const i of b)x[i]=v+c.attack_direction*bias+.05*r.normal();}
- if(c.n_sybil_agents){const common=v+c.attack_direction*c.collusion_bias+.005*r.normal();for(let i=c.n_agents;i<n;i++)x[i]=common+.002*r.normal();}
+ if(scenario==="collusion"){const common=v+c.attack_direction*c.collusion_bias*scale+.02*r.normal();for(const i of b)x[i]=common+.01*r.normal();}
+ else {const bias=scenario==="subtle_bias"?c.subtle_bias:c.static_bias;for(const i of b)x[i]=v+c.attack_direction*bias*scale+.05*r.normal();}
+ if(c.n_sybil_agents){const common=v+c.attack_direction*c.collusion_bias*scale+.005*r.normal();for(let i=c.n_agents;i<n;i++)x[i]=common+.002*r.normal();}
  return x;
 }
 export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,record=null){
- const n=bad.length,attack=activeAttack(t,scenario,c),e=makeMat(n,NaN);
+ const n=bad.length,intensity=attackIntensity(t,scenario,c),attack=intensity>0,e=makeMat(n,NaN);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   // Exclude inactive, isolated and not-yet-activated identities, even offline.
   if(!active[i]||!active[j])continue;
-  const quality=attack&&bad[j]?c.byzantine_quality:c.honest_quality;
+  const quality=attack&&bad[j]?c.honest_quality+(c.byzantine_quality-c.honest_quality)*Math.min(1,intensity):c.honest_quality;
   const eventRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"observation",t,i,j):r;
   let v=attack&&bad[i]?(bad[j]?.98:.02):clamp((eventRng.random()<quality?1:0)+eventRng.normal()*c.observer_noise_sigma,0,1);
   if(i===j)v=c.honest_quality;
@@ -431,7 +450,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   }
   const row={step:t+1,truth:c.desired_action,active_agents:running.filter((x,i)=>x&&active[i]).length,available_agents:tx.available.filter(Boolean).length,isolated_agents:eligible.filter((x,i)=>x&&!active[i]).length,
     largest_component:tx.stats.component_size,messages_delivered:tx.stats.delivered+evidence.stats.delivered,messages_lost:tx.stats.lost+evidence.stats.lost,messages_bandwidth_dropped:tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped,messages_expired:tx.stats.expired,messages_backlogged:tx.stats.backlogged,messages_queued:tx.stats.queued,
-    partition_active:Number(partition),attack_active:Number(activeAttack(t,scenario,c)),...decisions};
+    partition_active:Number(partition),attack_active:Number(activeAttack(t,scenario,c)),attack_intensity:attackIntensity(t,scenario,c),...decisions};
   series.push(row);
   if(detail){
    network_series.push({...row,proposal_queue:tx.stats.queued,mean_message_delay:tx.stats.mean_delay,delivery_ratio:delivered/Math.max(1,attempted),message_balance:communicationState.total.balance,proposal_message_balance:communicationState.proposal.balance,evidence_message_balance:communicationState.evidence.balance});
