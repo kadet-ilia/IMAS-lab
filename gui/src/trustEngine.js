@@ -115,6 +115,7 @@ export function validateConfig(value={}){
   for(const p of c.attack_schedule){
    requireField(p&&Number.isInteger(p.start)&&p.start>previous&&p.start<=c.n_steps,"attack_schedule","начала фаз должны возрастать и не превышать T");
    requireField(typeof p.intensity==="number"&&Number.isFinite(p.intensity)&&p.intensity>=0&&p.intensity<=5,"attack_schedule","интенсивность должна лежать в пределах 0…5");
+   requireField(p.curve===undefined||["constant","linear","exponential","parabolic","hyperbolic"].includes(p.curve),"attack_schedule","неизвестный закон изменения интенсивности");
    previous=p.start;
   }
   requireField(c.attack_schedule[0].start===1,"attack_schedule","первая фаза должна начинаться с шага 1");
