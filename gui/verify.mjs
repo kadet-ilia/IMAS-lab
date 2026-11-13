@@ -247,7 +247,7 @@ const [lyapFile]=await Promise.all([
  page.getByRole("button",{name:"Экспорт JSON"}).click()
 ]);
 const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
-if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
+if(lyapData.runs?.length!==1 || lyapData.summary?.length!==4 ||
   lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
   !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
   !lyapData.series.some(row=>row.attack_intensity>1) ||
@@ -271,6 +271,9 @@ const [csvFile]=await Promise.all([
  tablePanel.getByRole("button",{name:"CSV"}).click()
 ]);
 if(!csvFile.suggestedFilename().endsWith(".csv"))throw Error("Individual table CSV export failed");
+const expectedMethods=["arithmetic_mean","trust_weighted_mean","coordinate_trimmed_mean","proposed_robust"];
+if(JSON.stringify(lyapData.summary.map(row=>row.method))!==JSON.stringify(expectedMethods))
+ throw Error("Lyapunov worker: the four aggregation methods are not all present in the expected order");
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();

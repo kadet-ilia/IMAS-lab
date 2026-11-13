@@ -10,7 +10,7 @@
  */
 import {METHODS, simulateRun, validateConfig, TRUST_MODEL_VERSION} from "./trustEngine.js";
 
-export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-1.1";
+export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-1.2-four-methods";
 const finite=x=>typeof x==="number"&&Number.isFinite(x);
 const mean=x=>x.length?x.reduce((s,v)=>s+v,0)/x.length:null;
 const sd=x=>x.length<2?null:Math.sqrt(x.reduce((s,v)=>s+(v-mean(x))**2,0)/(x.length-1));
@@ -92,6 +92,13 @@ export function feedbackTrajectory(trajectory,config,options){
   let e=o.initialError,bound=Math.abs(e),valid=0,deltaVPositive=0;
   const points=[{step:0,e,V:e*e,deltaV:null,iss_bound:bound,decision_error:null,attack_intensity:0,decision_available:false}];
   const decisionErrors=[],stateErrors=[],correctOn=[],correctOff=[],onSteps=[],offSteps=[];
+  const averageField=field=>mean(trajectory.map(row=>row[field]).filter(finite));
+  const availableAgents=averageField("available_proposals");
+  const usedAgents=method==="coordinate_trimmed_mean"?averageField("coordinate_trimmed_retained"):
+   method==="proposed_robust"?averageField("trust_trimmed_retained"):availableAgents;
+  const trustFilteredAgents=method==="proposed_robust"?(averageField("trust_filter_rejected")??0):0;
+  const trimmedAgents=method==="coordinate_trimmed_mean"?(averageField("coordinate_trimmed_count")??0):
+   method==="proposed_robust"?(averageField("trust_trimmed_count")??0):0;
   let maxDelta=-Infinity,maxD=0;
   for(let i=0;i<trajectory.length;i++){
    const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases,c.n_steps);
@@ -118,6 +125,8 @@ export function feedbackTrajectory(trajectory,config,options){
   const settling=points.findIndex((p,i)=>i>0&&points.slice(i).every(z=>Math.abs(z.e)<=o.tolerance));
   const metrics={
    method,decision_coverage:valid/c.n_steps,
+   mean_available_agents:availableAgents,mean_trust_filtered_agents:trustFilteredAgents,
+   mean_trimmed_agents:trimmedAgents,mean_used_agents:usedAgents,
    decision_mae:valid?mean(decisionErrors.map(Math.abs)):null,
    decision_rmse:valid?Math.sqrt(mean(decisionErrors.map(x=>x*x))):null,
    correct_probability:(correctOn.filter(Boolean).length+correctOff.filter(Boolean).length)/c.n_steps,
@@ -153,13 +162,14 @@ export function buildLyapunovResult(runs,config,options){
   return {method,...metrics};
  });
  const comparison=[];
- for(const baseline of METHODS.filter(m=>m!=="proposed_robust")){
+ for(let i=0;i<METHODS.length;i++)for(let j=i+1;j<METHODS.length;j++){
+  const baseline=METHODS[i],proposed=METHODS[j];
   for(const metric of ["decision_rmse","state_rmse","final_abs_error","correct_probability"]){
    const benefit=evaluated.map(x=>{
-    const a=x.data[baseline].metrics[metric],b=x.data.proposed_robust.metrics[metric];
+    const a=x.data[baseline].metrics[metric],b=x.data[proposed].metrics[metric];
     return finite(a)&&finite(b)?(metric==="correct_probability"?b-a:a-b):null;
    });
-   comparison.push({baseline,proposed:"proposed_robust",metric,benefit:statistic(benefit),paired:true});
+   comparison.push({baseline,proposed,metric,benefit:statistic(benefit),paired:true});
   }
  }
  const series=Array.from({length:c.n_steps+1},(_,i)=>{

@@ -1,12 +1,13 @@
 import React, {forwardRef,useEffect,useImperativeHandle,useRef,useState} from "react";
 import {CartesianGrid,Line,LineChart,ReferenceLine,ResponsiveContainer,Tooltip,XAxis,YAxis,Legend} from "recharts";
 import {ExperimentPanel as Panel,ExperimentKpi as Kpi} from "./ExperimentLayout.jsx";
-import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION,ATTACK_CURVES} from "./lyapunovStudy.js";
+import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION,ATTACK_CURVES,attackIntensityAt} from "./lyapunovStudy.js";
 
 const METHODS=[
  ["arithmetic_mean","Арифметическое среднее","#2672ff"],
  ["trust_weighted_mean","Среднее с учётом доверия","#079b91"],
- ["proposed_robust","Робастный метод","#123a63"]
+ ["coordinate_trimmed_mean","Робастное покоординатное усечённое среднее","#c17a2b"],
+ ["proposed_robust","Доверительно-усечённое среднее (комбинированный метод)","#123a63"]
 ];
 const n=(v,d=3)=>Number.isFinite(v)?v.toFixed(d):"—";
 const percent=v=>Number.isFinite(v)?(v*100).toFixed(1)+"%":"—";
@@ -125,11 +126,11 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   onRuntimeChange?.({running,completed:progress.completed,total:progress.total,
     lastCompletedAt:result?new Date().toISOString():null,hasResult:Boolean(result)});
  },[running,progress.completed,progress.total,Boolean(result)]);
- const timeline=Array.from({length:config.n_steps},(_,i)=>({step:i+1,intensity:(()=>{
-  let value=0;for(const p of phases)if(p.start<=i+1)value=p.intensity;else break;return value;
- })()}));
+ const timeline=Array.from({length:config.n_steps},(_,i)=>({
+  step:i+1,intensity:attackIntensityAt(i+1,phases,config.n_steps)
+ }));
  const metrics=result?.summary||[];
- const proposed=metrics.find(x=>x.method==="proposed_robust");
+ const combined=metrics.find(x=>x.method==="proposed_robust");
  const nominal=result?.nominal;
  const firstTrace=result?.trace;
  const traceForGraph=firstTrace?Array.from({length:config.n_steps+1},(_,i)=>{
@@ -161,6 +162,15 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
    <label>Число независимых прогонов R<input aria-label="Число прогонов устойчивости" type="number" min="1" max="200" step="1" value={runs} onChange={e=>setRuns(Number(e.target.value))} disabled={running}/></label>
   </div>
   <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} disabled={running}/>
+  <Panel title="Исследуемые методы агрегирования" subtitle="Все методы получают один и тот же набор доставленных предложений; проекция на безопасный интервал применяется ко всем методам.">
+   <ol>
+    <li><strong>Арифметическое среднее.</strong> Равные веса всех доступных предложений; доверие не используется.</li>
+    <li><strong>Среднее с учётом доверия.</strong> Все доступные предложения агрегируются с весами, пропорциональными репутации агента.</li>
+    <li><strong>Робастное покоординатное усечённое среднее.</strong> Без доверительной фильтрации удаляются заданные количества минимальных и максимальных значений; для текущей скалярной модели усечение выполняется по единственной координате.</li>
+    <li><strong>Доверительно-усечённое среднее (комбинированный метод).</strong> Сначала исключаются агенты с репутацией ниже порога τ, затем усечённо отбираются крайние значения и оставшиеся предложения агрегируются с учётом доверия. Если после фильтрации нет доступных агентов, метод воздерживается от решения.</li>
+   </ol>
+   <p className="r27-note">Параметры τ и число удаляемых значений с каждой стороны задаются в настройках расчёта доверия. Порог τ=0 отключает доверительную фильтрацию в комбинированном методе.</p>
+  </Panel>
   <ExportPanel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
    <ResponsiveContainer width="100%" height={215}><LineChart data={timeline}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis domain={[0,5]} tick={{fontSize:10}}/><Tooltip/><Line name="Множитель атаки" dataKey="intensity" stroke="#c75c4d" strokeWidth={2.4} dot={false} type="stepAfter" isAnimationActive={false}/></LineChart></ResponsiveContainer>
   </ExportPanel>
@@ -170,18 +180,20 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   {result?<React.Fragment>
    <div className="kpi-grid">
     <Kpi label="Номинальное сокращение |e|" value={n(nominal.rho,3)} note="ρ = |1 − k|, при отсутствии возмущений"/>
-    <Kpi label="Точность робастного метода" value={percent(proposed?.correct_probability.mean)} note="Доля правильных решений, включая отказы"/>
-    <Kpi label="RMSE коллективной оценки" value={n(proposed?.decision_rmse.mean,4)} note="Робастный метод, только принятые решения"/>
-    <Kpi label="RMSE состояния объекта" value={n(proposed?.state_rmse.mean,4)} note="Относительно x*, все шаги"/>
+    <Kpi label="Точность доверительно-усечённого метода" value={percent(combined?.correct_probability.mean)} note="Доля правильных решений, включая отказы"/>
+    <Kpi label="RMSE коллективной оценки" value={n(combined?.decision_rmse.mean,4)} note="Доверительно-усечённый метод, только принятые решения"/>
+    <Kpi label="RMSE состояния объекта" value={n(combined?.state_rmse.mean,4)} note="Доверительно-усечённый метод, все шаги"/>
    </div>
    <ExportPanel title="Сравнение показателей достижения цели исследования" subtitle={"R="+result.runs.length+"; средние по независимым прогонам, интервалы ±1,96·s/√R (без поправки на множественность)." }>
     <div className="table-wrap large"><table><thead><tr>
-     <th>Метод</th><th>P(прав.)</th><th>При атаке</th><th>При паузе</th><th>RMSE решения</th><th>RMSE состояния</th><th>|e(T)|</th><th>ΔV&gt;0 (доля)</th><th>Отказы</th>
+     <th>Метод</th><th>P(прав.)</th><th>При атаке</th><th>При паузе</th><th>RMSE решения</th><th>RMSE состояния</th><th>|e(T)|</th><th>ΔV&gt;0 (доля)</th><th>Отказы</th><th>Доступно</th><th>Фильтр доверия</th><th>Усечено</th><th>Использовано</th>
     </tr></thead><tbody>{metrics.map(row=><tr key={row.method}>
      <td>{METHODS.find(x=>x[0]===row.method)?.[1]}</td><td>{percent(row.correct_probability.mean)}</td>
      <td>{percent(row.attack_on_correct.mean)}</td><td>{percent(row.attack_off_correct.mean)}</td>
      <td>{n(row.decision_rmse.mean,4)}</td><td>{n(row.state_rmse.mean,4)}</td><td>{n(row.final_abs_error.mean,4)}</td>
      <td>{percent(row.positive_delta_v_fraction.mean)}</td><td>{n(row.missing_decisions.mean,1)}</td>
+     <td>{n(row.mean_available_agents.mean,1)}</td><td>{n(row.mean_trust_filtered_agents.mean,1)}</td>
+     <td>{n(row.mean_trimmed_agents.mean,1)}</td><td>{n(row.mean_used_agents.mean,1)}</td>
     </tr>)}</tbody></table></div>
    </ExportPanel>
    <ExportPanel title="Диагностика устойчивости и ограниченности отклонений" subtitle="Описательные показатели выбранного горизонта; оценка ISS не доказывает устойчивость динамики доверия и всех компонентов ИМАС.">
@@ -206,9 +218,9 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
    <ExportPanel title="Одношаговое изменение функции Ляпунова ΔV" subtitle="Первый прогон. Положительное ΔV указывает на рост V на данном шаге, но само по себе не является доказательством неустойчивости.">
     <ResponsiveContainer width="100%" height={310}><LineChart data={traceForGraph.slice(1)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><ReferenceLine y={0} stroke="#54677b"/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_deltaV"} stroke={color} dot={false} strokeWidth={1.8} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
    </ExportPanel>
-   <ExportPanel title="Парные эффекты робастного метода относительно альтернатив" subtitle="Разность внутри одинаковых случайных реализаций; положительное значение соответствует улучшению.">
-    <div className="table-wrap large"><table><thead><tr><th>Базовый метод</th><th>Показатель</th><th>Средний эффект</th><th>95%-й интервал</th><th>Пар</th></tr></thead><tbody>{result.comparison.map((x,i)=><tr key={i}>
-     <td>{METHODS.find(m=>m[0]===x.baseline)?.[1]}</td><td>{x.metric}</td><td>{n(x.benefit.mean,5)}</td>
+   <ExportPanel title="Парные сравнения методов" subtitle="Разность внутри одинаковых случайных реализаций; положительный эффект означает преимущество метода B по выбранной метрике.">
+    <div className="table-wrap large"><table><thead><tr><th>Метод A</th><th>Метод B</th><th>Показатель</th><th>Средний эффект</th><th>95%-й интервал</th><th>Пар</th></tr></thead><tbody>{result.comparison.map((x,i)=><tr key={i}>
+     <td>{METHODS.find(m=>m[0]===x.baseline)?.[1]}</td><td>{METHODS.find(m=>m[0]===x.proposed)?.[1]}</td><td>{x.metric}</td><td>{n(x.benefit.mean,5)}</td>
      <td>{x.benefit.ci95_half_width===null?"Не определён":n(x.benefit.mean-x.benefit.ci95_half_width,5)+" … "+n(x.benefit.mean+x.benefit.ci95_half_width,5)}</td>
      <td>{x.benefit.n}</td></tr>)}</tbody></table></div>
    </ExportPanel>

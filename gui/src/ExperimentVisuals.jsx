@@ -135,7 +135,7 @@ export function baselineReplay(data,config){
    return "normal";
   });
   const meanTrust=reps.filter(x=>x.step===step).map(x=>x.reputation).filter(Number.isFinite);
-  return {step,status,activeEdges:[],info:"Робастная оценка: "+round(row.proposed_robust)+"; эталон: "+round(row.truth)+"; среднее доверие: "+round(meanTrust.length?meanTrust.reduce((a,b)=>a+b,0)/meanTrust.length:0),value:row.proposed_robust};
+  return {step,status,activeEdges:[],info:"Доверительно-усечённая оценка: "+round(row.proposed_robust)+"; эталон: "+round(row.truth)+"; среднее доверие: "+round(meanTrust.length?meanTrust.reduce((a,b)=>a+b,0)/meanTrust.length:0),value:row.proposed_robust};
  });
- return {title:"Топология взаимодействия и изменение доверия",vertices,edges,frames,notes:"Схематическое представление класса топологии. Реальные пары отправитель–получатель в протоколе исходного ядра не фиксируются. Отображаемые связи — иллюстративная топология, а не подтверждённый журнал доставки.",valueLabel:"Робастная оценка"};
+ return {title:"Топология взаимодействия и изменение доверия",vertices,edges,frames,notes:"Схематическое представление класса топологии. Реальные пары отправитель–получатель в протоколе исходного ядра не фиксируются. Отображаемые связи — иллюстративная топология, а не подтверждённый журнал доставки.",valueLabel:"Доверительно-усечённая оценка"};
 }

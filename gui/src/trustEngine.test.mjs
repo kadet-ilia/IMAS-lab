@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
- createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,
+ createRng,validateConfig,betaTrust,eigenTrust,trimmedWeightedMean,aggregateProposals,coordinateTrimmedMean,
  simulateRun,makePlan,runTask,assembleResult,runActionSync,bootstrapComparisons,observations,attackIntensity,TRUST_MODEL_VERSION,buildAdjacency,exogenousEventRng,EXOGENOUS_EVENT_STAGES,transport
 } from "./trustEngine.js";
 
@@ -28,7 +28,31 @@ test("Beta evidence, EigenTrust, trimmed mean invariants",()=>{
  const rep=eigenTrust([[.9,.2],[.6,.9]],[true,true],.85);
  assert.ok(rep.every(x=>x>=0&&x<=1.000001));
  assert.equal(trimmedWeightedMean([0,1,2,3,100],[1,1,1,1,1],1),2);
+ assert.equal(coordinateTrimmedMean([0,1,2,3,100],1),2);
  assert.throws(()=>trimmedWeightedMean([],[],0));
+});
+test("four aggregation methods separate trust weighting, trust filtering and coordinate trimming",()=>{
+ const c=validateConfig({...cfg,n_agents:5,n_byzantine:1,n_steps:8,trim_each_side:1,
+  aggregation_trust_threshold:.5,safe_action_min:-100,safe_action_max:100});
+ const values=[0,1,2,3,100],trust=[.9,.9,.9,.1,.1],available=Array(5).fill(true);
+ const result=aggregateProposals(values,trust,available,c);
+ assert.deepEqual(Object.keys(result.decisions),[
+  "arithmetic_mean","trust_weighted_mean","coordinate_trimmed_mean","proposed_robust"
+ ]);
+ assert.equal(result.decisions.arithmetic_mean,21.2);
+ assert.ok(Math.abs(result.decisions.trust_weighted_mean-13/2.9)<1e-12);
+ assert.equal(result.decisions.coordinate_trimmed_mean,2);
+ assert.equal(result.decisions.proposed_robust,1);
+ assert.equal(result.diagnostics.available_count,5);
+ assert.equal(result.diagnostics.coordinate_trimmed_count,2);
+ assert.equal(result.diagnostics.trust_filter_rejected,2);
+ assert.equal(result.diagnostics.trust_trimmed_count,2);
+ assert.equal(result.diagnostics.trust_trimmed_retained,1);
+ const none=aggregateProposals(values,trust,available,{...c,aggregation_trust_threshold:1});
+ assert.equal(none.decisions.proposed_robust,null);
+ assert.equal(none.decisions.coordinate_trimmed_mean,2);
+ assert.equal(none.diagnostics.trust_filter_eligible,0);
+ assert.throws(()=>validateConfig({...cfg,aggregation_trust_threshold:1.1}),/aggregation_trust_threshold/);
 });
 test("all four attack modes, networks and Sybil variants remain finite",()=>{
  for(const scenario of ["static_bias","subtle_bias","on_off","collusion"]){
@@ -37,7 +61,7 @@ test("all four attack modes, networks and Sybil variants remain finite",()=>{
     message_loss_probability:.14,message_delay_min_steps:0,message_delay_max_steps:2,
     bandwidth_messages_per_step:22,partition_enabled:true,
     partition_start_step:5,partition_end_step:8,n_sybil_agents:2,sybil_activation_step:4},scenario,0,0,true);
-   assert.equal(n.rows.length,3);
+   assert.equal(n.rows.length,4);
    assert.ok(n.rows.every(r=>Number.isFinite(r.rmse_to_truth)&&r.delivery_ratio>=0&&r.delivery_ratio<=1));
    assert.ok(n.result.summary.communication_lost>=0);
    assert.ok(n.result.summary.communication_bandwidth_dropped>=0);
@@ -57,11 +81,11 @@ test("honest-only baseline is near reference, adversarial mean is affected",()=>
 test("Monte Carlo contract, confidence bands, distributions and bootstrap",()=>{
  const result=runActionSync({action:"monte_carlo",scenario:"collusion",config:cfg});
  assert.equal(result.runs.length,12);
- assert.equal(result.summary.length,3);
+ assert.equal(result.summary.length,4);
  assert.equal(result.trajectory_statistics.length,18);
  assert.ok(result.trajectory_statistics[0].proposed_robust_band90.length===2);
- assert.equal(result.distributions.length,15);
- assert.equal(result.bootstrap_comparisons.length,8);
+ assert.equal(result.distributions.length,20);
+ assert.equal(result.bootstrap_comparisons.length,24);
  assert.equal(result.completed_runs,4);
 });
 test("one-factor sensitivity contract, browser-compatible task resumption",()=>{
@@ -77,7 +101,7 @@ test("one-factor sensitivity contract, browser-compatible task resumption",()=>{
 test("fractional factorial sensitivity returns main and pair effects",()=>{
  const out=runActionSync({action:"sensitivity",sensitivity_mode:"factorial",scenario:"collusion",config:cfg});
  assert.equal(out.mode,"factorial");
- assert.equal(out.design_points.length,96);
+ assert.equal(out.design_points.length,128);
  assert.ok(out.main_effects.length>=6);
  assert.ok(out.interaction_effects.length>0);
  assert.equal(out.partial,false);
@@ -274,8 +298,8 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  assert.ok(pairs.some(x=>x.c.isolation_enabled===false));
  assert.ok(pairs.some(x=>x.c.isolation_enabled===true));
  const full=runActionSync(payload);
- assert.equal(full.ablation_rows.length,12);
- assert.equal(full.ablation_contrasts.length,26);
+ assert.equal(full.ablation_rows.length,16);
+ assert.equal(full.ablation_contrasts.length,48);
  assert.equal(full.design.strictCommonRandomNumbers,true);
  assert.match(full.design.exogenousEventScheme,/keyed-by-seed-run/);
  assert.ok(plan.tasks.every(task=>task.c.paired_exogenous_events===true));
@@ -295,8 +319,8 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  }
  assert.ok(full.ablation_contrasts.every(x=>x.n_pairs===10));
  assert.ok(full.ablation_contrasts.every(x=>x.ci95_low!==null));
- assert.equal(full.multipleTesting.tested,26);
- assert.equal(full.multipleTesting.planned,26);
+ assert.equal(full.multipleTesting.tested,48);
+ assert.equal(full.multipleTesting.planned,48);
  assert.equal(full.multipleTesting.correction,"Holm-FWER-0.05");
  assert.ok(full.ablation_contrasts.every(x=>Number.isFinite(x.pRaw)&&Number.isFinite(x.pHolm)));
  assert.ok(full.ablation_contrasts.every(x=>x.pHolm>=x.pRaw&&x.pHolm<=1));
