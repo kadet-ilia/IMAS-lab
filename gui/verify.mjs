@@ -228,6 +228,12 @@ for(const [id,name] of trustModes){
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
 await stepInput.fill("30");await stepInput.press("Tab");
+const phaseCards=page.locator(".lyapunov-phase");
+if(await phaseCards.count()!==5)throw Error("Stability editor must display five attack phases in one row");
+const rampPhase=phaseCards.nth(1);
+await rampPhase.locator("input").first().fill("5");
+await rampPhase.locator("select").selectOption("linear");
+if((await rampPhase.locator("select").inputValue())!=="linear")throw Error("Linear attack ramp selector did not persist");
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 await page.getByRole("button",{name:"Выполнить исследование"}).click();
 try{
@@ -241,13 +247,33 @@ const [lyapFile]=await Promise.all([
  page.getByRole("button",{name:"Экспорт JSON"}).click()
 ]);
 const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
-if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
+if(lyapData.runs?.length!==1 || lyapData.summary?.length!==4 ||
   lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
   !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
   !lyapData.series.some(row=>row.attack_intensity>1) ||
   !lyapData.series.some(row=>row.attack_intensity===0)){
  throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
 }
+if(!lyapData.series.some(row=>row.attack_intensity>0&&row.attack_intensity<1))
+ throw Error("Linear ramp was not applied to simulated attack intensity");
+const svgPanel=page.locator(".lyapunov-export-tools").first();
+const [svgFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),svgPanel.getByRole("button",{name:"SVG"}).click()
+]);
+if(!svgFile.suggestedFilename().endsWith(".svg"))throw Error("Individual graph SVG export failed");
+const [pngFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),svgPanel.getByRole("button",{name:"PNG"}).click()
+]);
+if(!pngFile.suggestedFilename().endsWith(".png"))throw Error("Individual graph PNG export failed");
+const tablePanel=page.locator(".lyapunov-export-tools").nth(1);
+const [csvFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ tablePanel.getByRole("button",{name:"CSV"}).click()
+]);
+if(!csvFile.suggestedFilename().endsWith(".csv"))throw Error("Individual table CSV export failed");
+const expectedMethods=["arithmetic_mean","trust_weighted_mean","coordinate_trimmed_mean","proposed_robust"];
+if(JSON.stringify(lyapData.summary.map(row=>row.method))!==JSON.stringify(expectedMethods))
+ throw Error("Lyapunov worker: the four aggregation methods are not all present in the expected order");
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
@@ -682,9 +708,9 @@ await page.locator(".sensitivity-action select").selectOption("ablation");
 await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
 await page.getByText("Абляционный эксперимент: режим атаки × управляющая изоляция",{exact:true}).waitFor({timeout:45000});
 report.ablationRows=await page.locator("section.panel").filter({hasText:"Абляционный эксперимент: режим атаки × управляющая изоляция"}).locator("tbody tr").count();
-report.ablationWorkerSmoke=report.ablationRows===12;
+report.ablationWorkerSmoke=report.ablationRows===16;
 
-if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×3 ablation rows from Web Workers, got "+report.ablationRows);
+if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×4 ablation rows from Web Workers, got "+report.ablationRows);
 
 // A repeated call must read the complete scientific result from the cache.
 await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
@@ -733,7 +759,7 @@ for(const pool of [4,1]){
  poolResults[pool]=await readAblationExport();
  if(poolResults[pool].parallel_workers_used!==pool)
   throw Error("UP-35: requested "+pool+" workers, got "+poolResults[pool].parallel_workers_used);
- if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==12)
+ if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==16)
   throw Error("UP-35: incomplete real browser calculation at pool size "+pool);
 }
 report.workerPool4=poolResults[4].parallel_workers_used;

@@ -1,12 +1,13 @@
 import React, {forwardRef,useEffect,useImperativeHandle,useRef,useState} from "react";
 import {CartesianGrid,Line,LineChart,ReferenceLine,ResponsiveContainer,Tooltip,XAxis,YAxis,Legend} from "recharts";
 import {ExperimentPanel as Panel,ExperimentKpi as Kpi} from "./ExperimentLayout.jsx";
-import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION} from "./lyapunovStudy.js";
+import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION,ATTACK_CURVES,attackIntensityAt} from "./lyapunovStudy.js";
 
 const METHODS=[
  ["arithmetic_mean","Арифметическое среднее","#2672ff"],
  ["trust_weighted_mean","Среднее с учётом доверия","#079b91"],
- ["proposed_robust","Робастный метод","#123a63"]
+ ["coordinate_trimmed_mean","Робастное покоординатное усечённое среднее","#c17a2b"],
+ ["proposed_robust","Доверительно-усечённое среднее (комбинированный метод)","#123a63"]
 ];
 const n=(v,d=3)=>Number.isFinite(v)?v.toFixed(d):"—";
 const percent=v=>Number.isFinite(v)?(v*100).toFixed(1)+"%":"—";
@@ -14,24 +15,61 @@ function download(name,body,type){
  const blob=new Blob([body],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
  link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);
 }
+
+function fileBase(value){return (value||"imas-export").toLowerCase().replace(/[^a-zа-яё0-9]+/gi,"-").replace(/^-|-$/g,"").slice(0,70)||"imas-export";}
+function ExportActions({targetRef,title}){
+ const [ready,setReady]=useState(false);
+ useEffect(()=>{setReady(true);},[targetRef,title]);
+ const hasSvg=()=>ready&&Boolean(targetRef.current?.querySelector("svg"));
+ const hasTable=()=>ready&&Boolean(targetRef.current?.querySelector("table"));
+ const saveSvg=()=>{
+  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
+  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");
+  download(fileBase(title)+".svg",new XMLSerializer().serializeToString(clone),"image/svg+xml;charset=utf-8");
+ };
+ const savePng=()=>{
+  const svg=targetRef.current?.querySelector("svg");if(!svg)return;
+  const clone=svg.cloneNode(true);clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+  const box=svg.getBoundingClientRect();clone.setAttribute("width",Math.ceil(box.width)||1200);clone.setAttribute("height",Math.ceil(box.height)||600);
+  const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)],{type:"image/svg+xml;charset=utf-8"}));
+  const image=new Image();image.onload=()=>{const canvas=document.createElement("canvas");canvas.width=image.width;canvas.height=image.height;canvas.getContext("2d").drawImage(image,0,0);canvas.toBlob(blob=>{if(blob){const png=URL.createObjectURL(blob),a=document.createElement("a");a.href=png;a.download=fileBase(title)+".png";a.click();URL.revokeObjectURL(png);}URL.revokeObjectURL(url);});};image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
+ };
+ const saveCsv=()=>{
+  const table=targetRef.current?.querySelector("table");if(!table)return;
+  const rows=[...table.rows].map(row=>[...row.cells].map(cell=>'"'+cell.innerText.replace(/"/g,'""').replace(/\\s+/g," ").trim()+'"').join(";"));
+  download(fileBase(title)+".csv","\\uFEFF"+rows.join("\\r\\n"),"text/csv;charset=utf-8");
+ };
+ return <div className="lyapunov-export-tools">
+  {hasSvg()?<><button type="button" className="inline-action" onClick={saveSvg} title="Сохранить график или схему в SVG">SVG</button><button type="button" className="inline-action" onClick={savePng} title="Сохранить график или схему в PNG">PNG</button></>:null}
+  {hasTable()?<button type="button" className="inline-action" onClick={saveCsv} title="Сохранить таблицу в CSV">CSV</button>:null}
+ </div>;
+}
+function ExportPanel({title,children,...props}){
+ const targetRef=useRef(null);
+ return <Panel title={title} headerAside={<ExportActions targetRef={targetRef} title={title}/>} {...props}>
+  <div ref={targetRef} className="lyapunov-export-content">{children}</div>
+ </Panel>;
+}
+
 function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
  const edit=(index,key,value)=>setPhases(prev=>prev.map((p,i)=>i===index?{...p,[key]:value}:p));
  const add=()=>{
   const last=phases.at(-1).start;
-  if(last<steps)setPhases(prev=>[...prev,{start:last+1,intensity:0}]);
+  if(last<steps&&phases.length<5)setPhases(prev=>[...prev,{start:last+1,intensity:0,curve:"constant"}]);
  };
- return <Panel title="Динамическая активность атаки" subtitle="Множитель 0 — атака отключена; 1 — номинальное смещение; 2 — удвоенная амплитуда. Значение сохраняется до начала следующей фазы.">
+ return <Panel title="Динамическая активность атаки" subtitle="До пяти фаз в одной строке. Интенсивность 0…5; выбранный закон изменяет её от уровня предыдущей фазы к заданному значению в пределах текущей фазы.">
   <div className="lyapunov-phase-grid">
    {phases.map((phase,i)=><div className="lyapunov-phase" key={i}>
     <label>Начало, шаг<input type="number" min={i?2:1} max={steps} step="1" disabled={disabled||i===0}
       value={phase.start} onChange={e=>edit(i,"start",e.target.value===""?NaN:Number(e.target.value))}/></label>
-    <label>Интенсивность<input type="number" min="0" max="5" step=".1" disabled={disabled}
+    <label>Интенсивность, до<input type="number" min="0" max="5" step=".1" disabled={disabled}
       value={phase.intensity} onChange={e=>edit(i,"intensity",e.target.value===""?NaN:Number(e.target.value))}/></label>
+    <label>Закон изменения<select disabled={disabled} value={phase.curve||"constant"} onChange={e=>edit(i,"curve",e.target.value)}>{ATTACK_CURVES.map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
     {i>0?<button className="inline-action" type="button" disabled={disabled} onClick={()=>setPhases(prev=>prev.filter((_,j)=>i!==j))}>Удалить</button>:<span className="lyapunov-fixed-phase">Первая фаза</span>}
    </div>)}
   </div>
   <div className="action-controls lyapunov-phase-actions">
-   <button className="secondary-button" type="button" disabled={disabled||phases.length>=30||phases.at(-1).start>=steps} onClick={add}>Добавить фазу</button>
+   <button className="secondary-button" type="button" disabled={disabled||phases.length>=5||phases.at(-1).start>=steps} onClick={add}>Добавить фазу</button>
    <button className="secondary-button" type="button" disabled={disabled} onClick={()=>setPhases(defaultAttackPhases(steps,attackStart))}>Типовой профиль on–off–усиление</button>
   </div>
  </Panel>;
@@ -88,11 +126,11 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   onRuntimeChange?.({running,completed:progress.completed,total:progress.total,
     lastCompletedAt:result?new Date().toISOString():null,hasResult:Boolean(result)});
  },[running,progress.completed,progress.total,Boolean(result)]);
- const timeline=Array.from({length:config.n_steps},(_,i)=>({step:i+1,intensity:(()=>{
-  let value=0;for(const p of phases)if(p.start<=i+1)value=p.intensity;else break;return value;
- })()}));
+ const timeline=Array.from({length:config.n_steps},(_,i)=>({
+  step:i+1,intensity:attackIntensityAt(i+1,phases,config.n_steps)
+ }));
  const metrics=result?.summary||[];
- const proposed=metrics.find(x=>x.method==="proposed_robust");
+ const combined=metrics.find(x=>x.method==="proposed_robust");
  const nominal=result?.nominal;
  const firstTrace=result?.trace;
  const traceForGraph=firstTrace?Array.from({length:config.n_steps+1},(_,i)=>{
@@ -124,30 +162,41 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
    <label>Число независимых прогонов R<input aria-label="Число прогонов устойчивости" type="number" min="1" max="200" step="1" value={runs} onChange={e=>setRuns(Number(e.target.value))} disabled={running}/></label>
   </div>
   <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} disabled={running}/>
-  <Panel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
-   <ResponsiveContainer width="100%" height={215}><LineChart data={timeline}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis domain={[0,5]} tick={{fontSize:10}}/><Tooltip/><Line name="Множитель атаки" dataKey="intensity" stroke="#c75c4d" strokeWidth={2.4} dot={false} type="stepAfter" isAnimationActive={false}/></LineChart></ResponsiveContainer>
+  <Panel title="Исследуемые методы агрегирования" subtitle="Все методы получают один и тот же набор доставленных предложений; проекция на безопасный интервал применяется ко всем методам.">
+   <ol>
+    <li><strong>Арифметическое среднее.</strong> Равные веса всех доступных предложений; доверие не используется.</li>
+    <li><strong>Среднее с учётом доверия.</strong> Все доступные предложения агрегируются с весами, пропорциональными репутации агента.</li>
+    <li><strong>Робастное покоординатное усечённое среднее.</strong> Без доверительной фильтрации удаляются заданные количества минимальных и максимальных значений; для текущей скалярной модели усечение выполняется по единственной координате.</li>
+    <li><strong>Доверительно-усечённое среднее (комбинированный метод).</strong> Сначала исключаются агенты с репутацией ниже порога τ, затем усечённо отбираются крайние значения и оставшиеся предложения агрегируются с учётом доверия. Если после фильтрации нет доступных агентов, метод воздерживается от решения.</li>
+   </ol>
+   <p className="r27-note">Параметры τ и число удаляемых значений с каждой стороны задаются в настройках расчёта доверия. Порог τ=0 отключает доверительную фильтрацию в комбинированном методе.</p>
   </Panel>
+  <ExportPanel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
+   <ResponsiveContainer width="100%" height={215}><LineChart data={timeline}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis domain={[0,5]} tick={{fontSize:10}}/><Tooltip/><Line name="Множитель атаки" dataKey="intensity" stroke="#c75c4d" strokeWidth={2.4} dot={false} type="stepAfter" isAnimationActive={false}/></LineChart></ResponsiveContainer>
+  </ExportPanel>
   {!valid?<p role="alert" className="imas-validation-error">{validationError}</p>:null}
   {error?<p role="alert" className="error-banner">{error}</p>:null}
   {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Состояние вычислительного потока: {({idle:"готов",launched:"запуск",worker_imported:"загружен",computing:"вычисление",result:"завершён",error:"ошибка",stopped:"остановлен"}[workerStage]||workerStage)}.</p>:null}
   {result?<React.Fragment>
    <div className="kpi-grid">
     <Kpi label="Номинальное сокращение |e|" value={n(nominal.rho,3)} note="ρ = |1 − k|, при отсутствии возмущений"/>
-    <Kpi label="Точность робастного метода" value={percent(proposed?.correct_probability.mean)} note="Доля правильных решений, включая отказы"/>
-    <Kpi label="RMSE коллективной оценки" value={n(proposed?.decision_rmse.mean,4)} note="Робастный метод, только принятые решения"/>
-    <Kpi label="RMSE состояния объекта" value={n(proposed?.state_rmse.mean,4)} note="Относительно x*, все шаги"/>
+    <Kpi label="Точность доверительно-усечённого метода" value={percent(combined?.correct_probability.mean)} note="Доля правильных решений, включая отказы"/>
+    <Kpi label="RMSE коллективной оценки" value={n(combined?.decision_rmse.mean,4)} note="Доверительно-усечённый метод, только принятые решения"/>
+    <Kpi label="RMSE состояния объекта" value={n(combined?.state_rmse.mean,4)} note="Доверительно-усечённый метод, все шаги"/>
    </div>
-   <Panel title="Сравнение показателей достижения цели исследования" subtitle={"R="+result.runs.length+"; средние по независимым прогонам, интервалы ±1,96·s/√R (без поправки на множественность)." }>
+   <ExportPanel title="Сравнение показателей достижения цели исследования" subtitle={"R="+result.runs.length+"; средние по независимым прогонам, интервалы ±1,96·s/√R (без поправки на множественность)." }>
     <div className="table-wrap large"><table><thead><tr>
-     <th>Метод</th><th>P(прав.)</th><th>При атаке</th><th>При паузе</th><th>RMSE решения</th><th>RMSE состояния</th><th>|e(T)|</th><th>ΔV&gt;0 (доля)</th><th>Отказы</th>
+     <th>Метод</th><th>P(прав.)</th><th>При атаке</th><th>При паузе</th><th>RMSE решения</th><th>RMSE состояния</th><th>|e(T)|</th><th>ΔV&gt;0 (доля)</th><th>Отказы</th><th>Доступно</th><th>Фильтр доверия</th><th>Усечено</th><th>Использовано</th>
     </tr></thead><tbody>{metrics.map(row=><tr key={row.method}>
      <td>{METHODS.find(x=>x[0]===row.method)?.[1]}</td><td>{percent(row.correct_probability.mean)}</td>
      <td>{percent(row.attack_on_correct.mean)}</td><td>{percent(row.attack_off_correct.mean)}</td>
      <td>{n(row.decision_rmse.mean,4)}</td><td>{n(row.state_rmse.mean,4)}</td><td>{n(row.final_abs_error.mean,4)}</td>
      <td>{percent(row.positive_delta_v_fraction.mean)}</td><td>{n(row.missing_decisions.mean,1)}</td>
+     <td>{n(row.mean_available_agents.mean,1)}</td><td>{n(row.mean_trust_filtered_agents.mean,1)}</td>
+     <td>{n(row.mean_trimmed_agents.mean,1)}</td><td>{n(row.mean_used_agents.mean,1)}</td>
     </tr>)}</tbody></table></div>
-   </Panel>
-   <Panel title="Диагностика устойчивости и ограниченности отклонений" subtitle="Описательные показатели выбранного горизонта; оценка ISS не доказывает устойчивость динамики доверия и всех компонентов ИМАС.">
+   </ExportPanel>
+   <ExportPanel title="Диагностика устойчивости и ограниченности отклонений" subtitle="Описательные показатели выбранного горизонта; оценка ISS не доказывает устойчивость динамики доверия и всех компонентов ИМАС.">
     <div className="table-wrap large"><table><thead><tr><th>Метод</th><th>max ΔV</th><th>max |δ|</th><th>Радиус по выборке</th><th>Граница |e(T)|</th><th>Шаг установления</th></tr></thead><tbody>{metrics.map(row=><tr key={row.method}>
      <td>{METHODS.find(x=>x[0]===row.method)?.[1]}</td>
      <td>{n(row.max_delta_v.mean,5)}</td>
@@ -156,25 +205,25 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
      <td>{n(row.sampled_iss_bound_final.mean,5)}</td>
      <td>{row.settling_step.n?n(row.settling_step.mean,1):"Не достигнуто"}</td>
     </tr>)}</tbody></table></div>
-   </Panel>
-   <Panel title="Точность коллективных решений в динамике" subtitle="RMSE на каждом шаге по R прогонам с выданными решениями. Пропуски означают, что решения не формировались.">
+   </ExportPanel>
+   <ExportPanel title="Точность коллективных решений в динамике" subtitle="RMSE на каждом шаге по R прогонам с выданными решениями. Пропуски означают, что решения не формировались.">
     <ResponsiveContainer width="100%" height={315}><LineChart data={result.series.slice(1)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_decision_rmse"} stroke={color} dot={false} connectNulls={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Функция Ляпунова по методам" subtitle="Средняя V(t)=e(t)² по R прогонам; логарифмическая шкала, нулевые значения отображаются на уровне 10⁻¹⁶.">
+   </ExportPanel>
+   <ExportPanel title="Функция Ляпунова по методам" subtitle="Средняя V(t)=e(t)² по R прогонам; логарифмическая шкала, нулевые значения отображаются на уровне 10⁻¹⁶.">
     <ResponsiveContainer width="100%" height={360}><LineChart data={meanGraph}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis scale="log" domain={[1e-16,"auto"]} tick={{fontSize:10}}/><Tooltip formatter={v=>n(v,8)}/><Legend/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_V_mean"} stroke={color} dot={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Отклонение состояния от целевого равновесия" subtitle="Первый прогон: положительное/отрицательное отклонение; пунктиром показан заданный допуск ±ε.">
+   </ExportPanel>
+   <ExportPanel title="Отклонение состояния от целевого равновесия" subtitle="Первый прогон: положительное/отрицательное отклонение; пунктиром показан заданный допуск ±ε.">
     <ResponsiveContainer width="100%" height={315}><LineChart data={traceForGraph}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><ReferenceLine y={tolerance} stroke="#8898a8" strokeDasharray="4 4"/><ReferenceLine y={-tolerance} stroke="#8898a8" strokeDasharray="4 4"/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_e"} stroke={color} dot={false} strokeWidth={2} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Одношаговое изменение функции Ляпунова ΔV" subtitle="Первый прогон. Положительное ΔV указывает на рост V на данном шаге, но само по себе не является доказательством неустойчивости.">
+   </ExportPanel>
+   <ExportPanel title="Одношаговое изменение функции Ляпунова ΔV" subtitle="Первый прогон. Положительное ΔV указывает на рост V на данном шаге, но само по себе не является доказательством неустойчивости.">
     <ResponsiveContainer width="100%" height={310}><LineChart data={traceForGraph.slice(1)}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/><Legend/><ReferenceLine y={0} stroke="#54677b"/>{METHODS.map(([id,label,color])=><Line key={id} name={label} type="monotone" dataKey={id+"_deltaV"} stroke={color} dot={false} strokeWidth={1.8} isAnimationActive={false}/>)}</LineChart></ResponsiveContainer>
-   </Panel>
-   <Panel title="Парные эффекты робастного метода относительно альтернатив" subtitle="Разность внутри одинаковых случайных реализаций; положительное значение соответствует улучшению.">
-    <div className="table-wrap large"><table><thead><tr><th>Базовый метод</th><th>Показатель</th><th>Средний эффект</th><th>95%-й интервал</th><th>Пар</th></tr></thead><tbody>{result.comparison.map((x,i)=><tr key={i}>
-     <td>{METHODS.find(m=>m[0]===x.baseline)?.[1]}</td><td>{x.metric}</td><td>{n(x.benefit.mean,5)}</td>
+   </ExportPanel>
+   <ExportPanel title="Парные сравнения методов" subtitle="Разность внутри одинаковых случайных реализаций; положительный эффект означает преимущество метода B по выбранной метрике.">
+    <div className="table-wrap large"><table><thead><tr><th>Метод A</th><th>Метод B</th><th>Показатель</th><th>Средний эффект</th><th>95%-й интервал</th><th>Пар</th></tr></thead><tbody>{result.comparison.map((x,i)=><tr key={i}>
+     <td>{METHODS.find(m=>m[0]===x.baseline)?.[1]}</td><td>{METHODS.find(m=>m[0]===x.proposed)?.[1]}</td><td>{x.metric}</td><td>{n(x.benefit.mean,5)}</td>
      <td>{x.benefit.ci95_half_width===null?"Не определён":n(x.benefit.mean-x.benefit.ci95_half_width,5)+" … "+n(x.benefit.mean+x.benefit.ci95_half_width,5)}</td>
      <td>{x.benefit.n}</td></tr>)}</tbody></table></div>
-   </Panel>
+   </ExportPanel>
    <Panel title="Условия интерпретации устойчивости">
     <p>В частной модели e(t+1) = (1−k)e(t) − kδ(t), где δ(t) — ошибка коллективной оценки из ядра доверия. При отказе в выдаче решения применяется удержание e(t+1)=e(t). V(t)=e(t)²; при δ=0 и 0&lt;k&lt;2 выполняется V(t+1)=(1−k)²V(t) и номинальная асимптотическая устойчивость.</p>
     <p>При произвольном ненулевом δ(t) точка e=0, как правило, перестаёт быть равновесием. Для принятых решений справедливо |e(t+1)| ≤ ρ|e(t)| + k|δ(t)|, ρ=|1−k|&lt;1. Это оценка вход–состояние (ISS) для введённой скалярной модели, а не доказательство устойчивости полного контура ИМАС.</p>

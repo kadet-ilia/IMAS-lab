@@ -117,7 +117,7 @@ def independent_network_trace(result):
     last_sent=[-1000000000]*n
     history=[]
     decisions={method:[] for method in (
-        "arithmetic_mean","trust_weighted_mean","proposed_robust")}
+        "arithmetic_mean","trust_weighted_mean","coordinate_trimmed_mean","proposed_robust")}
     expected_isolations=[]
     channel={
         key:{field:0 for field in ("attempted","delivered","lost","bandwidth_dropped","expired")}
@@ -209,15 +209,22 @@ def independent_network_trace(result):
         values=[last_values[i] for i in available_ids]
         weights=[max(rep[i],c["minimum_weight"]) for i in available_ids]
         if values:
-            center=quantile(values,.5)
-            clipped=[max(center-c["clip_radius"],
-                         min(center+c["clip_radius"],x)) for x in values]
+            project=lambda x:min(c["safe_action_max"],max(c["safe_action_min"],x))
+            trusted_positions=[j for j,i in enumerate(available_ids)
+                               if rep[i]>=c["aggregation_trust_threshold"]]
+            if trusted_positions:
+                trusted_values=[values[j] for j in trusted_positions]
+                trusted_weights=[weights[j] for j in trusted_positions]
+                combined=project(trim_reference({"values":trusted_values,
+                    "weights":trusted_weights,"k":c["trim_each_side"]}))
+            else:
+                combined=None
             decision={
-                "arithmetic_mean":sum(values)/len(values),
-                "trust_weighted_mean":sum(x*w for x,w in zip(values,weights))/sum(weights),
-                "proposed_robust":min(c["safe_action_max"],max(c["safe_action_min"],
-                     trim_reference({"values":clipped,"weights":weights,
-                                     "k":c["trim_each_side"]})))
+                "arithmetic_mean":project(sum(values)/len(values)),
+                "trust_weighted_mean":project(sum(x*w for x,w in zip(values,weights))/sum(weights)),
+                "coordinate_trimmed_mean":project(trim_reference({"values":values,
+                    "weights":[1.0]*len(values),"k":c["trim_each_side"]})),
+                "proposed_robust":combined
             }
         else:
             decision={method:None for method in decisions}

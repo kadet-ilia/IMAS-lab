@@ -10,20 +10,29 @@
  */
 import {METHODS, simulateRun, validateConfig, TRUST_MODEL_VERSION} from "./trustEngine.js";
 
-export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-1.0";
+export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-1.2-four-methods";
 const finite=x=>typeof x==="number"&&Number.isFinite(x);
 const mean=x=>x.length?x.reduce((s,v)=>s+v,0)/x.length:null;
 const sd=x=>x.length<2?null:Math.sqrt(x.reduce((s,v)=>s+(v-mean(x))**2,0)/(x.length-1));
 const roundStart=(x,t)=>Math.max(1,Math.min(t,Math.round(x)));
+export const ATTACK_CURVES=[["constant","Постоянная"],["linear","Линейное нарастание"],["exponential","Экспоненциальное"],["parabolic","Параболическое"],["hyperbolic","Гиперболическое"]];
+const curveProgress=(u,curve)=>{
+ const x=Math.max(0,Math.min(1,u));
+ if(curve==="linear")return x;
+ if(curve==="exponential"){const a=4;return (Math.exp(a*x)-1)/(Math.exp(a)-1);}
+ if(curve==="parabolic")return x*x;
+ if(curve==="hyperbolic"){const a=4;return a*x/(1+(a-1)*x);}
+ return 1;
+};
 
 export function defaultAttackPhases(steps,attackStart=20){
  const t=Math.max(1,Math.round(steps)),start=roundStart(attackStart,t);
  const candidates=[
-  {start:1,intensity:0},
-  {start,intensity:1},
-  {start:roundStart(Math.max(start+1,Math.floor(t*.40)),t),intensity:0},
-  {start:roundStart(Math.max(start+2,Math.floor(t*.58)),t),intensity:1.5},
-  {start:roundStart(Math.max(start+3,Math.floor(t*.78)),t),intensity:0}
+  {start:1,intensity:0,curve:"constant"},
+  {start,intensity:1,curve:"constant"},
+  {start:roundStart(Math.max(start+1,Math.floor(t*.40)),t),intensity:0,curve:"constant"},
+  {start:roundStart(Math.max(start+2,Math.floor(t*.58)),t),intensity:1.5,curve:"constant"},
+  {start:roundStart(Math.max(start+3,Math.floor(t*.78)),t),intensity:0,curve:"constant"}
  ];
  const distinct=new Map();
  for(const p of candidates)if(!distinct.has(p.start)||p.start===1&&start===1)distinct.set(p.start,p);
@@ -31,23 +40,32 @@ export function defaultAttackPhases(steps,attackStart=20){
 }
 
 export function validateAttackPhases(phases,steps){
- if(!Array.isArray(phases)||!phases.length||phases.length>30)throw Error("Профиль атаки: требуется от 1 до 30 фаз");
+ if(!Array.isArray(phases)||!phases.length||phases.length>5)throw Error("Профиль атаки: требуется от 1 до 5 фаз");
  let previous=0;
  for(const [i,p] of phases.entries()){
   if(!p||!Number.isInteger(p.start)||p.start<=previous||p.start>steps)
    throw Error("Профиль атаки: начала фаз должны возрастать и лежать в пределах 1…T (фаза "+(i+1)+")");
   if(!finite(p.intensity)||p.intensity<0||p.intensity>5)
    throw Error("Профиль атаки: множитель интенсивности должен лежать в пределах 0…5");
+  if(!ATTACK_CURVES.some(([id])=>id===(p.curve||"constant")))throw Error("Профиль атаки: неизвестный закон изменения интенсивности");
   previous=p.start;
  }
  if(phases[0].start!==1)throw Error("Профиль атаки: первая фаза должна начинаться с шага 1");
- return phases.map(p=>({start:p.start,intensity:p.intensity}));
+ return phases.map(p=>({start:p.start,intensity:p.intensity,curve:p.curve||"constant"}));
 }
 
-export function attackIntensityAt(step,phases){
+export function attackIntensityAt(step,phases,totalSteps=null){
  let value=0;
- for(const p of phases){if(p.start>step)break;value=p.intensity;}
- return value;
+ for(let i=0;i<phases.length;i++){
+  const p=phases[i],next=phases[i+1];
+  if(p.start>step)break;
+  const curve=p.curve||"constant";
+  if(curve==="constant"){value=p.intensity;continue;}
+  const end=next?next.start-1:(Number.isInteger(totalSteps)?totalSteps:p.start);
+  const u=end<=p.start?1:(step-p.start)/(end-p.start);
+  value=value+(p.intensity-value)*curveProgress(u,curve);
+ }
+ return Math.max(0,Math.min(5,value));
 }
 
 export function validateLyapunovOptions(config,options={}){
@@ -74,9 +92,16 @@ export function feedbackTrajectory(trajectory,config,options){
   let e=o.initialError,bound=Math.abs(e),valid=0,deltaVPositive=0;
   const points=[{step:0,e,V:e*e,deltaV:null,iss_bound:bound,decision_error:null,attack_intensity:0,decision_available:false}];
   const decisionErrors=[],stateErrors=[],correctOn=[],correctOff=[],onSteps=[],offSteps=[];
+  const averageField=field=>mean(trajectory.map(row=>row[field]).filter(finite));
+  const availableAgents=averageField("available_proposals");
+  const usedAgents=method==="coordinate_trimmed_mean"?averageField("coordinate_trimmed_retained"):
+   method==="proposed_robust"?averageField("trust_trimmed_retained"):availableAgents;
+  const trustFilteredAgents=method==="proposed_robust"?(averageField("trust_filter_rejected")??0):0;
+  const trimmedAgents=method==="coordinate_trimmed_mean"?(averageField("coordinate_trimmed_count")??0):
+   method==="proposed_robust"?(averageField("trust_trimmed_count")??0):0;
   let maxDelta=-Infinity,maxD=0;
   for(let i=0;i<trajectory.length;i++){
-   const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases);
+   const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases,c.n_steps);
    if(row.step!==i+1)throw Error("Нарушена последовательность тактов при оценке устойчивости");
    const decision=row[method],accepted=finite(decision),d=accepted?decision-c.desired_action:null;
    const eNext=accepted?(1-o.gain)*e-o.gain*d:e;
@@ -100,6 +125,8 @@ export function feedbackTrajectory(trajectory,config,options){
   const settling=points.findIndex((p,i)=>i>0&&points.slice(i).every(z=>Math.abs(z.e)<=o.tolerance));
   const metrics={
    method,decision_coverage:valid/c.n_steps,
+   mean_available_agents:availableAgents,mean_trust_filtered_agents:trustFilteredAgents,
+   mean_trimmed_agents:trimmedAgents,mean_used_agents:usedAgents,
    decision_mae:valid?mean(decisionErrors.map(Math.abs)):null,
    decision_rmse:valid?Math.sqrt(mean(decisionErrors.map(x=>x*x))):null,
    correct_probability:(correctOn.filter(Boolean).length+correctOff.filter(Boolean).length)/c.n_steps,
@@ -135,17 +162,18 @@ export function buildLyapunovResult(runs,config,options){
   return {method,...metrics};
  });
  const comparison=[];
- for(const baseline of METHODS.filter(m=>m!=="proposed_robust")){
+ for(let i=0;i<METHODS.length;i++)for(let j=i+1;j<METHODS.length;j++){
+  const baseline=METHODS[i],proposed=METHODS[j];
   for(const metric of ["decision_rmse","state_rmse","final_abs_error","correct_probability"]){
    const benefit=evaluated.map(x=>{
-    const a=x.data[baseline].metrics[metric],b=x.data.proposed_robust.metrics[metric];
+    const a=x.data[baseline].metrics[metric],b=x.data[proposed].metrics[metric];
     return finite(a)&&finite(b)?(metric==="correct_probability"?b-a:a-b):null;
    });
-   comparison.push({baseline,proposed:"proposed_robust",metric,benefit:statistic(benefit),paired:true});
+   comparison.push({baseline,proposed,metric,benefit:statistic(benefit),paired:true});
   }
  }
  const series=Array.from({length:c.n_steps+1},(_,i)=>{
-  const row={step:i,attack_intensity:i===0?0:attackIntensityAt(i,o.phases)};
+  const row={step:i,attack_intensity:i===0?0:attackIntensityAt(i,o.phases,c.n_steps)};
   for(const method of METHODS){
    row[method+"_V_mean"]=mean(evaluated.map(x=>x.data[method].points[i].V));
    row[method+"_e_mean"]=mean(evaluated.map(x=>x.data[method].points[i].e));

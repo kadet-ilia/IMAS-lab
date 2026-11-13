@@ -34,7 +34,7 @@ test("noise-free nominal feedback has exact V(t+1)=0.25V(t)",()=>{
  const c=validateConfig(config);
  const trajectory=Array.from({length:c.n_steps},(_,i)=>({
   step:i+1,arithmetic_mean:c.desired_action,
-  trust_weighted_mean:c.desired_action,proposed_robust:c.desired_action
+  trust_weighted_mean:c.desired_action,coordinate_trimmed_mean:c.desired_action,proposed_robust:c.desired_action
  }));
  const result=feedbackTrajectory(trajectory,c,{gain:.5,initialError:1,tolerance:.01,runs:1,phases:[{start:1,intensity:0}]});
  const points=result.proposed_robust.points;
@@ -50,7 +50,7 @@ test("with nonzero disturbances positive deltaV is possible, ISS sampled bound h
  const c=validateConfig(config);
  const trajectory=Array.from({length:c.n_steps},(_,i)=>({
   step:i+1,arithmetic_mean:c.desired_action+1,
-  trust_weighted_mean:c.desired_action+1,proposed_robust:c.desired_action+1
+  trust_weighted_mean:c.desired_action+1,coordinate_trimmed_mean:c.desired_action+1,proposed_robust:c.desired_action+1
  }));
  const result=feedbackTrajectory(trajectory,c,{gain:.5,initialError:0,tolerance:.01,runs:1,phases});
  const points=result.proposed_robust.points;
@@ -62,7 +62,7 @@ test("with nonzero disturbances positive deltaV is possible, ISS sampled bound h
 test("no decision causes safe hold and penalizes unconditional accuracy",()=>{
  const c=validateConfig(config);
  const trajectory=Array.from({length:c.n_steps},(_,i)=>({
-  step:i+1,arithmetic_mean:null,trust_weighted_mean:null,proposed_robust:null
+  step:i+1,arithmetic_mean:null,trust_weighted_mean:null,coordinate_trimmed_mean:null,proposed_robust:null
  }));
  const result=feedbackTrajectory(trajectory,c,{gain:.5,initialError:1,tolerance:.01,runs:1,phases});
  assert.equal(result.proposed_robust.metrics.decision_coverage,0);
@@ -74,9 +74,9 @@ test("no decision causes safe hold and penalizes unconditional accuracy",()=>{
 test("complete experiment compares identical random realizations across methods",()=>{
  const result=runLyapunovStudy(config,{gain:.5,initialError:1,tolerance:.1,runs:3,phases});
  assert.equal(result.runs.length,3);
- assert.equal(result.summary.length,3);
+ assert.equal(result.summary.length,4);
  assert.equal(result.series.length,9);
- assert.equal(result.comparison.length,8);
+ assert.equal(result.comparison.length,24);
  assert.equal(result.nominal.unforced_lyapunov_factor,.25);
  assert.deepEqual(result.series.slice(1).map(row=>row.attack_intensity),[0,0,1,1,0,0,2,2]);
  for(const m of result.summary)assert.ok(m.state_rmse.mean>=0);
@@ -91,4 +91,24 @@ test("representative 50-agent 30-step dynamic study returns a finite output",()=
  assert.equal(study.series.length,31);
  assert.ok(Number.isFinite(study.summary[0].decision_rmse.mean));
  assert.ok(performance.now()-start<20000,"one representative run is unexpectedly slow");
+});
+
+test("attack intensity curves interpolate from previous phase level to target",()=>{
+ const profile=(curve)=>[{start:1,intensity:0,curve:"constant"},{start:3,intensity:4,curve},{start:8,intensity:0,curve:"constant"}];
+ assert.deepEqual([3,4,5,6,7].map(step=>attackIntensityAt(step,profile("linear"),10)),[0,1,2,3,4]);
+ const exponential=[3,4,5,6,7].map(step=>attackIntensityAt(step,profile("exponential"),10));
+ const parabolic=[3,4,5,6,7].map(step=>attackIntensityAt(step,profile("parabolic"),10));
+ const hyperbolic=[3,4,5,6,7].map(step=>attackIntensityAt(step,profile("hyperbolic"),10));
+ for(const values of [exponential,parabolic,hyperbolic]){
+  assert.equal(values[0],0);assert.equal(values.at(-1),4);
+  assert.ok(values.every((value,i)=>i===0||value>=values[i-1]));
+ }
+ assert.ok(hyperbolic[1]>linearMid(profile("linear")));
+ function linearMid(p){return attackIntensityAt(4,p,10);}
+});
+test("attack profile is limited to five phases and validates curve names",()=>{
+ const five=Array.from({length:5},(_,i)=>({start:i+1,intensity:i,curve:"constant"}));
+ assert.equal(validateAttackPhases(five,10).length,5);
+ assert.throws(()=>validateAttackPhases([...five,{start:6,intensity:1}],10),/1 до 5/);
+ assert.throws(()=>validateAttackPhases([{start:1,intensity:1,curve:"sine"}],10),/неизвестный закон/);
 });
