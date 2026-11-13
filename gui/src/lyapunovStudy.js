@@ -10,7 +10,7 @@
  */
 import {METHODS, simulateRun, validateConfig, TRUST_MODEL_VERSION} from "./trustEngine.js";
 
-export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-1.0";
+export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-1.1";
 const finite=x=>typeof x==="number"&&Number.isFinite(x);
 const mean=x=>x.length?x.reduce((s,v)=>s+v,0)/x.length:null;
 const sd=x=>x.length<2?null:Math.sqrt(x.reduce((s,v)=>s+(v-mean(x))**2,0)/(x.length-1));
