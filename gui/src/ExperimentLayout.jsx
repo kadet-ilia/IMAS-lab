@@ -1,4 +1,5 @@
-import React from "react";
+import React, {useRef,useState} from "react";
+import {availablePanelFormats,savePanelAsset} from "./figureExport.js";
 
 /**
  * Single structural shell for all six equally supported experiments.
@@ -24,7 +25,28 @@ export function ExperimentLayout({sidebar,navigation,authors,title,description=n
 
 /** Common card components: all experiments use the same class names and DOM shape. */
 export function ExperimentPanel({title,subtitle,children,className="",headerAside=null}){
- return <section className={["panel",className].filter(Boolean).join(" ")}><header className="panel-header"><div><h2>{title}</h2>{subtitle?<p>{subtitle}</p>:null}</div>{headerAside}</header><div className="panel-body">{children}</div></section>;
+ const root=useRef(null),[open,setOpen]=useState(false),[error,setError]=useState("");
+ const formats=open?availablePanelFormats(root.current):[];
+ const save=format=>{
+  setOpen(false);setError("");
+  savePanelAsset(root.current,title,format).catch(e=>setError(e.message||String(e)));
+ };
+ return <section ref={root} className={["panel",className].filter(Boolean).join(" ")}>
+  <header className="panel-header"><div><h2>{title}</h2>{subtitle?<p>{subtitle}</p>:null}</div>
+   <div className="panel-header-actions">{headerAside}
+    <div className="panel-export">
+     <button type="button" className="panel-export-trigger" aria-label={"Сохранить объект: "+title}
+      aria-expanded={open} onClick={()=>setOpen(v=>!v)}>Сохранить</button>
+     {open?<div className="panel-export-menu" role="group" aria-label={"Форматы экспорта: "+title}>
+      {formats.length?formats.map(format=><button type="button" key={format} onClick={()=>save(format)}>{format}</button>)
+       :<span>Нет графика или таблицы</span>}
+     </div>:null}
+    </div>
+   </div>
+  </header>
+  {error?<p className="imas-validation-error" role="alert">{error}</p>:null}
+  <div className="panel-body">{children}</div>
+ </section>;
 }
 export function ExperimentKpi({label,value,note,tone="blue"}){
  return <div className="kpi"><div className="kpi-label">{label}</div><div className={["kpi-value",tone].filter(Boolean).join(" ")}>{value}</div><div className="kpi-note">{note}</div></div>;

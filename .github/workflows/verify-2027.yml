@@ -61,6 +61,7 @@ jobs:
           path: |
             gui/verification.json
             gui/dashboard.png
+            gui/stability.png
             gui/help.png
             gui/research2027.png
           if-no-files-found: warn

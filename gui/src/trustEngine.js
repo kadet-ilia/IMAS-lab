@@ -1,3 +1,4 @@
+import {attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
 import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 import {auditFactorialDesign,estimateFactorialContrasts,FACTORIAL_AUDIT_VERSION} from "./factorialAudit.js";
 import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./metricPassport.js";
@@ -13,6 +14,8 @@ import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./met
  * No network calls and no server resources are used by this module.
  */
 export const METHODS=["arithmetic_mean","trust_weighted_mean","proposed_robust"];
+// Extended four-way comparison is used by the Lyapunov study; legacy E1 contracts remain three-way.
+export const STABILITY_METHODS=["arithmetic_mean","trust_weighted_mean","trimmed_unweighted","proposed_robust"];
 export const SCENARIOS=["static_bias","subtle_bias","on_off","collusion"];
 export const DEFAULTS={
  seed:20260716,n_agents:50,n_byzantine:10,n_sybil_agents:0,sybil_activation_step:20,
@@ -60,7 +63,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.11.0-dynamic-attack";
+export const TRUST_MODEL_VERSION="trust-js-2.12.0-attack-profiles-four-aggregators";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,10000],n_sensitivity_runs:[1,100],
@@ -109,16 +112,7 @@ export function validateConfig(value={}){
  requireField(c.trim_each_side<=Math.floor((c.n_agents-1)/2),"trim_each_side","нельзя удалить все наблюдения");
  requireField(c.message_delay_max_steps>=c.message_delay_min_steps,"message_delay_max_steps","меньше минимальной задержки");
  requireField(c.attack_direction===-1||c.attack_direction===1,"attack_direction","допустимы -1 или 1");
- if(c.attack_schedule!==undefined){
-  requireField(Array.isArray(c.attack_schedule)&&c.attack_schedule.length>0&&c.attack_schedule.length<=30,"attack_schedule","требуется от 1 до 30 фаз");
-  let previous=0;
-  for(const p of c.attack_schedule){
-   requireField(p&&Number.isInteger(p.start)&&p.start>previous&&p.start<=c.n_steps,"attack_schedule","начала фаз должны возрастать и не превышать T");
-   requireField(typeof p.intensity==="number"&&Number.isFinite(p.intensity)&&p.intensity>=0&&p.intensity<=5,"attack_schedule","интенсивность должна лежать в пределах 0…5");
-   previous=p.start;
-  }
-  requireField(c.attack_schedule[0].start===1,"attack_schedule","первая фаза должна начинаться с шага 1");
- }
+ if(c.attack_schedule!==undefined)c.attack_schedule=validateAttackPhases(c.attack_schedule,c.n_steps);
  requireField(["complete","ring","random","small_world"].includes(c.network_topology),"network_topology","неизвестная топология");
  if(c.network_enabled&&c.network_topology==="small_world")
   requireField(c.small_world_neighbors<c.n_agents+c.n_sybil_agents,"small_world_neighbors","недопустимое число соседей");
@@ -190,17 +184,17 @@ export function trimmedWeightedMean(values,weights,k){
 }
 function aggregate(proposals,reputation,available,c,last){
  const idx=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
- if(!idx.length)return Object.fromEntries(METHODS.map(method=>[method,null]));
+ if(!idx.length)return Object.fromEntries(STABILITY_METHODS.map(method=>[method,null]));
  const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight)),arithmetic=mean(v);
  const weighted=sum(v.map((x,i)=>x*w[i]))/sum(w),center=median(v),cv=v.map(x=>clamp(x,center-c.clip_radius,center+c.clip_radius));
- return {arithmetic_mean:arithmetic,trust_weighted_mean:weighted,proposed_robust:clamp(trimmedWeightedMean(cv,w,c.trim_each_side),c.safe_action_min,c.safe_action_max)};
+ return {arithmetic_mean:arithmetic,trust_weighted_mean:weighted,
+  trimmed_unweighted:clamp(trimmedWeightedMean(cv,cv.map(()=>1),c.trim_each_side),c.safe_action_min,c.safe_action_max),
+  proposed_robust:clamp(trimmedWeightedMean(cv,w,c.trim_each_side),c.safe_action_min,c.safe_action_max)};
 }
 export function attackIntensity(t,scenario,c){
  if(scenario==="dynamic"){
   if(!c.attack_schedule)throw Error("Для динамического сценария требуется attack_schedule");
-  let intensity=0;
-  for(const phase of c.attack_schedule){if(phase.start>t+1)break;intensity=phase.intensity;}
-  return intensity;
+  return attackIntensityAt(t+1,c.attack_schedule,c.n_steps);
  }
  return t+1>=c.attack_start_step&&(scenario!=="on_off"||((t+1-c.attack_start_step)%Math.max(1,c.on_off_period))<c.on_off_attack_steps)?1:0;
 }
