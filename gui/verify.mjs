@@ -229,6 +229,19 @@ await page.getByRole("group",{name:"Режим эксперимента"}).getBy
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
 await stepInput.fill("30");await stepInput.press("Tab");
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
+// Give phase 2 enough steps to verify that the chosen intensity curve is computed.
+for(const [phase,start] of [[3,25],[4,27],[5,29]]){
+ await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).fill(String(start));
+ await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).press("Tab");
+}
+await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).selectOption("linear");
+await page.getByRole("spinbutton",{name:"Конечная интенсивность фазы 2"}).fill("2");
+if((await page.locator(".lyapunov-phase-grid > .lyapunov-phase").count())!==5)
+ throw Error("Five attack phases must share the phase grid");
+const phasePositions=await page.locator(".lyapunov-phase-grid > .lyapunov-phase").evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));
+if(Math.max(...phasePositions)-Math.min(...phasePositions)>3)
+ throw Error("Attack phases unexpectedly wrapped to multiple rows");
+await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 await page.getByRole("button",{name:"Выполнить исследование"}).click();
 try{
  await page.locator(".lyapunov-study .kpi-grid .kpi").first().waitFor({timeout:20000});
@@ -241,14 +254,31 @@ const [lyapFile]=await Promise.all([
  page.getByRole("button",{name:"Экспорт JSON"}).click()
 ]);
 const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
-if(lyapData.runs?.length!==1 || lyapData.summary?.length!==3 ||
+if(lyapData.runs?.length!==1 || lyapData.summary?.length!==4 ||
   lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
   !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
   !lyapData.series.some(row=>row.attack_intensity>1) ||
-  !lyapData.series.some(row=>row.attack_intensity===0)){
+  !lyapData.series.some(row=>row.attack_intensity===0) ||
+  !(lyapData.series[22].attack_intensity>1&&lyapData.series[22].attack_intensity<2)){
  throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
 }
-const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true};
+// Export one specific chart, one table, and check the MIME formats.
+const chartPanel=page.locator(".lyapunov-study .panel").filter({has:page.getByText("Профиль атакующего воздействия", {exact:true})}).first();
+await chartPanel.getByRole("button",{name:/Сохранить объект:/}).click();
+const [svgFile]=await Promise.all([page.waitForEvent("download"),chartPanel.getByRole("button",{name:"SVG",exact:true}).click()]);
+const svgSource=fs.readFileSync(await svgFile.path(),"utf8");
+if(!svgSource.includes("<svg")||!svgSource.includes("xmlns"))throw Error("Individual chart SVG export is invalid");
+await chartPanel.getByRole("button",{name:/Сохранить объект:/}).click();
+const [pngFile]=await Promise.all([page.waitForEvent("download"),chartPanel.getByRole("button",{name:"PNG",exact:true}).click()]);
+const pngBytes=fs.readFileSync(await pngFile.path());
+if(pngBytes.subarray(0,8).toString("hex")!=="89504e470d0a1a0a")throw Error("Individual chart PNG export is invalid");
+const tablePanel=page.locator(".lyapunov-study .panel").filter({has:page.getByText("Сравнение показателей достижения цели исследования",{exact:true})}).first();
+await tablePanel.getByRole("button",{name:/Сохранить объект:/}).click();
+const [csvFile]=await Promise.all([page.waitForEvent("download"),tablePanel.getByRole("button",{name:"CSV",exact:true}).click()]);
+const csvSource=fs.readFileSync(await csvFile.path(),"utf8");
+if(!csvSource.includes("Доверительно-усечённое среднее")||!csvSource.includes("Покоординатное усечённое среднее"))
+ throw Error("Individual four-method table CSV export is incomplete");
+const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV"]};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
