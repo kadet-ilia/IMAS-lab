@@ -289,6 +289,7 @@ if((await picker.getByRole("button",{name:/Сохранить \d+ в SVG/}).coun
    (await picker.getByRole("button",{name:/Сохранить \d+ в CSV/}).count())<1)
  throw Error("Universal export picker must enumerate charts and tables");
 await page.getByRole("button",{name:"Сохранить отдельный график, таблицу или схему"}).click();
+await page.locator(".lyapunov-study").screenshot({path:path.join(here,"stability.png")});
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
