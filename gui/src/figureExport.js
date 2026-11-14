@@ -75,7 +75,8 @@ async function tableToPng(table,title){
  const heights=layout.map(row=>Math.max(36,...row.map(lines=>lines.length*19+14)));
  const height=72+heights.reduce((a,b)=>a+b,0);
  if(height>30000)throw Error("Таблица слишком велика для PNG; используйте CSV без потери строк");
- ctxCanvas.width=width*2;ctxCanvas.height=height*2;ctx.scale(2,2);
+ const scale=height>15000?1:2;
+ ctxCanvas.width=width*scale;ctxCanvas.height=height*scale;ctx.scale(scale,scale);
  ctx.fillStyle="#ffffff";ctx.fillRect(0,0,width,height);
  ctx.font="bold 18px Arial, sans-serif";ctx.fillStyle="#123a63";ctx.fillText(title,20,35,width-40);
  let y=62;
