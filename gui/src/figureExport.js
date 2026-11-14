@@ -121,7 +121,7 @@ export function collectExportableElements(root){
  return all.filter(element=>{
   if(element.closest(".panel-export-menu,.figure-export-menu"))return false;
   const rect=element.getBoundingClientRect();
-  return rect.width>150&&rect.height>75&&rect.bottom>0&&rect.top<window.innerHeight*8;
+  return rect.width>150&&rect.height>75;
  }).filter(element=>{
   if(element.tagName.toLowerCase()!=="svg")return true;
   return !element.parentElement?.closest("svg"); // only top-level SVGs
