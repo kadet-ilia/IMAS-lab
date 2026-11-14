@@ -246,7 +246,7 @@ npm run verify
 - `experiment.py` — независимая исходная Python-модель для научной проверки, не используемая при браузерной эксплуатации;
 - `gui/src/attackProfiles.js` — проверяемые законы изменения интенсивности атаки в пяти фазах;
 - `gui/src/lyapunovStudy.js`, `gui/src/LyapunovPanel.jsx` — сравнение четырёх агрегаторов по точности и динамике скалярной модели Ляпунова;
-- `gui/src/figureExport.js` — отдельный экспорт графиков и схем (SVG/PNG), таблиц (CSV/PNG);
+- `gui/src/figureExport.js`, `gui/src/FigureExportPicker.jsx` — экспорт отдельного графика или схемы (SVG/PNG), таблицы (CSV/PNG), включая объекты в нестандартных панелях;
 - `gui/src/trustRemediationRegression.test.mjs` — объединённые регрессионные проверки вместо двух устаревших файлов remediationWave1/2.
 
 
