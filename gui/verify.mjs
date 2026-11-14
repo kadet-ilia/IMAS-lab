@@ -278,7 +278,18 @@ const [csvFile]=await Promise.all([page.waitForEvent("download"),tablePanel.getB
 const csvSource=fs.readFileSync(await csvFile.path(),"utf8");
 if(!csvSource.includes("Доверительно-усечённое среднее")||!csvSource.includes("Покоординатное усечённое среднее"))
  throw Error("Individual four-method table CSV export is incomplete");
-const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV"]};
+await tablePanel.getByRole("button",{name:/Сохранить объект:/}).click();
+const [tablePng]=await Promise.all([page.waitForEvent("download"),tablePanel.getByRole("button",{name:"PNG",exact:true}).click()]);
+if(fs.readFileSync(await tablePng.path()).subarray(0,8).toString("hex")!=="89504e470d0a1a0a")
+ throw Error("Individual table PNG export is invalid");
+// The universal picker also enumerates objects from manually authored panels.
+await page.getByRole("button",{name:"Сохранить отдельный график, таблицу или схему"}).click();
+const picker=page.getByRole("group",{name:"Выбор объекта для экспорта"});
+if((await picker.getByRole("button",{name:/Сохранить \d+ в SVG/}).count())<1||
+   (await picker.getByRole("button",{name:/Сохранить \d+ в CSV/}).count())<1)
+ throw Error("Universal export picker must enumerate charts and tables");
+await page.getByRole("button",{name:"Сохранить отдельный график, таблицу или схему"}).click();
+const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
