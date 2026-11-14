@@ -112,3 +112,37 @@ export async function savePanelAsset(root,title,format){
  }
  throw Error("В выбранной панели отсутствует объект для формата "+format);
 }
+
+
+/** Global selection covers charts/tables rendered outside shared ExperimentPanel. */
+export function collectExportableElements(root){
+ if(!root)return [];
+ const all=[...root.querySelectorAll("svg, table")];
+ return all.filter(element=>{
+  if(element.closest(".panel-export-menu,.figure-export-menu"))return false;
+  const rect=element.getBoundingClientRect();
+  return rect.width>150&&rect.height>75&&rect.bottom>0&&rect.top<window.innerHeight*8;
+ }).filter(element=>{
+  if(element.tagName.toLowerCase()!=="svg")return true;
+  return !element.parentElement?.closest("svg"); // only top-level SVGs
+ }).map((element,index)=>{
+  const kind=element.tagName.toLowerCase()==="svg"?"График/схема":"Таблица";
+  const section=element.closest(".panel,.r27-panel,.r27-experiment-section");
+  const title=section?.querySelector(".panel-header h2, h2, h3")?.textContent?.trim()
+   ||element.closest("section")?.querySelector("h2,h3")?.textContent?.trim()||"Объект";
+  return {element,index:index+1,kind,title,formats:kind==="Таблица"?["PNG","CSV"]:["SVG","PNG"]};
+ });
+}
+export async function saveStandaloneElement(element,title,format){
+ if(!element?.isConnected)throw Error("Объект больше не находится на странице; обновите список");
+ const kind=element.tagName.toLowerCase();
+ if(kind==="svg"&&format==="SVG"){
+  saveBlob(new Blob([chartMarkup(element).markup],{type:"image/svg+xml;charset=utf-8"}),slug(title)+".svg");return;
+ }
+ if(kind==="svg"&&format==="PNG")return svgToPng(element,title);
+ if(kind==="table"&&format==="PNG")return tableToPng(element,title);
+ if(kind==="table"&&format==="CSV"){
+  saveBlob(new Blob([tableCsv(element)],{type:"text/csv;charset=utf-8"}),slug(title)+".csv");return;
+ }
+ throw Error("Выбранный формат не поддерживается для этого объекта");
+}
