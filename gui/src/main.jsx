@@ -22,6 +22,7 @@ import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import LyapunovPanel from "./LyapunovPanel.jsx";
+import FigureExportPicker from "./FigureExportPicker.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig} from "./trustEngine.js";
 import {passportForStudy,METRIC_PASSPORT_VERSION} from "./metricPassport.js";
@@ -816,6 +817,7 @@ function App() {
 <button onClick={isResearch?()=>researchActionsRef.current?.stop():activeTab==="stability"?()=>lyapunovActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!visibleRunning}><Icon name="stop"/>Остановить</button>
 <button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="reset"/>Сбросить</button>
 </>:null}
+<FigureExportPicker activeTab={activeTab}/>
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
 <button className="icon-button" title="Справка" onClick={()=>setActiveTab("help2027")}><Icon name="help"/></button>
 </div></header>
