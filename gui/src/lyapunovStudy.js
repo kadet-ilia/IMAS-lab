@@ -39,7 +39,7 @@ export function feedbackTrajectory(trajectory,config,options){
  for(const method of STABILITY_METHODS){
   let e=o.initialError,bound=Math.abs(e),valid=0,deltaVPositive=0;
   const points=[{step:0,e,V:e*e,deltaV:null,iss_bound:bound,decision_error:null,attack_intensity:0,decision_available:false}];
-  const decisionErrors=[],stateErrors=[],correctOn=[],correctOff=[],onSteps=[],offSteps=[];
+  const decisionErrors=[],stateErrors=[],correctOn=[],correctOff=[];
   let maxDelta=-Infinity,maxD=0;
   for(let i=0;i<trajectory.length;i++){
    const row=trajectory[i],intensity=attackIntensityAt(i+1,o.phases,c.n_steps);
@@ -55,7 +55,6 @@ export function feedbackTrajectory(trajectory,config,options){
     if(deltaV>1e-12)deltaVPositive++;
     (intensity>0?correctOn:correctOff).push(Math.abs(d)<=c.correctness_tolerance?1:0);
    }else (intensity>0?correctOn:correctOff).push(0);
-   (intensity>0?onSteps:offSteps).push(i+1);
    maxDelta=Math.max(maxDelta,deltaV);
    if(Math.abs(eNext)>boundNext+1e-8)throw Error("Нарушена оценка ISS для метода "+method);
    points.push({step:i+1,e:eNext,V:eNext*eNext,deltaV,iss_bound:boundNext,
