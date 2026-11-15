@@ -1,8 +1,7 @@
-name: Verify IMAS_LaB_test (browser-only)
+name: Verify IMAS_Lab (browser-only)
 on:
   push:
     branches:
-      - 'IMAS_LaB_test'
       - 'IMAS_Lab'
     paths:
       - 'gui/**'
