@@ -148,3 +148,47 @@ test("whole E1-A study exports generator model and per-run diagnostics",()=>{
  assert.ok(data.runs.every(x=>x.scenarioDiagnostics?.behaviorEvidenceGenerated>0));
  assert.equal(data.summary.length,5);
 });
+
+test("decision-feedback mode rejects legacy testimony and an undistributed network",async()=>{
+ const {validateAdaptiveStudy}=await import("./adaptiveExperiment.js");
+ assert.throws(()=>validateAdaptiveStudy(core,{
+  comparisonMode:"decision_feedback",evidenceModel:"legacy"
+ }),/поведенческая модель/i);
+ assert.throws(()=>validateAdaptiveStudy({...core,network_enabled:true},{
+  comparisonMode:"decision_feedback",evidenceModel:"behavior_linked"
+ }),/сетевых ограничениях/i);
+});
+test("feedback witness uses only the method's current output, not the true action",()=>{
+ const gen=createAdaptiveScenarioAdapter(core,{
+  comparisonMode:"decision_feedback",evidenceModel:"behavior_linked",
+  evidenceNoiseSigma:0,witnessCorruption:0
+ },0);
+ gen.onProposalsDelivered(delivered());
+ gen.onFeedbackDecision({step:1,value:0.6});
+ const nearTruth=gen.evidenceValue(evidenceCtx(0,0));
+ gen.onFeedbackDecision({step:1,value:-2});
+ const farTruth=gen.evidenceValue(evidenceCtx(0,0));
+ assert.ok(nearTruth>farTruth);
+ assert.ok(gen.getDiagnostic().feedbackDecisionUsed===2);
+});
+test("independent feedback contours are reproducible and record each method's own trust trajectory",()=>{
+ const settings={runs:2,scenario:"static_bias",attackStrategy:"coordinated",
+  evidenceModel:"behavior_linked",comparisonMode:"decision_feedback",
+  evidenceNoiseSigma:0,witnessCorruption:0.6,coordinatedBias:2.5};
+ const first=runAdaptiveSingle(core,settings,0),again=runAdaptiveSingle(core,settings,0);
+ assert.deepEqual(first,again);
+ assert.equal(Object.keys(first.methodStates).length,5);
+ assert.equal(Object.keys(first.scenarioDiagnosticsByMethod).length,5);
+ assert.equal(first.methodStates.adaptive_robust.length,core.n_steps);
+ assert.ok(first.scenarioDiagnosticsByMethod.adaptive_robust.feedbackDecisionUsed>0);
+ const base=first.methodStates.trimmed_unweighted;
+ const adapted=first.methodStates.adaptive_robust;
+ assert.ok(base.every(x=>Number.isFinite(x.mean_reputation)));
+ assert.ok(adapted.every(x=>Number.isFinite(x.mean_reputation)));
+ const data=runAdaptiveStudy(core,settings);
+ assert.equal(data.methodology.comparisonMode,"decision_feedback");
+ assert.equal(data.completedRuns,2);
+ assert.equal(data.summary.length,5);
+ assert.equal(data.trace.length,core.n_steps);
+ assert.ok(data.summary.every(x=>x.mean_reputation.n===2));
+});
