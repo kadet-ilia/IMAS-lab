@@ -40,6 +40,7 @@ htmlcov/
 *.checkpoint.json
 *.stop
 gui/verification.json
+gui/adaptive-results/
 gui/*.png
 gui/*.webp
 gui/*.svg
