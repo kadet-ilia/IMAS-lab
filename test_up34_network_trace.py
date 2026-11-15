@@ -117,7 +117,7 @@ def independent_network_trace(result):
     last_sent=[-1000000000]*n
     history=[]
     decisions={method:[] for method in (
-        "arithmetic_mean","trust_weighted_mean","proposed_robust")}
+        "arithmetic_mean","trust_weighted_mean","trimmed_unweighted","proposed_robust")}
     expected_isolations=[]
     channel={
         key:{field:0 for field in ("attempted","delivered","lost","bandwidth_dropped","expired")}
@@ -215,6 +215,9 @@ def independent_network_trace(result):
             decision={
                 "arithmetic_mean":sum(values)/len(values),
                 "trust_weighted_mean":sum(x*w for x,w in zip(values,weights))/sum(weights),
+                "trimmed_unweighted":min(c["safe_action_max"],max(c["safe_action_min"],
+                     trim_reference({"values":clipped,"weights":[1.0]*len(values),
+                                     "k":c["trim_each_side"]}))),
                 "proposed_robust":min(c["safe_action_max"],max(c["safe_action_min"],
                      trim_reference({"values":clipped,"weights":weights,
                                      "k":c["trim_each_side"]})))
