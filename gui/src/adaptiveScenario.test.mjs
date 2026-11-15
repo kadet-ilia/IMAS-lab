@@ -176,7 +176,9 @@ test("independent feedback contours are reproducible and record each method's ow
   evidenceModel:"behavior_linked",comparisonMode:"decision_feedback",
   evidenceNoiseSigma:0,witnessCorruption:0.6,coordinatedBias:2.5};
  const first=runAdaptiveSingle(core,settings,0),again=runAdaptiveSingle(core,settings,0);
- assert.deepEqual(first,again);
+ // Execution wall times from E1 are measurements, not deterministic science.
+ for(const key of ["metrics","trajectory","feedback","methodStates","scenarioDiagnosticsByMethod"])
+  assert.deepEqual(first[key],again[key],key+" should be reproducible");
  assert.equal(Object.keys(first.methodStates).length,5);
  assert.equal(Object.keys(first.scenarioDiagnosticsByMethod).length,5);
  assert.equal(first.methodStates.adaptive_robust.length,core.n_steps);
