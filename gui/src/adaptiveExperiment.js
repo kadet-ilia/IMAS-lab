@@ -6,8 +6,9 @@
 import {validateConfig,simulateRun,TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {validateAttackPhases,defaultAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 import {validateAdaptiveOptions,estimateAdaptiveDecision,ADAPTIVE_METHODS,ADAPTIVE_METHOD_IDS,ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
+import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.0.0-estimator-only";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.1.0-estimator-only";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -54,10 +55,11 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс прогона");
  const {core,options:o}=validateAdaptiveStudy(config,options);
  const adaptive=[];
+ const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
  const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
   const result=estimateAdaptiveDecision(observable,o,core);
   adaptive.push({step:observable.step,...result.decisions,diagnostics:result.diagnostics});
- });
+ },generator);
  if(simulation.trajectory.length!==adaptive.length||adaptive.length!==core.n_steps)
   throw Error("Несоответствие длины трассы E1 и наблюдений E1-А");
  const trajectory=simulation.trajectory.map((row,i)=>{
@@ -90,7 +92,8 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
   method,feedbackMetrics(trajectory,method,o.feedbackGain,o.feedbackInitialError).points
  ]));
- return {run:runIndex,metrics,trajectory,feedback,original_metrics:simulation.rows};
+ return {run:runIndex,metrics,trajectory,feedback,original_metrics:simulation.rows,
+  scenarioDiagnostics:generator?.getDiagnostic()??null};
 }
 export function summarizeAdaptiveRuns(runs,config={},options={}){
  const {core,options:o}=validateAdaptiveStudy(config,options);
@@ -123,8 +126,11 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
  }));
  return {
   archiveFormat:"imas-adaptive-collective-decisions",archiveVersion:1,
-  models:{base:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION},
+  models:{base:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
+   scenario:ADAPTIVE_SCENARIO_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
+   evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
+   attack:"strategy independent of temporal intensity profile; attacker labels used by simulator only",
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
