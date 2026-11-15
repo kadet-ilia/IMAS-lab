@@ -381,7 +381,7 @@ function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,
  topology_semantics:c.network_enabled&&c.n_sybil_agents>0&&c.network_topology!=="complete"?
   "base_"+c.network_topology+"+forced_sybil_clique_and_index_anchors":
   c.network_enabled?c.network_topology:"complete_without_transport_constraints"};}
-export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false,onStep=null){
+export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false,onStep=null,decisionObserver=null){
  const c=validateConfig(rawConfig),startWall=performance.now(),n=c.n_agents+c.n_sybil_agents,r=createRng(c.seed,scenarioIndex,runIndex);
  const sybil=all(n).map(i=>i>=c.n_agents),bad=sybil.slice(),badIds=r.choice(all(c.n_agents),c.n_byzantine);badIds.forEach(i=>bad[i]=true);
  const a=buildAdjacency(c,r,bad),groups=Array(n).fill(0);
@@ -421,6 +421,17 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   transportWallMs+=performance.now()-transportT0;
   const aggregateT0=performance.now();
   const decisions=aggregateProposals(tx.values,rep,tx.available,c);
+  // Optional read-only E1-A observer sees exactly the information available to
+  // the aggregator BEFORE evidence and isolation updates on this tick.
+  // Hidden Byzantine labels and oracle truth are intentionally absent.
+  if(decisionObserver!==null){
+    if(typeof decisionObserver!=="function")throw Error("decisionObserver must be a function");
+    decisionObserver(Object.freeze({
+      step:t+1,values:Object.freeze([...tx.values]),
+      reputation:Object.freeze([...rep]),available:Object.freeze([...tx.available]),
+      historySteps:hist.length,population:n
+    }));
+  }
   aggregateBundleWallMs+=performance.now()-aggregateT0;
   const honest=all(n).filter(i=>tx.available[i]&&!bad[i]),reference=honest.length?median(honest.map(i=>tx.values[i])):null;
   const half=honest.length?1.96*c.honest_noise_sigma/Math.sqrt(honest.length):null;
