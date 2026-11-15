@@ -20,17 +20,21 @@ const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
 const roundStart=(x,t)=>clamp(Math.round(x),1,t);
 
 export function defaultAttackPhases(steps,attackStart=20){
- const t=Math.max(1,Math.round(steps)),start=roundStart(attackStart,t);
+ const t=Math.max(1,Math.round(steps)),gap=Math.max(1,Math.round(attackStart));
  const candidates=[
   {start:1,intensity:0,profile:"constant"},
-  {start,intensity:1,profile:"constant"},
-  {start:roundStart(Math.max(start+1,Math.floor(t*.40)),t),intensity:0,profile:"constant"},
-  {start:roundStart(Math.max(start+2,Math.floor(t*.58)),t),intensity:1.5,profile:"constant"},
-  {start:roundStart(Math.max(start+3,Math.floor(t*.78)),t),intensity:0,profile:"constant"}
+  {start:1+gap,intensity:1,profile:"constant"},
+  {start:Math.floor(t*.40),intensity:0,profile:"constant"},
+  {start:Math.floor(t*.58),intensity:1.5,profile:"constant"},
+  {start:Math.floor(t*.78),intensity:0,profile:"constant"}
  ];
- const distinct=new Map();
- for(const p of candidates)if(!distinct.has(p.start)||p.start===1&&start===1)distinct.set(p.start,p);
- return [...distinct.values()].sort((a,b)=>a.start-b.start);
+ const result=[];
+ for(const p of candidates){
+  const start=Math.max(p.start,result.length?result[result.length-1].start+gap:1);
+  if(start>t)break;
+  result.push({...p,start});
+ }
+ return result;
 }
 
 export function validateAttackPhases(phases,steps){
