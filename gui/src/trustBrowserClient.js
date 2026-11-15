@@ -288,3 +288,15 @@ export async function loadLyapunovCacheRecord(key){
 export async function saveLyapunovCacheRecord(key,record){
  return withOriginStorageLock(()=>storage("lyapunov:complete:"+key,record));
 }
+
+/**
+ * E1-A cache access while the caller already holds TRUST_ORIGIN_LOCK.
+ * These functions intentionally do not reacquire the non-reentrant Web Lock.
+ * Only use from an enclosing withOriginStorageLock() critical section.
+ */
+export async function loadAdaptiveCacheWithinOriginLock(key){
+ return storage("adaptive:e1a:"+key);
+}
+export async function saveAdaptiveCacheWithinOriginLock(key,record){
+ return storage("adaptive:e1a:"+key,record);
+}
