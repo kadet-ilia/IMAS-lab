@@ -59,6 +59,8 @@ export function validateAdaptiveScenarioOptions(options={}){
  };
  for(const [key,[lo,hi,int]] of Object.entries(limits))validateNumber(key,o[key],lo,hi,int);
  if(o.attackDuty>o.attackPeriod)throw Error("Длительность импульса превышает период атаки");
+ if(o.attackStrategy==="reputation_boost"&&o.evidenceModel==="legacy")
+  throw Error("Накопление репутации требует модели свидетельств по поведению агентов");
  return o;
 }
 /** Returns null if E1-A requests the untouched legacy scenario. */
@@ -68,7 +70,6 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
  const observedHistory=[];
- const knownLabels=[];
  const debug={behaviorEvidenceGenerated:0,uninformativeEvidence:0,maliciousWitnessed:0,
   generatedAttackProposals:0,laggedObservationCount:0};
  const rngFor=(step,source=0,target=0,stage=0)=>
@@ -136,7 +137,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   }else score=quality+o.evidenceNoiseSigma*random.normal();
   // Byzantine observers may inject coordinated false evaluations. Labels are
   // known only to the SIMULATOR, never to an actual trust/decision algorithm.
-  if(intensity>0&&byzantine[observer]){
+  if(isActive(step,intensity)&&byzantine[observer]){
    const targetQuality=byzantine[target]?1:0;
    score=(1-o.witnessCorruption)*score+o.witnessCorruption*targetQuality;
    debug.maliciousWitnessed++;
