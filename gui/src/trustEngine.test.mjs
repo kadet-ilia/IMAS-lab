@@ -37,7 +37,7 @@ test("all four attack modes, networks and Sybil variants remain finite",()=>{
     message_loss_probability:.14,message_delay_min_steps:0,message_delay_max_steps:2,
     bandwidth_messages_per_step:22,partition_enabled:true,
     partition_start_step:5,partition_end_step:8,n_sybil_agents:2,sybil_activation_step:4},scenario,0,0,true);
-   assert.equal(n.rows.length,3);
+   assert.equal(n.rows.length,4);
    assert.ok(n.rows.every(r=>Number.isFinite(r.rmse_to_truth)&&r.delivery_ratio>=0&&r.delivery_ratio<=1));
    assert.ok(n.result.summary.communication_lost>=0);
    assert.ok(n.result.summary.communication_bandwidth_dropped>=0);
@@ -56,12 +56,12 @@ test("honest-only baseline is near reference, adversarial mean is affected",()=>
 });
 test("Monte Carlo contract, confidence bands, distributions and bootstrap",()=>{
  const result=runActionSync({action:"monte_carlo",scenario:"collusion",config:cfg});
- assert.equal(result.runs.length,12);
- assert.equal(result.summary.length,3);
+ assert.equal(result.runs.length,16);
+ assert.equal(result.summary.length,4);
  assert.equal(result.trajectory_statistics.length,18);
  assert.ok(result.trajectory_statistics[0].proposed_robust_band90.length===2);
- assert.equal(result.distributions.length,15);
- assert.equal(result.bootstrap_comparisons.length,8);
+ assert.equal(result.distributions.length,20);
+ assert.equal(result.bootstrap_comparisons.length,12);
  assert.equal(result.completed_runs,4);
 });
 test("one-factor sensitivity contract, browser-compatible task resumption",()=>{
@@ -77,7 +77,7 @@ test("one-factor sensitivity contract, browser-compatible task resumption",()=>{
 test("fractional factorial sensitivity returns main and pair effects",()=>{
  const out=runActionSync({action:"sensitivity",sensitivity_mode:"factorial",scenario:"collusion",config:cfg});
  assert.equal(out.mode,"factorial");
- assert.equal(out.design_points.length,96);
+ assert.equal(out.design_points.length,128);
  assert.ok(out.main_effects.length>=6);
  assert.ok(out.interaction_effects.length>0);
  assert.equal(out.partial,false);
@@ -274,8 +274,8 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  assert.ok(pairs.some(x=>x.c.isolation_enabled===false));
  assert.ok(pairs.some(x=>x.c.isolation_enabled===true));
  const full=runActionSync(payload);
- assert.equal(full.ablation_rows.length,12);
- assert.equal(full.ablation_contrasts.length,26);
+ assert.equal(full.ablation_rows.length,16);
+ assert.equal(full.ablation_contrasts.length,36);
  assert.equal(full.design.strictCommonRandomNumbers,true);
  assert.match(full.design.exogenousEventScheme,/keyed-by-seed-run/);
  assert.ok(plan.tasks.every(task=>task.c.paired_exogenous_events===true));
@@ -295,8 +295,8 @@ test("UP-07/09 four-arm controller/schedule design and paired seed indices",()=>
  }
  assert.ok(full.ablation_contrasts.every(x=>x.n_pairs===10));
  assert.ok(full.ablation_contrasts.every(x=>x.ci95_low!==null));
- assert.equal(full.multipleTesting.tested,26);
- assert.equal(full.multipleTesting.planned,26);
+ assert.equal(full.multipleTesting.tested,36);
+ assert.equal(full.multipleTesting.planned,36);
  assert.equal(full.multipleTesting.correction,"Holm-FWER-0.05");
  assert.ok(full.ablation_contrasts.every(x=>Number.isFinite(x.pRaw)&&Number.isFinite(x.pHolm)));
  assert.ok(full.ablation_contrasts.every(x=>x.pHolm>=x.pRaw&&x.pHolm<=1));
@@ -392,8 +392,8 @@ test("UP-13 factorial effects require complete physical design and ≥2 cell rep
  const payload={action:"sensitivity",sensitivity_mode:"factorial",scenario:"static_bias",config:c};
  const plan=makePlan(payload);
  const full=runActionSync(payload);
- assert.equal(full.factorialUncertainty.expectedMainEffects,24);
- assert.equal(full.factorialUncertainty.mainEffectsWithCI,24);
+ assert.equal(full.factorialUncertainty.expectedMainEffects,96);
+ assert.equal(full.factorialUncertainty.mainEffectsWithCI,96);
  assert.ok(full.main_effects.every(e=>e.estimable&&Number.isFinite(e.ci95_low)&&Number.isFinite(e.ci95_high)));
  assert.ok(full.main_effects.every(e=>e.ci95_low<=e.effect_high_minus_low&&e.ci95_high>=e.effect_high_minus_low));
  assert.ok(full.interaction_effects.every(e=>e.min_replicates_per_cell===2));
