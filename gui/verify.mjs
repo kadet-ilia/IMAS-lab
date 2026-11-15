@@ -228,6 +228,9 @@ for(const [id,name] of trustModes){
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
 await stepInput.fill("30");await stepInput.press("Tab");
+// Manual edits to the attack-start interval determine minimum phase spacing.
+const gapInput=page.getByRole("spinbutton",{name:"Время начала атаки (шаг)"});
+await gapInput.fill("1");await gapInput.press("Tab");
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 // Give phase 2 enough steps to verify that the chosen intensity curve is computed.
 for(const [phase,start] of [[3,25],[4,27],[5,29]]){
@@ -241,7 +244,15 @@ for(const phase of [6,7]){
  await page.getByRole("button",{name:/Добавить фазу/}).click();
  if((await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).count())!==1)
   throw Error("Cannot add phase "+phase);
+ if((await stepInput.inputValue())!==String(phase*30+1))
+  throw Error("Automatic T calculation must use phase count * manual base T + 1");
 }
+if((await page.getByRole("spinbutton",{name:"Начало фазы 6"}).inputValue())!=="29"||
+   (await page.getByRole("spinbutton",{name:"Начало фазы 7"}).inputValue())!=="30")
+ throw Error("New phase must start at the previous boundary plus attack-start interval");
+await stepInput.fill("220");await stepInput.press("Tab");
+if((await stepInput.inputValue())!=="220")throw Error("Automatic T must allow manual override");
+await stepInput.fill("211");await stepInput.press("Tab");
 await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).selectOption("linear");
 if((await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).locator('option:checked').innerText())!=="Линейное")
  throw Error("Linear profile must be labeled Линейное");
@@ -251,6 +262,19 @@ if((await page.locator(".lyapunov-phase-grid > .lyapunov-phase").count())!==7)
 const phasePositions=await page.locator(".lyapunov-phase-grid > .lyapunov-phase").evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));
 if(Math.max(...phasePositions)-Math.min(...phasePositions)>3)
  throw Error("Attack phases unexpectedly wrapped to multiple rows");
+// Profile-only export is available even before computing a result.
+const [phaseJsonFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ page.getByRole("button",{name:"Сохранить фазы JSON"}).click()
+]);
+const phaseJson=JSON.parse(fs.readFileSync(await phaseJsonFile.path(),"utf8"));
+if(phaseJson.numberOfPhases!==7||phaseJson.minimumPhaseGap!==1||
+   phaseJson.phaseParameters.length!==7||phaseJson.simulationSteps!==211)
+ throw Error("Phase JSON export missed attack schedule and sidebar parameters");
+const helpMarkers=page.locator(".lyapunov-inputs .parameter-tooltip");
+if((await helpMarkers.count())!==4)throw Error("All four stability parameters need help tooltips");
+await helpMarkers.first().hover();
+await helpMarkers.first().locator('[role="tooltip"]').waitFor({state:"visible",timeout:5000});
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
 await page.getByRole("button",{name:"Выполнить исследование"}).click();
 try{
@@ -264,6 +288,8 @@ const [lyapFile]=await Promise.all([
  page.getByRole("button",{name:"Экспорт JSON"}).click()
 ]);
 const lyapData=JSON.parse(fs.readFileSync(await lyapFile.path(),"utf8"));
+const progressInfo=await page.locator(".progress-strip").innerText();
+if(!progressInfo.includes("100.0%"))throw Error("Stability progress bar must display 100% after completion");
 if(lyapData.runs?.length!==1 || lyapData.summary?.length!==4 ||
   lyapData.series?.length!==lyapData.configuration.n_steps+1 ||
   !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
@@ -300,7 +326,18 @@ if((await picker.getByRole("button",{name:/Сохранить \d+ в SVG/}).coun
  throw Error("Universal export picker must enumerate charts and tables");
 await page.getByRole("button",{name:"Сохранить отдельный график, таблицу или схему"}).click();
 await page.locator(".lyapunov-study").screenshot({path:path.join(here,"stability.png")});
-const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true};
+const [archiveFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:15000}),
+ page.getByRole("button",{name:"Сохранить полный протокол JSON"}).click()
+]);
+const archive=JSON.parse(fs.readFileSync(await archiveFile.path(),"utf8"));
+if(archive.archiveFormat!=="imas-lyapunov-research-archive"||
+   archive.inputs.trustConfiguration.n_steps!==211||
+   archive.inputs.lyapunovParameters.phases.length!==7||
+   archive.results.runs[0].trajectory.length!==211||
+   archive.results.runs[0].feedback.proposed_robust.length!==212)
+ throw Error("Full research archive does not contain sufficient inputs or per-run traces");
+const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true,phaseExport:true,archive:true};
 await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
