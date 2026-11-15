@@ -717,6 +717,7 @@ function App() {
   const researchActionsRef = useRef(null);
   const lyapunovActionsRef = useRef(null);
   const [lyapunovRuntime,setLyapunovRuntime] = useState(null);
+  const [lyapunovData,setLyapunovData] = useState(null);
   const [researchRuntime,setResearchRuntime] = useState(null);
   useEffect(()=>{if(activeTab!=="help2027")lastExperimentRef.current=activeTab;},[activeTab]);
 
@@ -755,6 +756,7 @@ function App() {
     stop();
     lyapunovActionsRef.current?.stop();
     setLyapunovRuntime(null);
+    setLyapunovData(null);
     stabilityPhaseBasisRef.current=DEFAULT_CONFIG.n_steps;
     setConfig(DEFAULT_CONFIG);
     setScenario("collusion");
@@ -778,6 +780,8 @@ function App() {
     ablation: sensitivityByMode.ablation?.client_signature === experimentSignature ? sensitivityByMode.ablation : null,
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
+  const currentLyapunov=lyapunovData?.configuration?.seed===config.seed&&lyapunovData?.configuration?.n_steps===config.n_steps&&
+    lyapunovData?.configuration?.n_agents===config.n_agents&&lyapunovData?.configuration?.n_byzantine===config.n_byzantine?lyapunovData:null;
   const exportVisibleCharts = () => {
     const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
@@ -843,11 +847,11 @@ function App() {
                }}/>:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
               error={error?<div className="error-banner">{error}</div>:null}
             >
-              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime} phaseBasisSteps={stabilityPhaseBasisRef.current} onAutoStepsChange={onAutoStepsChange}/>:null}
+              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime} phaseBasisSteps={stabilityPhaseBasisRef.current} onAutoStepsChange={onAutoStepsChange} onStudyResult={setLyapunovData}/>:null}
               {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
-              {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode}/>:null}
+              {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} stability={currentLyapunov}/>:null}
             </ExperimentLayout>}
     </div>
     <footer className="statusbar">
