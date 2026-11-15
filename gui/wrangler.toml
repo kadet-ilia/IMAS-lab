@@ -1,6 +1,6 @@
 # IMAS_LaB_test: assets-only Cloudflare Worker.
 # This serves the compiled Vite React application without executing Python or Node.js.
-name = "imas-lab-test"
+name = "imas-lab"
 compatibility_date = "2026-11-02"
 workers_dev = true
 
