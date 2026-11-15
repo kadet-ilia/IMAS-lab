@@ -465,7 +465,7 @@ function TimeRangeSelector({children,start,end,onZoom,onDrag}){
   </div>;
 }
 
-function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) {
+function SingleRun({ data, config, trajectoryStatistics, onRunBands, running,onExportSvg }) {
   const [bandMode, setBandMode] = useState("sigma");
   const [bandMethod,setBandMethod] = useState("proposed_robust");
   const [showTolerance, setShowTolerance] = useState(false);
@@ -473,7 +473,7 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   const [dragRange, setDragRange] = useState(null);
   const trustReplay=useMemo(()=>baselineReplay(data,config),[data,config]);
   useEffect(()=>{setZoomRange(null);setDragRange(null);},[data]);
-  if (!data) return <><TopologyPlayback replay={trustReplay} compact/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
+  if (!data) return <><TopologyPlayback replay={trustReplay} compact onExportSvg={onExportSvg}/><div className="empty">Запустите эксперимент для построения трассировки и расчёта показателей.</div></>;
   const robust = data.metrics.find((item) => item.method === "proposed_robust");
   const last = data.series.at(-1);
   const totalBad = data.configuration.effective_byzantine_count ?? config.n_byzantine;
@@ -511,7 +511,7 @@ function SingleRun({ data, config, trajectoryStatistics, onRunBands, running }) 
   const networkVisible = config.network_enabled || config.n_sybil_agents > 0 || data.summary.delivery_ratio < 0.999;
   return <>
     <div className="trust-overview-grid">
-      <TopologyPlayback replay={trustReplay} compact />
+      <TopologyPlayback replay={trustReplay} compact onExportSvg={onExportSvg} />
       <Panel title="Сводная таблица результатов расчёта доверия" subtitle="Результаты одного прогона для всех методов агрегирования">
         <div className="table-wrap trust-summary-table"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>Смещение</th><th title="Доля шагов с |x−x*| ≤ 1,96σ/√n; это не доверительный интервал оценивателя">Номинальная полоса</th></tr></thead>
         <tbody>{data.metrics.map(item=><tr key={item.method}><td>{METHODS[item.method]||item.method}</td><td>{metricNumber(item.rmse,4)}</td><td>{metricNumber(item.mae,4)}</td><td>{metricNumber(Number.isFinite(item.bias)?Math.abs(item.bias):null,4)}</td><td>{metricPercent(item.nominal_band_rate,2)}</td></tr>)}</tbody></table></div>
@@ -706,9 +706,7 @@ function TrustHelpArticle() {
 
 function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const stabilityPhaseBasisRef=useRef(DEFAULT_CONFIG.n_steps);
   const onManualStepsChange=(value)=>{
-    if(Number.isInteger(value)&&value>0)stabilityPhaseBasisRef.current=value;
     setConfig(current=>({...current,n_steps:value}));
   };
   const onAutoStepsChange=(value)=>setConfig(current=>({...current,n_steps:value}));
@@ -769,7 +767,6 @@ function App() {
     lyapunovActionsRef.current?.stop();
     setLyapunovRuntime(null);
     setLyapunovData(null);
-    stabilityPhaseBasisRef.current=DEFAULT_CONFIG.n_steps;
     setConfig(DEFAULT_CONFIG);
     setScenario("collusion");
     setAttackLevel("high");
@@ -824,7 +821,7 @@ function App() {
 {activeTab==="help2027"?<button type="button" className="r27-manual-return" onClick={()=>setActiveTab(lastExperimentRef.current)}>Вернуться к экспериментам</button>:null}
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
-<button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>
+{activeTab!=="trace"?<button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>:null}
 </nav>
   );
 
@@ -852,14 +849,14 @@ function App() {
               title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
               description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
               progress={activeTab==="stability"?<ProgressStrip running={visibleRunning} progress={{
-                 message:lyapunovRuntime?.running?"Исследование устойчивости: вычисление траекторий":lyapunovRuntime?.hasResult?"Исследование устойчивости завершено":"Готов к исследованию устойчивости",
+                 message:lyapunovRuntime?.cacheHit?"Результаты загружены из локального кэша":lyapunovRuntime?.running?"Исследование устойчивости: вычисление траекторий":lyapunovRuntime?.hasResult?"Исследование устойчивости завершено":"Готов к исследованию устойчивости",
                  completed:lyapunovRuntime?.completed??0,total:lyapunovRuntime?.total||1,
                  percent:lyapunovRuntime?.percent??0
-               }}/>:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+               }} cacheHit={Boolean(lyapunovRuntime?.cacheHit)}/>:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
               error={error?<div className="error-banner">{error}</div>:null}
             >
-              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime} phaseBasisSteps={stabilityPhaseBasisRef.current} onAutoStepsChange={onAutoStepsChange} onStudyResult={setLyapunovData}/>:null}
-              {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
+              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime} onAutoStepsChange={onAutoStepsChange} onStudyResult={setLyapunovData}/>:null}
+              {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} onExportSvg={exportVisibleCharts}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
               {activeTab==="data"?<DataTab trace={currentTrace} monteCarlo={currentMonteCarlo} sensitivityByMode={currentSensitivityByMode} stability={currentLyapunov}/>:null}
