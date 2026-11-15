@@ -780,8 +780,7 @@ function App() {
     ablation: sensitivityByMode.ablation?.client_signature === experimentSignature ? sensitivityByMode.ablation : null,
   };
   const currentSensitivity = currentSensitivityByMode[sensitivityMode];
-  const currentLyapunov=lyapunovData?.configuration?.seed===config.seed&&lyapunovData?.configuration?.n_steps===config.n_steps&&
-    lyapunovData?.configuration?.n_agents===config.n_agents&&lyapunovData?.configuration?.n_byzantine===config.n_byzantine?lyapunovData:null;
+  const currentLyapunov=lyapunovData&&JSON.stringify(lyapunovData.sourceConfig)===JSON.stringify(config)?lyapunovData.result:null;
   const exportVisibleCharts = () => {
     const charts = [...document.querySelectorAll(".recharts-responsive-container svg, .boxplot svg, .r27-playback-svg")];
     charts.forEach((chart, index) => downloadBlob(`imas-${activeTab}-figure-${String(index + 1).padStart(2, "0")}.svg`, `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(chart)}`, "image/svg+xml;charset=utf-8"));
