@@ -8,7 +8,7 @@ import {validateAttackPhases,defaultAttackPhases,attackIntensityAt} from "./atta
 import {validateAdaptiveOptions,estimateAdaptiveDecision,ADAPTIVE_METHODS,ADAPTIVE_METHOD_IDS,ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.1.0-estimator-only";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.2.0-estimator-and-decision-feedback";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -24,6 +24,10 @@ const stats=a=>{
 };
 export function validateAdaptiveStudy(config={},options={}){
  const core=validateConfig(config),adaptive=validateAdaptiveOptions(options);
+ if(adaptive.comparisonMode==="decision_feedback"&&adaptive.evidenceModel==="legacy")
+  throw Error("Для обратной связи по решениям требуется поведенческая модель свидетельств");
+ if(adaptive.comparisonMode==="decision_feedback"&&core.network_enabled)
+  throw Error("Режим обратной связи по решениям E1-А пока поддерживается только при отключённых сетевых ограничениях: широковещательная доступность решения не моделируется по компонентам связности");
  const phases=adaptive.scenario==="dynamic"
   ?validateAttackPhases(adaptive.phases??defaultAttackPhases(core.n_steps,core.attack_start_step),core.n_steps)
   :null;
@@ -54,6 +58,7 @@ function feedbackMetrics(rows,method,gain,initial){
 export function runAdaptiveSingle(config={},options={},runIndex=0){
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс прогона");
  const {core,options:o}=validateAdaptiveStudy(config,options);
+ if(o.comparisonMode==="decision_feedback")return runAdaptiveSingleDecisionFeedback(core,o,runIndex);
  const adaptive=[];
  const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
  const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
@@ -71,8 +76,10 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
   if(Math.abs((row.trimmed_unweighted??0)-(trimmed_unweighted??0))>1e-10||
      Math.abs((row.proposed_robust??0)-(proposed_robust??0))>1e-10)
    throw Error("Нарушена согласованность контрольного агрегатора E1");
-  return {...row,...newMethods,
-   attack_intensity:o.scenario==="dynamic"?attackIntensityAt(row.step,o.phases,core.n_steps):row.attack_intensity};
+  const nominalIntensity=o.scenario==="dynamic"?attackIntensityAt(row.step,o.phases,core.n_steps):row.attack_intensity;
+  const activeIntensity=generator?.effectiveIntensity(row.step,nominalIntensity)??nominalIntensity;
+  return {...row,...newMethods,attack_intensity:activeIntensity,
+   attack_active:Number(activeIntensity>0),nominal_attack_intensity:nominalIntensity};
  });
  const metrics=ADAPTIVE_METHOD_IDS.map(method=>{
   const accepted=trajectory.filter(row=>finite(row[method]));
@@ -130,12 +137,17 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    scenario:ADAPTIVE_SCENARIO_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
    evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
+   comparisonMode:o.comparisonMode,
+   feedbackReference:o.comparisonMode==="decision_feedback"
+    ?"method-specific collective decision broadcast in an unconstrained network; independent reputation and isolation for each method"
+    :"common reputation and isolation for all estimators",
    attack:"strategy independent of temporal intensity profile; attacker labels used by simulator only",
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
    confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests",
-   stability:"auxiliary scalar feedback only, not a proof of full IMAS stability"},
+   stability:"auxiliary scalar feedback only, not a proof of full IMAS stability",
+   limitation:"Decision-feedback comparison is a synthetic closed-loop surrogate, not a full graph/network model of the IMAS; E1 original first-attack diagnostics may refer to nominal rather than effective attack onset"},
   configuration:core,options:o,methods:ADAPTIVE_METHODS,summary,paired,
   completedRuns:ordered.length,requestedRuns:o.runs,partial:ordered.length!==o.runs,
   trace:diagnostics,runs:ordered
