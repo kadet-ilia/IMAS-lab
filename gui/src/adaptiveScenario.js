@@ -69,7 +69,8 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  if(o.attackStrategy==="legacy"&&o.evidenceModel==="legacy")return null;
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
- const observedHistory=[];
+ const observedHistory=new Map();
+ let lastDeliveredStep=0;
  let feedbackDecision=null;
  const debug={behaviorEvidenceGenerated:0,uninformativeEvidence:0,maliciousWitnessed:0,
   generatedAttackProposals:0,laggedObservationCount:0,feedbackDecisionUsed:0,feedbackAbstentions:0};
@@ -108,7 +109,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  const onFeedbackDecision=({step,value})=>{
   if(!Number.isInteger(step)||step<1||!(value===null||finite(value)))
    throw Error("Недопустимое коллективное решение для обратной связи");
-  if(o.comparisonMode==="decision_feedback"&&observedHistory.length!==step)
+  if(o.comparisonMode==="decision_feedback"&&lastDeliveredStep!==step)
    throw Error("Обратная связь должна следовать после доставки предложений текущего такта");
   feedbackDecision={step,value};
  };
@@ -117,15 +118,21 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  const onProposalsDelivered=({step,values,available})=>{
   if(o.evidenceModel==="legacy")return;
   const copy={values:[...values],available:[...available]};
-  if(observedHistory.length!==step-1)
+  if(lastDeliveredStep!==step-1)
    throw Error("Запаздывание свидетельств: обнаружено нарушение порядка тактов");
-  observedHistory.push(copy);
+  lastDeliveredStep=step;
+  if(o.evidenceModel==="lagged_observation"){
+   observedHistory.set(step,copy);
+   // Only the most recent lag+1 source samples can be addressed by the
+   // specified age. Avoid O(T*N) archive growth on long simulations.
+   observedHistory.delete(step-o.evidenceLag-1);
+  }
  };
  const evidenceValue=({step,observer,target,values,available,byzantine,intensity})=>{
   if(o.evidenceModel==="legacy")throw Error("Не должен вызываться генератор при legacy-свидетельствах");
   debug.behaviorEvidenceGenerated++;
   const lag=o.evidenceModel==="lagged_observation"?o.evidenceLag:0;
-  const sample=lag?observedHistory[step-1-lag]:{values,available};
+  const sample=lag?observedHistory.get(step-lag):{values,available};
   if(lag)debug.laggedObservationCount++;
   // No directly observable proposal -> uninformative witness. Network delivery
   // still follows E1's existing transport ledger; this is not evidence latency.
@@ -150,8 +157,8 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   let score=quality;
   if(o.evidenceModel==="correlated_witnesses"){
    const common=rngFor(step,0,target,5).normal()*o.evidenceNoiseSigma;
-   score=quality+o.evidenceCorrelation*common+
-    (1-o.evidenceCorrelation)*o.evidenceNoiseSigma*random.normal();
+   score=quality+Math.sqrt(o.evidenceCorrelation)*common+
+    Math.sqrt(1-o.evidenceCorrelation)*o.evidenceNoiseSigma*random.normal();
   }else score=quality+o.evidenceNoiseSigma*random.normal();
   // Byzantine observers may inject coordinated false evaluations. Labels are
   // known only to the SIMULATOR, never to an actual trust/decision algorithm.
