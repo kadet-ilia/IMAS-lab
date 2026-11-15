@@ -306,7 +306,7 @@ if(e1a.trace.some(x=>!(x.alpha===null||(x.alpha>=0&&x.alpha<=1))||
  throw Error("E1-A: invalid adaptive control parameters in exported trace");
 await e1aAction.click();
 await page.locator(".topbar .cache-badge").waitFor({timeout:15000});
-report.e1aAdaptive={methods:e1aRows,runs:e1a.completedRuns,
+const e1aAdaptiveSummary={methods:e1aRows,runs:e1a.completedRuns,
  cacheReloaded:Boolean(await page.locator(".topbar .cache-badge").count()),
  paired:e1a.paired.length};
 
@@ -1040,6 +1040,7 @@ try{
  await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
  await secondTab.close();
 }
+report.e1aAdaptive=e1aAdaptiveSummary;
 report.unifiedFourMethods={oneRun:trustNames.length,stability:lyapunovVerification.methods,
  ablation:report.ablationRows,dataRegistry:true,monteCarloVerifiedByNodeTests:true};
 report.lyapunovStudy=lyapunovVerification;
