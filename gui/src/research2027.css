@@ -733,3 +733,13 @@
 }
 .r27-replay-compact button.r27-export-control svg{width:13px;height:13px}
 .r27-replay-compact button.r27-export-control:hover{border-color:#2672ff;color:#2672ff}
+
+/* Equal dimensions for export and Help controls across every experiment. */
+.r27-experiment-navigation button.r27-export-control{
+ width:auto;min-width:0;max-width:none;
+ height:29px;min-height:29px;max-height:29px;
+ padding:4px 9px;border-radius:3px;
+ border:1px solid #bdcddd;background:#fff;color:#375b79;
+ font-size:11px;font-weight:600;line-height:1.15;
+ box-sizing:border-box;
+}
