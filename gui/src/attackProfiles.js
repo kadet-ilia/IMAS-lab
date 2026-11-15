@@ -1,14 +1,15 @@
 /**
  * Reproducible, piecewise attack intensity (1-based discrete simulation steps).
  * A phase is active on [start, next.start-1]; last phase ends at T.
+ * There is no fixed phase-count limit: at most T different phase starts fit
+ * in a discrete simulation of T steps.
  * For a nonconstant phase intensity is the initial value and endIntensity
  * is attained on its last step. Shapes are normalized to f(0)=0, f(1)=1.
  * Legacy {start,intensity} phases retain the former constant semantics.
  */
-export const MAX_ATTACK_PHASES=5;
 export const ATTACK_SHAPES=[
  {id:"constant",label:"Постоянная"},
- {id:"linear",label:"Линейное нарастание"},
+ {id:"linear",label:"Линейное"},
  {id:"exponential",label:"Экспоненциальное"},
  {id:"parabolic",label:"Параболическое"},
  {id:"hyperbolic",label:"Гиперболическое"}
@@ -34,8 +35,10 @@ export function defaultAttackPhases(steps,attackStart=20){
 
 export function validateAttackPhases(phases,steps){
  if(!Number.isInteger(steps)||steps<1)throw Error("Профиль атаки: горизонт T должен быть положительным целым числом");
- if(!Array.isArray(phases)||!phases.length||phases.length>MAX_ATTACK_PHASES)
-  throw Error("Профиль атаки: требуется от 1 до "+MAX_ATTACK_PHASES+" фаз");
+ if(!Array.isArray(phases)||!phases.length)
+  throw Error("Профиль атаки: требуется хотя бы одна фаза");
+ if(phases.length>steps)
+  throw Error("Профиль атаки: число фаз не может превышать горизонт T");
  let previous=0;
  const normalized=phases.map((p,i)=>{
   if(!p||!Number.isInteger(p.start)||p.start<=previous||p.start>steps)
