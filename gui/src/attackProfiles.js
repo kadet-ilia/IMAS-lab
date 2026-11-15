@@ -21,20 +21,15 @@ const roundStart=(x,t)=>clamp(Math.round(x),1,t);
 
 export function defaultAttackPhases(steps,attackStart=20){
  const t=Math.max(1,Math.round(steps)),gap=Math.max(1,Math.round(attackStart));
- const candidates=[
-  {start:1,intensity:0,profile:"constant"},
-  {start:1+gap,intensity:1,profile:"constant"},
-  {start:Math.floor(t*.40),intensity:0,profile:"constant"},
-  {start:Math.floor(t*.58),intensity:1.5,profile:"constant"},
-  {start:Math.floor(t*.78),intensity:0,profile:"constant"}
- ];
- const result=[];
- for(const p of candidates){
-  const start=Math.max(p.start,result.length?result[result.length-1].start+gap:1);
+ // Equidistant initial boundaries allow automatic T=(M+1)*gap after additions.
+ // Intensities retain the original on/off/increase/off scenario.
+ const intensity=[0,1,0,1.5,0],phases=[];
+ for(let i=0;i<intensity.length;i++){
+  const start=1+i*gap;
   if(start>t)break;
-  result.push({...p,start});
+  phases.push({start,intensity:intensity[i],profile:"constant"});
  }
- return result;
+ return phases;
 }
 
 export function validateAttackPhases(phases,steps){
