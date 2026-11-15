@@ -80,6 +80,7 @@ svg { display: block; }
 
 .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .kpi-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.kpi-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kpi { min-height: 109px; background: #fff; border: 1px solid var(--border); padding: 12px 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .kpi-label { color: #46535f; font-size: 15px; line-height: 1.25; }
 .kpi-value { margin: 8px 0 5px; color: var(--blue); font-size: 29px; line-height: 1; font-weight: 690; letter-spacing: -.035em; }
