@@ -1,5 +1,5 @@
 import {attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
-import {TRUST_METHOD_IDS} from "./trustMethods.js";
+import {TRUST_METHOD_IDS,TRUST_METHOD_DEFINITIONS} from "./trustMethods.js";
 import {MAX_STABILITY_STEPS} from "./phaseScheduling.js";
 import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 import {auditFactorialDesign,estimateFactorialContrasts,FACTORIAL_AUDIT_VERSION} from "./factorialAudit.js";
@@ -178,12 +178,16 @@ export function eigenTrust(direct,active,damping){
  const scale=Math.max(...v,1e-15);idx.forEach((i,j)=>scores[i]=v[j]/scale);return scores;
 }
 export function trimmedWeightedMean(values,weights,k){
- if(!values.length)throw Error("Не заданы значения для агрегирования");
+ if(!Array.isArray(values)||!Array.isArray(weights)||values.length!==weights.length||!values.length)
+  throw Error("Значения и веса должны быть непустыми массивами одинаковой длины");
+ if(values.some(x=>!Number.isFinite(x))||weights.some(w=>!Number.isFinite(w)||w<0))
+  throw Error("Агрегирование требует конечных значений и неотрицательных конечных весов");
+ if(!Number.isInteger(k)||k<0)throw Error("Число отбрасываемых элементов должно быть неотрицательным целым");
  const order=all(values.length).sort((i,j)=>values[i]-values[j]||i-j);k=Math.min(k,Math.floor((order.length-1)/2));
  const keep=order.slice(k,order.length-k),w=keep.map(i=>Math.max(weights[i],0)),total=sum(w);
  return total<=1e-15?mean(keep.map(i=>values[i])):sum(keep.map((i,j)=>values[i]*w[j]))/total;
 }
-function aggregate(proposals,reputation,available,c,last){
+export function aggregateProposals(proposals,reputation,available,c){
  const idx=all(proposals.length).filter(i=>available[i]&&good(proposals[i]));
  if(!idx.length)return Object.fromEntries(STABILITY_METHODS.map(method=>[method,null]));
  const v=idx.map(i=>proposals[i]),w=idx.map(i=>Math.max(reputation[i],c.minimum_weight)),arithmetic=mean(v);
@@ -367,6 +371,7 @@ const finiteMean=a=>{const numbers=valid(a);return numbers.length?mean(numbers):
 function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,
  effective_agent_count:c.n_agents+c.n_sybil_agents,
  effective_byzantine_count:c.n_byzantine+c.n_sybil_agents,
+ methods:TRUST_METHOD_DEFINITIONS,
  topology_semantics:c.network_enabled&&c.n_sybil_agents>0&&c.network_topology!=="complete"?
   "base_"+c.network_topology+"+forced_sybil_clique_and_index_anchors":
   c.network_enabled?c.network_topology:"complete_without_transport_constraints"};}
@@ -383,7 +388,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   ?(all(c.n_steps).map(i=>i+1).find(step=>attackIntensityAt(step,c.attack_schedule,c.n_steps)>0)??null)
   :c.attack_start_step;
  const hist=[],queue=[],lastValues=Array(n).fill(NaN),lastSteps=Array(n).fill(-1e9);
- let previous=Object.fromEntries(METHODS.map(m=>[m,null]));
+ 
  const errors=Object.fromEntries(METHODS.map(m=>[m,[]])),signed=Object.fromEntries(METHODS.map(m=>[m,[]])),correct=Object.fromEntries(METHODS.map(m=>[m,[]])),consensus=Object.fromEntries(METHODS.map(m=>[m,[]])),cover=Object.fromEntries(METHODS.map(m=>[m,[]])),availableDecision=Object.fromEntries(METHODS.map(m=>[m,[]]));
  let attempted=0,delivered=0,lost=0,dropped=0,expired=0,queued=0;
  let communicationState=null;const messageLedger=[];
@@ -409,8 +414,8 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex,record);
   transportWallMs+=performance.now()-transportT0;
   const aggregateT0=performance.now();
-  const decisions=aggregate(tx.values,rep,tx.available,c,previous);
-  aggregateBundleWallMs+=performance.now()-aggregateT0;previous=decisions;
+  const decisions=aggregateProposals(tx.values,rep,tx.available,c);
+  aggregateBundleWallMs+=performance.now()-aggregateT0;
   const honest=all(n).filter(i=>tx.available[i]&&!bad[i]),reference=honest.length?median(honest.map(i=>tx.values[i])):null;
   const half=honest.length?1.96*c.honest_noise_sigma/Math.sqrt(honest.length):null;
   for(const m of METHODS){
@@ -531,7 +536,7 @@ export function bootstrapComparisons(rows,c){
    if(!differences.length)continue;const sign=["rmse_to_truth","mae_to_truth","consensus_error"].includes(metric)?-1:1,benefit=differences.map(x=>sign*x),boot=[];
    for(let b=0;b<c.bootstrap_samples;b++){let total=0;for(let j=0;j<benefit.length;j++)total+=benefit[r.integer(0,benefit.length-1)];boot.push(total/benefit.length);}
    const lo=quantile(boot,.025),hi=quantile(boot,.975);
-   result.push({metric,baseline,proposed:"proposed_robust",n_pairs:differences.length,raw_difference_mean:mean(differences),benefit_mean:mean(benefit),benefit_ci_low:lo,benefit_ci_high:hi,probability_better:boot.filter(x=>x>0).length/boot.length,significant:lo>0||hi<0,direction:"positive_benefit_means_proposed_is_better",bootstrap_samples:c.bootstrap_samples});
+   result.push({metric,baseline,proposed:"proposed_robust",n_pairs:differences.length,raw_difference_mean:mean(differences),benefit_mean:mean(benefit),benefit_ci_low:lo,benefit_ci_high:hi,probability_better:boot.filter(x=>x>0).length/boot.length,interval_excludes_zero_unadjusted:lo>0||hi<0,direction:"positive_benefit_means_proposed_is_better",bootstrap_samples:c.bootstrap_samples});
   }
  }return result;
 }
