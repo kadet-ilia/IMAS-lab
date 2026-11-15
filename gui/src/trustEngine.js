@@ -1,4 +1,5 @@
 import {attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
+import {TRUST_METHOD_IDS} from "./trustMethods.js";
 import {MAX_STABILITY_STEPS} from "./phaseScheduling.js";
 import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 import {auditFactorialDesign,estimateFactorialContrasts,FACTORIAL_AUDIT_VERSION} from "./factorialAudit.js";
@@ -14,9 +15,8 @@ import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./met
  *
  * No network calls and no server resources are used by this module.
  */
-export const METHODS=["arithmetic_mean","trust_weighted_mean","proposed_robust"];
-// Extended four-way comparison is used by the Lyapunov study; legacy E1 contracts remain three-way.
-export const STABILITY_METHODS=["arithmetic_mean","trust_weighted_mean","trimmed_unweighted","proposed_robust"];
+export const METHODS=TRUST_METHOD_IDS;
+export const STABILITY_METHODS=METHODS; // Backward-compatible alias; all five E1 tabs use exactly these four.
 export const SCENARIOS=["static_bias","subtle_bias","on_off","collusion"];
 export const DEFAULTS={
  seed:20260716,n_agents:50,n_byzantine:10,n_sybil_agents:0,sybil_activation_step:20,
@@ -64,7 +64,7 @@ export function exogenousEventRng(seed,run,stage,step,source=0,target=0){
  return createRng(seed,run,EXOGENOUS_STAGES[stage],step,source,target);
 }
 export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
-export const TRUST_MODEL_VERSION="trust-js-2.12.0-attack-profiles-four-aggregators";
+export const TRUST_MODEL_VERSION="trust-js-2.13.0-unified-four-aggregators";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
  sybil_activation_step:[1,MAX_STABILITY_STEPS],n_steps:[1,MAX_STABILITY_STEPS],n_runs:[1,10000],n_sensitivity_runs:[1,100],
@@ -519,7 +519,7 @@ export function trajectoryStats(paths,c){
 export function bootstrapComparisons(rows,c){
  const r=createRng(c.seed,99173),result=[];
  for(const metric of ["rmse_to_truth","mae_to_truth","probability_correct","consensus_error"]){
-  for(const baseline of ["arithmetic_mean","trust_weighted_mean"]){
+  for(const baseline of METHODS.filter(method=>method!=="proposed_robust")){
    const byRun=new Map();for(const x of rows){const v=byRun.get(x.run)||{};v[x.method]=x[metric];byRun.set(x.run,v);}
    const differences=[...byRun.values()].filter(v=>good(v.proposed_robust)&&good(v[baseline])).map(v=>v.proposed_robust-v[baseline]);
    if(!differences.length)continue;const sign=["rmse_to_truth","mae_to_truth","consensus_error"].includes(metric)?-1:1,benefit=differences.map(x=>sign*x),boot=[];
@@ -626,8 +626,8 @@ function summarizeAblation(plan,rows,partial,completed){
  }
  for(const schedule of ["on_off","persistent"])for(const iso of ["with_isolation","no_isolation"]){
   const a=schedule+"_"+iso;
-  for(const method of ["arithmetic_mean","trust_weighted_mean"])
-   add("aggregation",a,"proposed_robust",a,method,"probability_correct","Робастный агрегатор минус базовый при фиксированной политике изоляции");
+  for(const method of METHODS.filter(method=>method!=="proposed_robust"))
+   add("aggregation",a,"proposed_robust",a,method,"probability_correct","Комбинированный агрегатор минус базовый при фиксированной политике изоляции");
  }
  for(const iso of ["with_isolation","no_isolation"])for(const method of METHODS)
   add("attack_schedule","on_off_"+iso,method,"persistent_"+iso,method,
@@ -709,7 +709,10 @@ export function assembleResult(plan,completed){
   results.push(x);
  }
  const keys=["probability_correct","rmse_to_truth","detection_rate","delivery_ratio"];
- const analysed=estimateFactorialContrasts(plan.designs,rows,keys);
+ const analysed={
+  effects:METHODS.flatMap(method=>estimateFactorialContrasts(plan.designs,rows,keys,method).effects.map(e=>({...e,method}))),
+  interactions:METHODS.flatMap(method=>estimateFactorialContrasts(plan.designs,rows,keys,method).interactions.map(e=>({...e,method})))
+ };
  const effects=analysed.effects.map(e=>({
   ...e,factor:plan.factors[e.factorIndex],effect_high_minus_low:e.effect,
   benefit_effect:e.effect===null?null:(e.metric==="rmse_to_truth"?-e.effect:e.effect),
@@ -723,11 +726,11 @@ export function assembleResult(plan,completed){
  const withCI=effects.filter(e=>e.ci95_low!==null).length;
  const factorialUncertainty={
   method:"within-cell-replicate-independent-normal-approx-95",metrics:keys,
-  expectedMainEffects:6*keys.length,estimableMainEffects:estimable,
+  expectedMainEffects:METHODS.length*6*keys.length,estimableMainEffects:estimable,
   mainEffectsWithCI:withCI,confidenceLevel:.95,
   caveat:"Точечные эффекты оцениваются только при полном наборе ячеек. Интервал рассчитывается по вариации отдельных повторов внутри каждой ячейки (≥2 на ячейку), без учёта неопределённости самой модели, смешения высших взаимодействий или поправки на множественные сравнения."
  };
- return withMetricPassport({mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,factorialUncertainty,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>(b.absolute_effect??-1)-(a.absolute_effect??-1)).slice(0,30),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1});
+ return withMetricPassport({mode:"factorial",factors:plan.factors,factor_ranges:plan.ranges,designMetadata:plan.designMetadata,factorialUncertainty,design_points:results,main_effects:effects,interaction_effects:interactions.sort((a,b)=>(b.absolute_effect??-1)-(a.absolute_effect??-1)),raw_runs:rows,configuration:configDetail(c),partial,completed_tasks:completed.length,requested_tasks:total,parallel_workers_used:1});
 }
 export function runTask(plan,task){
  const scenarioIndex=plan.action==="sensitivity"&&plan.mode==="factorial"?task.index:0;
