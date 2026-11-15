@@ -4,13 +4,9 @@ import {ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip
 import {defaultAttackPhases,validateLyapunovOptions,buildLyapunovArchive,LYAPUNOV_STUDY_VERSION} from "./lyapunovStudy.js";
 import {ATTACK_SHAPES,attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
 import {addAttackPhase,validatePhaseGaps} from "./phaseScheduling.js";
+import {TRUST_METHOD_DEFINITIONS} from "./trustMethods.js";
 
-const METHODS=[
- ["arithmetic_mean","Арифметическое среднее","#2672ff"],
- ["trust_weighted_mean","Среднее с учётом доверия","#079b91"],
- ["trimmed_unweighted","Покоординатное усечённое среднее (без доверия)","#d18a31"],
- ["proposed_robust","Доверительно-усечённое среднее (комбинированный метод)","#123a63"]
-];
+const METHODS=TRUST_METHOD_DEFINITIONS.map(m=>[m.id,m.label,m.color]);
 const n=(v,d=3)=>Number.isFinite(v)?v.toFixed(d):"—";
 const percent=v=>Number.isFinite(v)?(v*100).toFixed(1)+"%":"—";
 function download(name,body,type){
@@ -83,7 +79,7 @@ function PhaseEditor({phases,setPhases,steps,attackStart,basisSteps,onAutoStepsC
  </Panel>;
 }
 
-const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,phaseBasisSteps,onAutoStepsChange},ref){
+const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,phaseBasisSteps,onAutoStepsChange,onStudyResult},ref){
  const [phases,setPhases]=useState(()=>defaultAttackPhases(config.n_steps,config.attack_start_step));
  const [gain,setGain]=useState(.5);
  const [initialError,setInitialError]=useState(1);
@@ -122,7 +118,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,ph
    if(message.type==="result"||message.type==="error"){
     setWorkerStage(message.type);
     worker.terminate();workerRef.current=null;setRunning(false);
-    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});}
+    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});onStudyResult?.(message.result);setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});}
     else setError(message.message||"Ошибка вычислительного потока");
    }
   };
@@ -161,7 +157,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,ph
     <button className="secondary-button" type="button" onClick={start} disabled={running||!valid}>Выполнить исследование</button>
     <button className="secondary-button" type="button" onClick={stop} disabled={!running}>Остановить</button>
    </div></div>
-  <p className="r27-note"><strong>Четыре сравниваемых метода:</strong> арифметическое среднее, среднее с учётом доверия, усечённое среднее без доверительных весов и комбинированное доверительно-усечённое среднее. Для двух усечённых методов используются одинаковые ограничения значений и одинаковое симметричное усечение; различаются только веса. Общая политика изоляции агентов задаётся в параметрах эксперимента.</p>
+  <p className="r27-note"><strong>Четыре сравниваемых метода:</strong> {TRUST_METHOD_DEFINITIONS.map(m=>m.label).join("; ")}. Для двух усечённых методов используются одинаковые ограничения значений и одинаковое симметричное усечение; различаются только веса. Общая политика изоляции агентов задаётся в параметрах эксперимента.</p>
   <p className="r27-note"><strong>Цель:</strong> количественно сопоставить методы по точности решений и поведению замкнутой скалярной модели при произвольной заданной последовательности включения, выключения и усиления атаки. Числовые результаты иллюстрируют модель, а не доказывают устойчивость полной ИМАС.</p>
   <div className="lyapunov-inputs">
    <label><span className="lyapunov-field-label">Коэффициент обратной связи k <ParameterTooltip text="Коэффициент k задаёт скорость коррекции состояния по коллективной оценке. Для номинальной модели требуется 0 < k < 2; большие значения могут вызвать перерегулирование."/></span><input aria-label="Коэффициент обратной связи k" type="number" min=".01" max="1.99" step=".05" value={gain} onChange={e=>setGain(Number(e.target.value))} disabled={running}/></label>
