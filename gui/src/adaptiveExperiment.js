@@ -7,6 +7,7 @@ import {validateConfig,simulateRun,TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {validateAttackPhases,defaultAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 import {validateAdaptiveOptions,estimateAdaptiveDecision,ADAPTIVE_METHODS,ADAPTIVE_METHOD_IDS,ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
+import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
 export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.2.0-estimator-and-decision-feedback";
 const finite=Number.isFinite;
@@ -198,16 +199,23 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
   return {method,...Object.fromEntries(metrics.map(m=>[m,stats(group.map(row=>row[m]))]))};
  });
- const paired=ADAPTIVE_METHOD_IDS.filter(method=>method!=="adaptive_robust").map(baseline=>{
+ const pairedRaw=ADAPTIVE_METHOD_IDS.filter(method=>method!=="adaptive_robust").map((baseline,index)=>{
   const diffs=ordered.map(run=>{
    const a=run.metrics.find(x=>x.method==="adaptive_robust")?.rmse;
    const b=run.metrics.find(x=>x.method===baseline)?.rmse;
    return finite(a)&&finite(b)?a-b:null;
   }).filter(finite);
+  const sign=diffs.length>=2?pairedSignFlipP(diffs,core.seed+index*101,4095):null;
   return {baseline,adaptive:"adaptive_robust",metric:"rmse_adaptive_minus_baseline",
    ...stats(diffs),wins:diffs.filter(x=>x<0).length,losses:diffs.filter(x=>x>0).length,
-   ties:diffs.filter(x=>x===0).length};
+   ties:diffs.filter(x=>x===0).length,p_value:sign?.p??null,
+   sign_flip_method:sign?.method??null,sign_flip_replicates:sign?.replicates??0};
  });
+ const indices=pairedRaw.map((row,i)=>row.p_value===null?-1:i).filter(i=>i>=0);
+ const adjusted=holmAdjusted(indices.map(i=>pairedRaw[i].p_value));
+ const holmByIndex=new Map(indices.map((i,j)=>[i,adjusted[j]]));
+ const paired=pairedRaw.map((row,i)=>({...row,p_holm:holmByIndex.get(i)??null,
+  inferentialStatus:"exploratory; not independently confirmed"}));
  const diagnostics=ordered[0].trajectory.map(row=>({
   step:row.step,attack_intensity:row.attack_intensity,truth:core.desired_action,
   trimmed_unweighted:row.trimmed_unweighted,proposed_robust:row.proposed_robust,
@@ -228,7 +236,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
-   confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests",
+   confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests; two-sided paired sign-flip p values Holm-adjusted across four planned RMSE contrasts",
+   inference:"Sign-flip requires pairwise sign-exchangeability under the null; paired seeds alone do not establish validity. This study is exploratory; independent confirmatory series required.",
    stability:"auxiliary scalar feedback only, not a proof of full IMAS stability",
    limitation:"Decision-feedback comparison is a synthetic closed-loop surrogate, not a full graph/network model of the IMAS; E1 original first-attack diagnostics may refer to nominal rather than effective attack onset"},
   configuration:core,options:o,methods:ADAPTIVE_METHODS,summary,paired,
