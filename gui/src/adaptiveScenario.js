@@ -10,7 +10,7 @@
  */
 import {createRng} from "./trustEngine.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.0.0";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.1.0";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -70,8 +70,9 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
  const observedHistory=[];
+ let feedbackDecision=null;
  const debug={behaviorEvidenceGenerated:0,uninformativeEvidence:0,maliciousWitnessed:0,
-  generatedAttackProposals:0,laggedObservationCount:0};
+  generatedAttackProposals:0,laggedObservationCount:0,feedbackDecisionUsed:0,feedbackAbstentions:0};
  const rngFor=(step,source=0,target=0,stage=0)=>
   createRng(config.seed,runIndex,0x45A11,stage,step,source,target);
  const isActive=(step,intensity)=>{
@@ -104,6 +105,15 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   }
   return out;
  };
+ const onFeedbackDecision=({step,value})=>{
+  if(!Number.isInteger(step)||step<1||!(value===null||finite(value)))
+   throw Error("Недопустимое коллективное решение для обратной связи");
+  if(o.comparisonMode==="decision_feedback"&&observedHistory.length!==step)
+   throw Error("Обратная связь должна следовать после доставки предложений текущего такта");
+  feedbackDecision={step,value};
+ };
+ const effectiveIntensity=(step,intensity)=>
+  o.attackStrategy==="legacy"||isActive(step,intensity)?intensity:0;
  const onProposalsDelivered=({step,values,available})=>{
   if(o.evidenceModel==="legacy")return;
   const copy={values:[...values],available:[...available]};
@@ -124,7 +134,15 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   }
   const peers=sample.values.filter((x,i)=>i!==target&&sample.available[i]&&finite(x));
   if(peers.length<2){debug.uninformativeEvidence++;return 0.5;}
-  const reference=med(peers);
+  let reference=med(peers);
+  if(o.comparisonMode==="decision_feedback"){
+   if(feedbackDecision?.step!==step)throw Error("Отсутствует коллективное решение текущего такта");
+   if(!finite(feedbackDecision.value)){
+    debug.uninformativeEvidence++;debug.feedbackAbstentions++;return 0.5;
+   }
+   reference=feedbackDecision.value;
+   debug.feedbackDecisionUsed++;
+  }
   const residual=Math.abs(sample.values[target]-reference);
   // A bounded quality score based on observable disagreement, not oracle truth.
   const quality=1/(1+(residual/o.evidenceTolerance)**2);
@@ -145,7 +163,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   return clamp(score);
  };
  return Object.freeze({
-  transformProposals,onProposalsDelivered,
+  transformProposals,onProposalsDelivered,onFeedbackDecision,effectiveIntensity,
   evidenceValue:o.evidenceModel==="legacy"?null:evidenceValue,
   getDiagnostic:()=>({...debug,modelVersion:ADAPTIVE_SCENARIO_VERSION,
    strategy:o.attackStrategy,evidenceModel:o.evidenceModel}),
