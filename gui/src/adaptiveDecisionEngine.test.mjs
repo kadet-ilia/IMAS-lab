@@ -121,3 +121,18 @@ test("E1-A default-size scenario runs to completion without missing or inconsist
  assert.ok(data.summary.every(x=>x.rmse.n===2));
  assert.ok(data.trace.every(x=>Number.isFinite(x.adaptive_robust)));
 });
+
+test("four planned paired RMSE comparisons expose valid exact/Monte Carlo p-values and Holm adjustment",()=>{
+ const data=runAdaptiveStudy(core,{runs:3,scenario:"static_bias",trimEachSide:2});
+ assert.equal(data.paired.length,4);
+ assert.equal(data.methodology.comparisonMode,"estimator_only");
+ for(const row of data.paired){
+  assert.ok(Number.isFinite(row.p_value)&&row.p_value>=0&&row.p_value<=1);
+  assert.ok(Number.isFinite(row.p_holm)&&row.p_holm>=row.p_value&&row.p_holm<=1);
+  assert.equal(row.inferentialStatus,"exploratory; not independently confirmed");
+  assert.equal(row.n,3);
+  assert.equal(row.sign_flip_method,"exact-paired-sign-flip");
+ }
+ const single=runAdaptiveStudy(core,{runs:1,scenario:"static_bias"});
+ assert.ok(single.paired.every(x=>x.p_value===null&&x.p_holm===null));
+});
