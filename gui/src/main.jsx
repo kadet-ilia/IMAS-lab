@@ -22,6 +22,7 @@ import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import LyapunovPanel from "./LyapunovPanel.jsx";
+import AdaptiveDecisionPanel from "./AdaptiveDecisionPanel.jsx";
 import FigureExportPicker from "./FigureExportPicker.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig,TRUST_MODEL_VERSION} from "./trustEngine.js";
@@ -699,7 +700,7 @@ const HELP_SECTIONS = [
   ["trust", "Модель доверия"], ["reputation", "Глобальная репутация EigenTrust"], ["isolation", "Изоляция и восстановление"],
   ["aggregation", "Четыре агрегатора"], ["network", "Сетевая модель и транспорт"], ["sybil", "Sybil-атака"],
   ["statistics", "Межпрогонная статистика"], ["bootstrap", "Парный bootstrap"], ["distributions", "Распределения"],
-  ["sensitivity", "Анализ чувствительности"], ["lyapunov", "Устойчивость по Ляпунову и точность"], ["ablation", "Абляционный эксперимент"],
+  ["sensitivity", "Анализ чувствительности"], ["adaptive", "Адаптивное формирование коллективных решений"], ["lyapunov", "Устойчивость по Ляпунову и точность"], ["ablation", "Абляционный эксперимент"],
   ["provenance-new", "Первичные события и баланс сообщений"], ["parallel", "Параллельное выполнение и кэш"],
   ["process", "Порядок проведения"], ["up34-parity", "Межъязыковая верификация"], ["software", "Программный комплекс"],
   ["interpretation", "Интерпретация результатов"], ["glossary", "Термины"], ["limits", "Границы применимости"],
@@ -730,6 +731,16 @@ function TrustHelpArticle() {
     <section id="bootstrap"><h2>Парный bootstrap различий методов</h2><p>Сравнивается комбинированный метод с тремя альтернативами по четырём показателям: RMSE, MAE, P(правильное решение) и ошибке консенсуса (12 контрастов при наличии валидных значений). Для каждого контраста берутся пары результатов одного и того же индекса прогона; индекс совместно перевыбирается с возвращением. Для ошибок положительное значение benefit означает уменьшение ошибки у комбинированного метода, для правильности — увеличение доли правильных решений.</p><Formula number="18">Δ<sub>b</sub>=R<sub>pair</sub><sup>−1</sup>Σ<sub>r∈S<sub>b</sub></sub>[L<sub>base</sub><sup>(r)</sup>−L<sub>comb</sub><sup>(r)</sup>] (для ошибок).</Formula><p>95%-й percentile-bootstrap-интервал задаётся квантилями 0,025 и 0,975 распределения повторных средних. Доля перевыборок с положительным эффектом не является вероятностью истинного превосходства. Интервалы без поправки на 12 потенциальных сравнений предназначены для описательного анализа и не подтверждают статистическую значимость всего семейства гипотез.</p></section>
     <section id="distributions"><h2>Распределения результатов</h2><p>Для каждого из четырёх методов отдельно формируются гистограммы и сводки min, P5, P25, медиана, P75, P95, max, среднее и СКО. Доступные показатели: RMSE, MAE, доля правильных решений, полнота и задержка обнаружения. Неопределённые результаты (null) исключаются из числовой выборки; для интерпретации важно учитывать, сколько прогонов оказалось допустимыми. Несколько групп или асимметрия распределения не описываются одним средним.</p></section>
     <section id="sensitivity"><h2>Анализ чувствительности</h2><p>В режиме «Чувствительность» доступны три самостоятельных плана. (1) Однофакторный: изменение числа византийских агентов f при неизменном числе усечений trim_each_side, заданном в общей конфигурации; рассчитываются прогонные средние RMSE, P(правильное решение), полноты обнаружения и доли доставки. При f=0 полнота обнаружения не определена. (2) Шестифакторный двухуровневый: f, порог изоляции, окно доверия, коэффициент сохранения свидетельств φ, множитель смещения атакующих предложений и СКО шума корректных агентов. (3) Абляция: сравнение постоянной и периодической атаки при включённой и выключенной изоляции; подробности приведены ниже.</p><p>Для многофакторного плана используется полный 2⁶=64 либо регулярный полуплан 2⁽⁶⁻¹⁾=32 с I=ABCDEF (разрешение VI); произвольные случайные подмножества не используются. В полуплане главные эффекты смешаны с пятикратными взаимодействиями, двухфакторные — с четырёхфакторными. Основным показателем на экране является RMSE, поскольку бинарная правильность может насыщаться значением 1, а при выключенной сети доля доставки тождественно равна 1. Нулевой эффект по такому показателю не означает отсутствия влияния параметра на все свойства модели.</p><Formula number="19">E<sub>j</sub>=mean(y|z<sub>j</sub>=+1)−mean(y|z<sub>j</sub>=−1).</Formula><Formula number="20">E<sub>jk</sub>=mean(y|z<sub>j</sub>z<sub>k</sub>=+1)−mean(y|z<sub>j</sub>z<sub>k</sub>=−1).</Formula><p>Оценки контрастов строятся по средним повторам внутри полностью заполненных точек, а 95%-е нормальные интервалы — по выборочной дисперсии независимых повторов внутри каждой точки (не менее двух на ячейку). Интервалы не корректируются на множественные проверки и не включают неопределённость физической модели, смешение высших взаимодействий и ошибки выбора диапазонов факторов. Контраст относится к заданным двум уровням, а не к производной по единице параметра.</p></section>
+    <section id="adaptive"><h2>Адаптивное формирование коллективных решений (E1-А)</h2>
+    <p>Новый режим сравнивает исходное усечённое среднее, исходное комбинированное доверительно-усечённое среднее и три варианта E1-А на одном потоке наблюдений. Исторические идентификаторы четырёх методов E1 и их определения не изменяются. В режиме estimator_only все методы используют общие репутацию, доставку и политику изоляции, что исключает некорректное приписывание эффекта отдельного агрегатора изменению изоляции.</p>
+    <p>После удаления по k наблюдений с обоих краёв численного ряда строятся невзвешенная и доверительно-взвешенная оценки. Для равных значений используется одинаковая доля сохранения по группе, что устраняет зависимость результата от порядка идентификаторов при пограничном усечении. Для новой ветви доступны два порядка обработки: ограничение–усечение и усечение–ограничение. Коэффициент α определяет долю взвешенной оценки в адаптивном решении.</p>
+    <Formula number="E1-А.1">ŷ_A(t) = Π_S((1−α_t)ŷ_T(t)+α_t ŷ_W(t)), 0≤α_t≤1.</Formula>
+    <Formula number="E1-А.2">α_t = min(1, h_t/H) · min(1, N_eff/(qN_K)) · exp(−λ · |ŷ_T−ŷ_W|/s), s=max(s₀,1.4826·MAD).</Formula>
+    <p>Здесь h_t — число завершённых тактов накопления свидетельств, H — окно подготовки доверия, q — минимальная нормированная эффективная доля выборки, λ — штраф расхождения. Это эвристическая формула, не статистически калиброванная вероятность честности и не гарантированно оптимальное правило. Для неё предусмотрены абляции α=0 и α=const.</p>
+    <p>При исследовании адаптивного числа усечений k число экстремальных оценок определяется только по наблюдаемым предложениям. Истинное число нарушителей не передаётся оценивателю. Истина и метки атакующих используются постфактум для расчёта показателей. Фазы интенсивности не означают разные стратегии: в режиме dynamic используется заданный базовым E1 генератор смещения.</p>
+    <p>Для сравнения рассчитываются RMSE по принятым решениям, безусловная доля правильных решений, покрытие, 95-й процентиль абсолютной ошибки, парные прогонные разности и вспомогательные показатели обратной связи. Доверительные интервалы — нормальная аппроксимация для средних независимых прогонов, без поправки на множественность. Вспомогательная функция V=e² не доказывает устойчивость всей ИМАС.</p>
+    <p>Полный JSON содержит все прогоны, параметры, диагностические ряды и траектории. Вычисления выполняются Web Worker с возможностью остановки, контрольными точками после каждого завершённого прогона и возобновлением через локальный IndexedDB. Отдельное математическое описание хранится в gui/docs/adaptive-collective-decisions-mathematics.md.</p>
+    </section>
     <section id="lyapunov"><h2>Оценка устойчивости по Ляпунову и точности коллективных решений</h2>
      <p>Режим «Устойчивость и точность» исследует частную одномерную модель с обратной связью, использующую погрешности коллективных оценок действующего ядра доверия. В принятой вспомогательной постановке целевой объект имеет постоянное равновесие x*=0 в координатах ошибки e=x−x*. Этот вспомогательный объект не отождествляется с полной ИМАС: устойчивость обучения доверия, изменения топологии, сети и общей модели поддержки принятия решений требует отдельного исследования.</p>
      <Formula number="21">δ<sub>m</sub>(t)=ŷ<sub>m</sub>(t)−y*, e<sub>m</sub>(t+1)=(1−k)e<sub>m</sub>(t)−kδ<sub>m</sub>(t), 0&lt;k&lt;2.</Formula>
@@ -802,6 +813,9 @@ function App() {
   const lyapunovActionsRef = useRef(null);
   const [lyapunovRuntime,setLyapunovRuntime] = useState(null);
   const [lyapunovData,setLyapunovData] = useState(null);
+  const adaptiveActionsRef = useRef(null);
+  const [adaptiveRuntime,setAdaptiveRuntime] = useState(null);
+  const [adaptiveData,setAdaptiveData] = useState(null);
   const [researchRuntime,setResearchRuntime] = useState(null);
   useEffect(()=>{if(activeTab!=="help2027")lastExperimentRef.current=activeTab;},[activeTab]);
 
@@ -839,6 +853,9 @@ function App() {
   const reset = () => {
     stop();
     lyapunovActionsRef.current?.stop();
+    adaptiveActionsRef.current?.stop();
+    setAdaptiveRuntime(null);
+    setAdaptiveData(null);
     setLyapunovRuntime(null);
     setLyapunovData(null);
     setConfig(DEFAULT_CONFIG);
@@ -853,7 +870,9 @@ function App() {
     setActiveTab("trace");
   };
   const newSeed = () => setConfig((current) => ({ ...current, seed: Math.floor((Date.now() + Math.random() * 100000) % 2147483647) }));
-  const runForTab = () => activeTab==="stability" ? lyapunovActionsRef.current?.start() : request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
+  const runForTab = () => activeTab==="stability" ? lyapunovActionsRef.current?.start()
+    : activeTab==="adaptive" ? adaptiveActionsRef.current?.start()
+    : request(activeTab === "mc" ? "monte_carlo" : activeTab === "sensitivity" ? "sensitivity" : "trace", { sensitivityMode });
   const experimentSignature = JSON.stringify({ scenario, config });
   const currentTrace = trace?.client_signature === experimentSignature ? trace : null;
   const currentMonteCarlo = monteCarlo?.client_signature === experimentSignature ? monteCarlo : null;
@@ -871,9 +890,9 @@ function App() {
   const toggleFullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   const isResearch=activeTab.startsWith("study-");
   const researchReady=isResearch&&researchRuntime?.studyId===activeTab.slice(6);
-  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):activeTab==="stability"?Boolean(lyapunovRuntime?.running):running;
+  const visibleRunning=isResearch?(researchReady&&Boolean(researchRuntime.running)):activeTab==="stability"?Boolean(lyapunovRuntime?.running):activeTab==="adaptive"?Boolean(adaptiveRuntime?.running):running;
   const visibleSeed=isResearch?(researchReady?researchRuntime.seed:"—"):config.seed;
-  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(activeTab==="stability"?(lyapunovRuntime?.hasResult?"Результат расчёта":"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—"));
+  const lastTimestamp=isResearch?(researchReady&&researchRuntime.lastCompletedAt?new Date(researchRuntime.lastCompletedAt).toLocaleString("ru-RU"):"—"):(activeTab==="stability"?(lyapunovRuntime?.hasResult?"Результат расчёта":"—"):activeTab==="adaptive"?(adaptiveRuntime?.hasResult?"Результат расчёта":"—"):(lastRun?.at ? lastRun.at.toLocaleString("ru-RU") : "—"));
   const experimentNavigation = (
 <nav className={"r27-experiment-navigation"+(activeTab==="help2027"?" r27-help-navigation":"")} aria-label="Выбор эксперимента">
 <label htmlFor="imas-experiment-select">Эксперимент
@@ -886,8 +905,8 @@ function App() {
 <option value="study-misinformation">Нарушение коллективного решения</option>
 </select></label>
 <div className="r27-mode-tabs" role="group" aria-label="Режим эксперимента">
- {["trace","mc","sensitivity","stability","data"].includes(activeTab)
-   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["data","Данные"]].map(([id,name])=>
+ {["trace","mc","sensitivity","stability","adaptive","data"].includes(activeTab)
+   ? [["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["adaptive","Адаптивные решения"],["data","Данные"]].map(([id,name])=>
       <button type="button" key={id} className={"r27-mode-tab"+(activeTab===id?" active":"")} aria-pressed={activeTab===id} onClick={()=>setActiveTab(id)}>{name}</button>)
    : <span className="r27-mode-placeholder">Основной режим</span>}
 </div>
@@ -898,12 +917,12 @@ function App() {
 </nav>
   );
 
-  return <div className="app-shell"><header className="topbar"><div className="brand"><h1><span className="brand-line">Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы</span><span className="brand-line">поддержки принятия решений по обеспечению кибербезопасности</span></h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&(activeTab==="stability"?lyapunovRuntime?.cacheHit:lastRun?.cacheHit)?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
+  return <div className="app-shell"><header className="topbar"><div className="brand"><h1><span className="brand-line">Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы</span><span className="brand-line">поддержки принятия решений по обеспечению кибербезопасности</span></h1></div><div className="top-meta"><span>Статус:</span><strong className={visibleRunning?"busy-text":"ready-text"}>{visibleRunning?"Выполняется":"Готов к запуску"}</strong><span className="meta-separator"/><span>Последний прогон:</span><strong>{lastTimestamp}</strong><span className="meta-separator"/><span>Сид:</span><strong>{visibleSeed}</strong>{!isResearch&&(activeTab==="stability"?lyapunovRuntime?.cacheHit:activeTab==="adaptive"?adaptiveRuntime?.cacheHit:lastRun?.cacheHit)?<span className="cache-badge">кэш</span>:null}</div><div className="toolbar">
 {activeTab!=="help2027"?<>
-<button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):running}><Icon name="seed"/>Новый сид</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.newSeed():newSeed} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="seed"/>Новый сид</button>
 <button className="primary-small" onClick={isResearch?()=>researchActionsRef.current?.start():runForTab} disabled={isResearch?(!researchReady||visibleRunning):(visibleRunning||activeTab==="data")}><Icon name="play"/>Запустить</button>
-<button onClick={isResearch?()=>researchActionsRef.current?.stop():activeTab==="stability"?()=>lyapunovActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!visibleRunning}><Icon name="stop"/>Остановить</button>
-<button onClick={isResearch?()=>researchActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="reset"/>Сбросить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.stop():activeTab==="stability"?()=>lyapunovActionsRef.current?.stop():activeTab==="adaptive"?()=>adaptiveActionsRef.current?.stop():stop} disabled={isResearch?(!researchReady||!visibleRunning):!visibleRunning}><Icon name="stop"/>Остановить</button>
+<button onClick={isResearch?()=>researchActionsRef.current?.reset():activeTab==="adaptive"?()=>adaptiveActionsRef.current?.reset():reset} disabled={isResearch?(!researchReady||visibleRunning):visibleRunning}><Icon name="reset"/>Сбросить</button>
 </>:null}
 <FigureExportPicker activeTab={activeTab}/>
 <button className="icon-button" title="Полноэкранный режим" onClick={toggleFullscreen}><Icon name="fullscreen"/></button>
@@ -925,10 +944,14 @@ function App() {
                  message:lyapunovRuntime?.cacheHit?"Результаты загружены из локального кэша":lyapunovRuntime?.running?"Исследование устойчивости: вычисление траекторий":lyapunovRuntime?.hasResult?"Исследование устойчивости завершено":"Готов к исследованию устойчивости",
                  completed:lyapunovRuntime?.completed??0,total:lyapunovRuntime?.total||1,
                  percent:lyapunovRuntime?.percent??0
-               }} cacheHit={Boolean(lyapunovRuntime?.cacheHit)}/>:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+               }} cacheHit={Boolean(lyapunovRuntime?.cacheHit)}/>:activeTab==="adaptive"?<ProgressStrip running={visibleRunning} progress={{
+                message:adaptiveRuntime?.hasResult?"Адаптивное исследование завершено":visibleRunning?"Формирование адаптивных решений":"Готов к исследованию E1-А",
+                completed:adaptiveRuntime?.completed??0,total:adaptiveRuntime?.total||1,percent:adaptiveRuntime?.percent??0
+               }} cacheHit={Boolean(adaptiveRuntime?.cacheHit)}/>:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
               error={error?<div className="error-banner">{error}</div>:null}
             >
               {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime} onAutoStepsChange={onAutoStepsChange} onStudyResult={setLyapunovData}/>:null}
+              {activeTab==="adaptive"?<AdaptiveDecisionPanel ref={adaptiveActionsRef} config={config} onRuntimeChange={setAdaptiveRuntime} onStudyResult={setAdaptiveData}/>:null}
               {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running} onExportSvg={exportVisibleCharts}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
@@ -936,7 +959,7 @@ function App() {
             </ExperimentLayout>}
     </div>
     <footer className="statusbar">
-      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):activeTab==="stability"?(lyapunovRuntime?.completed??0)+" прогонов / "+(lyapunovRuntime?.total??0):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
+      <span>Шаги: {isResearch?(researchReady?(researchRuntime?.steps??"—"):"—"):activeTab==="stability"?(lyapunovRuntime?.completed??0)+" прогонов / "+(lyapunovRuntime?.total??0):activeTab==="adaptive"?(adaptiveRuntime?.completed??0)+" прогонов / "+(adaptiveRuntime?.total??0):(currentTrace?.series?.at(-1)?.step??0)+" / "+config.n_steps}</span>
       <span>Время: {isResearch?(researchReady&&researchRuntime?.elapsedMs!=null?formatSeconds(researchRuntime.elapsedMs/1000):"—"):(lastRun?formatSeconds(lastRun.seconds):"—")}</span>
       <span>{isResearch?(visibleRunning?"Вычисляется":researchRuntime?.hasResult?"Завершено":"—"):(progress?String(progress.completed??0)+" / "+String(progress.total??0):"—")}</span>
       <span>Сид: {activeTab==="help2027"?"—":visibleSeed}</span>
