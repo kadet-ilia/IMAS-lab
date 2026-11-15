@@ -772,9 +772,9 @@ await page.locator(".sensitivity-action select").selectOption("ablation");
 await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
 await page.getByText("Абляционный эксперимент: режим атаки × управляющая изоляция",{exact:true}).waitFor({timeout:45000});
 report.ablationRows=await page.locator("section.panel").filter({hasText:"Абляционный эксперимент: режим атаки × управляющая изоляция"}).locator("tbody tr").count();
-report.ablationWorkerSmoke=report.ablationRows===12;
+report.ablationWorkerSmoke=report.ablationRows===16;
 
-if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×3 ablation rows from Web Workers, got "+report.ablationRows);
+if(!report.ablationWorkerSmoke)throw Error("UP-35: expected 4×4 ablation rows from Web Workers, got "+report.ablationRows);
 
 // A repeated call must read the complete scientific result from the cache.
 await page.locator(".sensitivity-action").getByRole("button",{name:"Выполнить"}).click();
@@ -823,7 +823,7 @@ for(const pool of [4,1]){
  poolResults[pool]=await readAblationExport();
  if(poolResults[pool].parallel_workers_used!==pool)
   throw Error("UP-35: requested "+pool+" workers, got "+poolResults[pool].parallel_workers_used);
- if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==12)
+ if(poolResults[pool].completed_tasks!==8||poolResults[pool].ablation_rows.length!==16)
   throw Error("UP-35: incomplete real browser calculation at pool size "+pool);
 }
 report.workerPool4=poolResults[4].parallel_workers_used;
@@ -852,7 +852,7 @@ await page.getByRole("group",{name:"Режим эксперимента"}).getBy
 const factorRow=page.locator(".data-row").filter({hasText:"Многофакторная чувствительность"});
 const [factorFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),factorRow.getByRole("button",{name:"Скачать JSON"}).click()]);
 const factorData=JSON.parse(fs.readFileSync(await factorFile.path(),"utf8"));
-const planned=factorData.main_effects?.filter(x=>x.metric==="probability_correct")||[];
+const planned=factorData.main_effects?.filter(x=>x.metric==="probability_correct"&&x.method==="proposed_robust")||[];
 if(planned.length!==6||planned.some(x=>!x.estimable||!Number.isFinite(x.effect_high_minus_low)||!Number.isFinite(x.ci95_low)||!Number.isFinite(x.ci95_high)))
  throw Error("E1 factorial: incomplete numerical factors despite completed UI render");
 report.factorialRendering={bars:effectBars,intervalRows,computed:planned.length,points:factorData.design_points?.length};
