@@ -10,7 +10,7 @@ const file=path=>readFileSync(resolve(gui,path),"utf8");
 
 test("Cloudflare Workers serves Vite build as SPA assets without a server script",()=>{
  const config=file("wrangler.toml");
- assert.match(config,/^name\s*=\s*"imas-lab-test"\s*$/m);
+ assert.match(config,/^name\s*=\s*"imas-lab"\s*$/m);
  assert.match(config,/^\[assets\]\s*$/m);
  assert.match(config,/^directory\s*=\s*"\.\/dist"\s*$/m);
  assert.match(config,/^not_found_handling\s*=\s*"single-page-application"\s*$/m);
