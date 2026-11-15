@@ -7,7 +7,7 @@ const LEGACY_GROUPS={
  "Базовая модель":["purpose","configuration","agents"],
  "Доверие и безопасность":["trust","reputation","isolation","aggregation","network","sybil"],
  "Статистика и оценивание":["statistics","bootstrap","distributions","sensitivity","ablation"],
- "Устойчивость и точность":["lyapunov"],
+ "Устойчивость и точность":["adaptive","lyapunov"],
  "Реализация и применение":["provenance-new","parallel","process","up34-parity","software","interpretation","glossary","limits"]
 };
 const INTRO=[
