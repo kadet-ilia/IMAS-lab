@@ -370,7 +370,7 @@ function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,
  topology_semantics:c.network_enabled&&c.n_sybil_agents>0&&c.network_topology!=="complete"?
   "base_"+c.network_topology+"+forced_sybil_clique_and_index_anchors":
   c.network_enabled?c.network_topology:"complete_without_transport_constraints"};}
-export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false){
+export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false,onStep=null){
  const c=validateConfig(rawConfig),startWall=performance.now(),n=c.n_agents+c.n_sybil_agents,r=createRng(c.seed,scenarioIndex,runIndex);
  const sybil=all(n).map(i=>i>=c.n_agents),bad=sybil.slice(),badIds=r.choice(all(c.n_agents),c.n_byzantine);badIds.forEach(i=>bad[i]=true);
  const a=buildAdjacency(c,r,bad),groups=Array(n).fill(0);
@@ -454,6 +454,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     states.push({step:t+1,agent:i+1,state:sybil[i]&&!eligible[i]?"dormant":!active[i]?"isolated":sybil[i]?"sybil":bad[i]?"byzantine":"honest"});
    }
   }
+  if(onStep&&((t+1)%Math.max(1,Math.ceil(c.n_steps/100))===0||t+1===c.n_steps))onStep(t+1,c.n_steps);
  }
  // A pre-attack isolation of a latent Byzantine identity is not attack detection.
  const found=all(n).filter(i=>firstAttackIsolationAt[i]!==null),allBad=bad.filter(Boolean).length;
