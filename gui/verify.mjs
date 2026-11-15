@@ -114,7 +114,7 @@ async function assertStandardWorkspace(section) {
     throw Error(section+": workspace columns are not adjacent: "+JSON.stringify({aside,main}));
   }
   if((await page.locator("h1").count())!==1 ||
-     (await page.locator("h1").first().innerText()).trim()!==standardHeading){
+     (await page.locator("h1").first().innerText()).replace(/\s+/g," ").trim()!==standardHeading){
     throw Error(section+": the only h1 must be the unified laboratory heading");
   }
   if(!(await workspace.locator(":scope > main.content > nav.r27-experiment-navigation").count())){
@@ -125,13 +125,28 @@ await assertStandardWorkspace("Расчет доверия");
 const titleGeometry=await page.locator(".topbar").evaluate(el=>{
  const brand=el.querySelector(".brand h1"),toolbar=el.querySelector(".toolbar");
  const a=brand.getBoundingClientRect(),b=toolbar.getBoundingClientRect(),bar=el.getBoundingClientRect();
- return {text:brand.innerText,left:a.left,right:a.right,bottom:a.bottom,toolbarTop:b.top,top:bar.top,bottomBar:bar.bottom,viewportWidth:window.innerWidth,scrollWidth:brand.scrollWidth,clientWidth:brand.clientWidth};
+ const lines=[...brand.querySelectorAll(".brand-line")].map(x=>x.getBoundingClientRect());
+ const select=document.getElementById("imas-experiment-select");
+ return {
+  text:brand.innerText.replace(/\s+/g," ").trim(),left:a.left,right:a.right,top:a.top,bottom:a.bottom,
+  toolbarLeft:b.left,barLeft:bar.left,barRight:bar.right,barTop:bar.top,barBottom:bar.bottom,
+  scrollWidth:brand.scrollWidth,clientWidth:brand.clientWidth,scrollHeight:brand.scrollHeight,clientHeight:brand.clientHeight,
+  font:getComputedStyle(brand).fontSize,lines:lines.map(x=>({top:x.top,bottom:x.bottom})),
+  selectFont:getComputedStyle(select).fontSize,
+  labelFont:getComputedStyle(select.closest("label")).fontSize,
+  optionFont:getComputedStyle(select.options[0]).fontSize
+ };
 });
-if(titleGeometry.text!=="Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности"||
- titleGeometry.bottom>titleGeometry.toolbarTop+2||
- titleGeometry.right>titleGeometry.viewportWidth+2||
- titleGeometry.scrollWidth>titleGeometry.clientWidth+2)
- throw Error("Full long laboratory heading must remain visible above toolbar: "+JSON.stringify(titleGeometry));
+if(titleGeometry.text!==standardHeading||
+ titleGeometry.lines.length!==2||titleGeometry.lines[0].top>=titleGeometry.lines[1].top||
+ titleGeometry.right>titleGeometry.toolbarLeft+2||
+ titleGeometry.top<titleGeometry.barTop-2||titleGeometry.bottom>titleGeometry.barBottom+2||
+ titleGeometry.scrollWidth>titleGeometry.clientWidth+2||
+ titleGeometry.scrollHeight>titleGeometry.clientHeight+2||
+ titleGeometry.font!=="18px"||
+ titleGeometry.labelFont!=="12px"||titleGeometry.selectFont!=="12px"||titleGeometry.optionFont!=="12px"){
+ throw Error("Two-line left brand and experiment selector must match the active layout: "+JSON.stringify(titleGeometry));
+}
 const trustSummary=page.locator(".trust-summary-table tbody tr");
 if((await trustSummary.count())!==4)throw Error("One-run results must contain four shared trust methods");
 const trustNames=await trustSummary.locator("td:first-child").allTextContents();
