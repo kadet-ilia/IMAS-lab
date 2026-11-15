@@ -5,6 +5,7 @@ import {defaultAttackPhases,validateLyapunovOptions,buildLyapunovArchive,LYAPUNO
 import {ATTACK_SHAPES,attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
 import {addAttackPhase,validatePhaseGaps} from "./phaseScheduling.js";
 import {TRUST_METHOD_DEFINITIONS} from "./trustMethods.js";
+import {loadLyapunovResult,saveLyapunovResult} from "./lyapunovCache.js";
 
 const METHODS=TRUST_METHOD_DEFINITIONS.map(m=>[m.id,m.label,m.color]);
 const n=(v,d=3)=>Number.isFinite(v)?v.toFixed(d):"—";
@@ -89,47 +90,98 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,on
  const [progress,setProgress]=useState({completed:0,total:0,percent:0,step:0,totalSteps:config.n_steps});
  const [error,setError]=useState("");
  const [saved,setSaved]=useState(null);
- const workerRef=useRef(null);
- // Preserve manually edited phase boundaries when the sidebar horizon or attack gap changes.
- useEffect(()=>()=>{workerRef.current?.terminate();workerRef.current=null;},[]);
+ const [cacheHit,setCacheHit]=useState(false);
+ const [cacheWarning,setCacheWarning]=useState("");
+ const workerRef=useRef(null),runningRef=useRef(false),jobToken=useRef(0);
+ // Preserve manually edited phase boundaries when sidebar parameters change.
+ useEffect(()=>()=>{jobToken.current++;workerRef.current?.terminate();workerRef.current=null;},[]);
  const options={phases,gain,initialError,tolerance,runs};
  const signature=JSON.stringify({config,options});
  const result=saved?.signature===signature?saved.value:null;
  let valid=true,validationError="";
  try{validateLyapunovOptions(config,options);}catch(reason){valid=false;validationError=reason.message||String(reason);}
+
+ // On remount, return a previously completed, durable result for the exact
+ // scientific configuration rather than showing an empty study.
+ useEffect(()=>{
+  if(!valid||running||result||runningRef.current)return;
+  let cancelled=false;
+  loadLyapunovResult(config,options).then(value=>{
+   if(!cancelled&&value&&!runningRef.current){
+    setSaved({signature,value});setCacheHit(true);setWorkerStage("cached");
+    setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});
+    onStudyResult?.({sourceConfig:config,result:value});
+   }
+  }).catch(()=>{/* Keep the UI usable; an explicit run will retry and report cache faults. */});
+  return ()=>{cancelled=true;};
+ },[signature,running,Boolean(result)]);
+
  const stop=()=>{
+  jobToken.current++;runningRef.current=false;
   workerRef.current?.terminate();workerRef.current=null;
-  setRunning(false);setWorkerStage("stopped");setError("Расчёт остановлен пользователем. Частичные результаты не интерпретируются.");
+  setRunning(false);setWorkerStage("stopped");
+  setError("Расчёт остановлен пользователем. Частичные результаты не интерпретируются.");
  };
- const start=()=>{
-  if(workerRef.current)return;
+ const start=async()=>{
+  if(runningRef.current||workerRef.current)return;
   try{validateLyapunovOptions(config,options);}
   catch(reason){setError(reason.message||String(reason));return;}
-  setError("");setSaved(null);setRunning(true);setWorkerStage("launched");setProgress({completed:0,total:runs,percent:0,step:0,totalSteps:config.n_steps});
-  const worker=new Worker(new URL("./lyapunovWorker.js",import.meta.url),{type:"module"});
+  runningRef.current=true;
+  const token=++jobToken.current,runSignature=signature,runConfig=config,runOptions=options;
+  setError("");setSaved(null);setCacheHit(false);setCacheWarning("");
+  setRunning(true);setWorkerStage("checking_cache");
+  setProgress({completed:0,total:runs,percent:0,step:0,totalSteps:config.n_steps});
+  let cached=null;
+  try{cached=await loadLyapunovResult(runConfig,runOptions);}
+  catch(reason){setCacheWarning("Не удалось прочитать локальный кэш: "+(reason.message||String(reason)));}
+  if(token!==jobToken.current||!runningRef.current)return;
+  if(cached){
+   setSaved({signature:runSignature,value:cached});
+   onStudyResult?.({sourceConfig:runConfig,result:cached});
+   setCacheHit(true);setWorkerStage("cached");
+   setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});
+   runningRef.current=false;setRunning(false);
+   return;
+  }
+  let worker;
+  try{worker=new Worker(new URL("./lyapunovWorker.js",import.meta.url),{type:"module"});}
+  catch(reason){runningRef.current=false;setRunning(false);setError(reason.message||String(reason));return;}
   workerRef.current=worker;
-  const runSignature=signature;
-  worker.onmessage=event=>{
-   if(workerRef.current!==worker)return;
+  setWorkerStage("launched");
+  worker.onmessage=async event=>{
+   if(workerRef.current!==worker||token!==jobToken.current)return;
    const message=event.data||{};
    if(message.type==="status")setWorkerStage(message.stage);
    if(message.type==="progress")setProgress({completed:message.completed,total:message.total,percent:message.percent,step:message.step,totalSteps:message.totalSteps});
    if(message.type==="result"||message.type==="error"){
-    setWorkerStage(message.type);
-    worker.terminate();workerRef.current=null;setRunning(false);
-    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});onStudyResult?.({sourceConfig:config,result:message.result});setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});}
-    else setError(message.message||"Ошибка вычислительного потока");
+    worker.terminate();workerRef.current=null;
+    if(message.type==="result"){
+     setWorkerStage("saving");
+     try{await saveLyapunovResult(runConfig,runOptions,message.result);}
+     catch(reason){setCacheWarning("Результат вычислен, но не сохранён в IndexedDB: "+(reason.message||String(reason)));}
+     if(token!==jobToken.current)return;
+     setSaved({signature:runSignature,value:message.result});
+     onStudyResult?.({sourceConfig:runConfig,result:message.result});
+     setProgress({completed:runs,total:runs,percent:100,step:runConfig.n_steps,totalSteps:runConfig.n_steps});
+     setWorkerStage("result");
+    }else{setWorkerStage("error");setError(message.message||"Ошибка вычислительного потока");}
+    runningRef.current=false;setRunning(false);
    }
   };
-  worker.onerror=e=>{if(workerRef.current!==worker)return;worker.terminate();workerRef.current=null;setRunning(false);setError(e.message||"Ошибка вычислительного потока");};
-  worker.postMessage({type:"run",config,options});
+  worker.onerror=e=>{
+   if(workerRef.current!==worker||token!==jobToken.current)return;
+   worker.terminate();workerRef.current=null;runningRef.current=false;
+   setRunning(false);setWorkerStage("error");setError(e.message||"Ошибка вычислительного потока");
+  };
+  worker.postMessage({type:"run",config:runConfig,options:runOptions});
  };
- useImperativeHandle(ref,()=>({start,stop,reset:()=>{stop();setSaved(null);setError("");setPhases(defaultAttackPhases(config.n_steps,config.attack_start_step));}}));
+ useImperativeHandle(ref,()=>({start,stop,reset:()=>{stop();setSaved(null);setCacheHit(false);setError("");setPhases(defaultAttackPhases(config.n_steps,config.attack_start_step));}}));
  useEffect(()=>{
   onRuntimeChange?.({running,completed:progress.completed,total:progress.total,
-    percent:progress.percent,step:progress.step,totalSteps:progress.totalSteps,stage:workerStage,
+    percent:running||result?progress.percent:0,step:progress.step,totalSteps:progress.totalSteps,stage:workerStage,
+    cacheHit:Boolean(result)&&cacheHit,cacheWarning:cacheWarning,
     lastCompletedAt:result?new Date().toISOString():null,hasResult:Boolean(result)});
- },[running,progress.completed,progress.total,progress.percent,progress.step,workerStage,Boolean(result)]);
+ },[running,progress.completed,progress.total,progress.percent,progress.step,workerStage,cacheHit,cacheWarning,Boolean(result)]);
  const timeline=Array.from({length:config.n_steps},(_,i)=>({step:i+1,intensity:valid?attackIntensityAt(i+1,phases,config.n_steps):null}));
  const metrics=result?.summary||[];
  const proposed=metrics.find(x=>x.method==="proposed_robust");
@@ -174,6 +226,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,on
   </Panel>
   {!valid?<p role="alert" className="imas-validation-error">{validationError}</p>:null}
   {error?<p role="alert" className="error-banner">{error}</p>:null}
+  {cacheWarning?<p role="alert" className="imas-validation-error">{cacheWarning}</p>:null}
   {running?<p className="r27-note" role="status">Выполнено прогонов: {progress.completed} / {progress.total}. Состояние вычислительного потока: {({idle:"готов",launched:"запуск",worker_imported:"загружен",computing:"вычисление",result:"завершён",error:"ошибка",stopped:"остановлен"}[workerStage]||workerStage)}.</p>:null}
   {result?<React.Fragment>
    <div className="kpi-grid">
