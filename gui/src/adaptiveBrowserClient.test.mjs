@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {runAdaptiveBrowser,loadAdaptiveCheckpoint} from "./adaptiveBrowserClient.js";
+import {runAdaptiveBrowser,loadAdaptiveCheckpoint,adaptiveCacheKey} from "./adaptiveBrowserClient.js";
+import {ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 import {runAdaptiveSingle,validateAdaptiveStudy} from "./adaptiveExperiment.js";
 
 class MockAdaptiveWorker {
@@ -44,6 +45,7 @@ test("E1-A holds one non-reentrant origin lock while preserving checkpoints and 
   assert.equal(state.attempts,1,"One origin lock per scientific job");
   assert.ok(progress.some(p=>p.completed===2));
   const validated=validateAdaptiveStudy(config,options);
+  assert.ok(adaptiveCacheKey(validated.core,validated.options).includes(ADAPTIVE_SCENARIO_VERSION));
   const checkpoint=await loadAdaptiveCheckpoint(validated.core,validated.options);
   assert.equal(checkpoint.completedRuns,2);
   assert.equal(checkpoint.result.partial,false);
