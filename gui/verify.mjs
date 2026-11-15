@@ -339,6 +339,7 @@ if(archive.archiveFormat!=="imas-lyapunov-research-archive"||
  throw Error("Full research archive does not contain sufficient inputs or per-run traces");
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true,phaseExport:true,archive:true};
 await stepInput.fill("200");await stepInput.press("Tab");
+await gapInput.fill("20");await gapInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
 const ablationMode=page.locator(".sensitivity-action select");
