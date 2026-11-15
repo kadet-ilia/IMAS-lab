@@ -111,3 +111,13 @@ test("partial runs are flagged, and incompatible run index sequences are rejecte
  assert.equal(partial.partial,true);assert.equal(partial.completedRuns,1);
  assert.throws(()=>summarizeAdaptiveRuns([{...first,run:1}],core,opts),/порядок/);
 });
+
+test("E1-A default-size scenario runs to completion without missing or inconsistent estimates",()=>{
+ const cfg={n_agents:50,n_byzantine:10,n_steps:200,attack_start_step:20,
+  trim_each_side:10,seed:20260716};
+ const data=runAdaptiveStudy(cfg,{runs:2});
+ assert.equal(data.completedRuns,2);
+ assert.equal(data.trace.length,200);
+ assert.ok(data.summary.every(x=>x.rmse.n===2));
+ assert.ok(data.trace.every(x=>Number.isFinite(x.adaptive_robust)));
+});
