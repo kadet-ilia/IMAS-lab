@@ -1,8 +1,9 @@
 import React, {forwardRef,useEffect,useImperativeHandle,useRef,useState} from "react";
 import {CartesianGrid,Line,LineChart,ReferenceLine,ResponsiveContainer,Tooltip,XAxis,YAxis,Legend} from "recharts";
-import {ExperimentPanel as Panel,ExperimentKpi as Kpi} from "./ExperimentLayout.jsx";
-import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION} from "./lyapunovStudy.js";
-import {ATTACK_SHAPES,attackIntensityAt} from "./attackProfiles.js";
+import {ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip} from "./ExperimentLayout.jsx";
+import {defaultAttackPhases,validateLyapunovOptions,buildLyapunovArchive,LYAPUNOV_STUDY_VERSION} from "./lyapunovStudy.js";
+import {ATTACK_SHAPES,attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
+import {addAttackPhase,validatePhaseGaps} from "./phaseScheduling.js";
 
 const METHODS=[
  ["arithmetic_mean","Арифметическое среднее","#2672ff"],
@@ -16,18 +17,35 @@ function download(name,body,type){
  const blob=new Blob([body],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
  link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);
 }
-function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
+function PhaseEditor({phases,setPhases,steps,attackStart,basisSteps,onAutoStepsChange,disabled}){
+ const [phaseError,setPhaseError]=useState("");
  const edit=(index,key,value)=>setPhases(prev=>prev.map((p,i)=>i===index?{...p,[key]:value}:p));
  const setProfile=(index,profile)=>setPhases(prev=>prev.map((p,i)=>i!==index?p:{
   ...p,profile,endIntensity:profile==="constant"?p.intensity:(p.endIntensity??Math.min(5,p.intensity+1))
  }));
  const add=()=>{
-  const last=phases.at(-1).start;
-  if(last<steps)
-   setPhases(prev=>[...prev,{start:last+1,intensity:0,profile:"constant"}]);
+  try{
+   validatePhaseGaps(phases,attackStart);
+   const proposed=addAttackPhase(phases,attackStart,basisSteps);
+   setPhases(proposed.phases);
+   onAutoStepsChange(proposed.steps);
+   setPhaseError("");
+  }catch(reason){setPhaseError(reason.message||String(reason));}
+ };
+ const saveProfile=()=>{
+  try{
+   const normalized=validateAttackPhases(phases,steps);
+   validatePhaseGaps(normalized,attackStart);
+   const document={format:"imas-dynamic-attack-profile",schemaVersion:1,
+    savedAt:new Date().toISOString(),numberOfPhases:normalized.length,
+    simulationSteps:steps,phaseBasisSteps:basisSteps,minimumPhaseGap:attackStart,
+    phaseParameters:normalized,curveSemantics:"initial and final attack intensity, 0..5; phase ends before next phase"};
+   download("imas-attack-phases.json",JSON.stringify(document,null,2),"application/json;charset=utf-8");
+   setPhaseError("");
+  }catch(reason){setPhaseError(reason.message||String(reason));}
  };
  return <Panel title="Динамическая активность атаки"
-  subtitle="Число фаз не ограничено искусственным пределом. Все фазы размещаются в одном горизонтальном ряду с прокруткой; каждый шаг может быть началом отдельной фазы. Для изменяемого профиля интенсивность переходит от начальной к конечной за время фазы.">
+  subtitle="Добавляемая фаза начинается не раньше чем через заданное в боковой панели «Время начала атаки» число шагов. Расширение горизонта: T = количество фаз × опорное T + 1. Все значения можно изменять вручную.">
   <div className="lyapunov-phase-grid" aria-label="Фазы динамической атаки">
    {phases.map((phase,i)=><div className="lyapunov-phase" key={i}>
     <div className="lyapunov-phase-heading"><strong>Фаза {i+1}</strong>
@@ -54,16 +72,18 @@ function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
   </div>
   <div className="action-controls lyapunov-phase-actions">
    <button className="secondary-button" type="button"
-    disabled={disabled||phases.at(-1).start>=steps}
+    disabled={disabled}
     onClick={add}>Добавить фазу (сейчас {phases.length})</button>
    <button className="secondary-button" type="button" disabled={disabled}
-    onClick={()=>setPhases(defaultAttackPhases(steps,attackStart))}>Типовой профиль on–off–усиление</button>
+    onClick={()=>{setPhases(defaultAttackPhases(steps,attackStart));setPhaseError("");}}>Типовой профиль on–off–усиление</button>
+   <button className="secondary-button" type="button" onClick={saveProfile}>Сохранить фазы JSON</button>
   </div>
-  <p className="r27-note">Линейный: u; экспоненциальный: (e⁴ᵘ−1)/(e⁴−1); параболический: u²; гиперболический: 5u/(1+4u), где u∈[0;1] — нормированное время внутри фазы. При постоянной форме начальная интенсивность сохраняется до следующей фазы.</p>
+  {phaseError?<p className="imas-validation-error" role="alert">{phaseError}</p>:null}
+  <p className="r27-note">Опорное T: {basisSteps} шагов; минимальный интервал между началами фаз: {attackStart} шагов. Линейный: u; экспоненциальный: (e⁴ᵘ−1)/(e⁴−1); параболический: u²; гиперболический: 5u/(1+4u), где u∈[0;1] — нормированное время внутри фазы. При постоянной форме начальная интенсивность сохраняется до следующей фазы.</p>
  </Panel>;
 }
 
-const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},ref){
+const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,phaseBasisSteps,onAutoStepsChange},ref){
  const [phases,setPhases]=useState(()=>defaultAttackPhases(config.n_steps,config.attack_start_step));
  const [gain,setGain]=useState(.5);
  const [initialError,setInitialError]=useState(1);
@@ -71,11 +91,11 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
  const [runs,setRuns]=useState(12);
  const [running,setRunning]=useState(false);
  const [workerStage,setWorkerStage]=useState("idle");
- const [progress,setProgress]=useState({completed:0,total:0});
+ const [progress,setProgress]=useState({completed:0,total:0,percent:0,step:0,totalSteps:config.n_steps});
  const [error,setError]=useState("");
  const [saved,setSaved]=useState(null);
  const workerRef=useRef(null);
- useEffect(()=>setPhases(defaultAttackPhases(config.n_steps,config.attack_start_step)),[config.n_steps,config.attack_start_step]);
+ // Preserve manually edited phase boundaries when the sidebar horizon or attack gap changes.
  useEffect(()=>()=>{workerRef.current?.terminate();workerRef.current=null;},[]);
  const options={phases,gain,initialError,tolerance,runs};
  const signature=JSON.stringify({config,options});
@@ -90,7 +110,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   if(workerRef.current)return;
   try{validateLyapunovOptions(config,options);}
   catch(reason){setError(reason.message||String(reason));return;}
-  setError("");setSaved(null);setRunning(true);setWorkerStage("launched");setProgress({completed:0,total:runs});
+  setError("");setSaved(null);setRunning(true);setWorkerStage("launched");setProgress({completed:0,total:runs,percent:0,step:0,totalSteps:config.n_steps});
   const worker=new Worker(new URL("./lyapunovWorker.js",import.meta.url),{type:"module"});
   workerRef.current=worker;
   const runSignature=signature;
@@ -98,11 +118,11 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
    if(workerRef.current!==worker)return;
    const message=event.data||{};
    if(message.type==="status")setWorkerStage(message.stage);
-   if(message.type==="progress")setProgress({completed:message.completed,total:message.total});
+   if(message.type==="progress")setProgress({completed:message.completed,total:message.total,percent:message.percent,step:message.step,totalSteps:message.totalSteps});
    if(message.type==="result"||message.type==="error"){
     setWorkerStage(message.type);
     worker.terminate();workerRef.current=null;setRunning(false);
-    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});setProgress({completed:runs,total:runs});}
+    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});}
     else setError(message.message||"Ошибка вычислительного потока");
    }
   };
@@ -112,8 +132,9 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
  useImperativeHandle(ref,()=>({start,stop,reset:()=>{stop();setSaved(null);setError("");setPhases(defaultAttackPhases(config.n_steps,config.attack_start_step));}}));
  useEffect(()=>{
   onRuntimeChange?.({running,completed:progress.completed,total:progress.total,
+    percent:progress.percent,step:progress.step,totalSteps:progress.totalSteps,stage:workerStage,
     lastCompletedAt:result?new Date().toISOString():null,hasResult:Boolean(result)});
- },[running,progress.completed,progress.total,Boolean(result)]);
+ },[running,progress.completed,progress.total,progress.percent,progress.step,workerStage,Boolean(result)]);
  const timeline=Array.from({length:config.n_steps},(_,i)=>({step:i+1,intensity:valid?attackIntensityAt(i+1,phases,config.n_steps):null}));
  const metrics=result?.summary||[];
  const proposed=metrics.find(x=>x.method==="proposed_robust");
@@ -143,12 +164,12 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange},r
   <p className="r27-note"><strong>Четыре сравниваемых метода:</strong> арифметическое среднее, среднее с учётом доверия, усечённое среднее без доверительных весов и комбинированное доверительно-усечённое среднее. Для двух усечённых методов используются одинаковые ограничения значений и одинаковое симметричное усечение; различаются только веса. Общая политика изоляции агентов задаётся в параметрах эксперимента.</p>
   <p className="r27-note"><strong>Цель:</strong> количественно сопоставить методы по точности решений и поведению замкнутой скалярной модели при произвольной заданной последовательности включения, выключения и усиления атаки. Числовые результаты иллюстрируют модель, а не доказывают устойчивость полной ИМАС.</p>
   <div className="lyapunov-inputs">
-   <label>Коэффициент обратной связи k<input aria-label="Коэффициент обратной связи k" type="number" min=".01" max="1.99" step=".05" value={gain} onChange={e=>setGain(Number(e.target.value))} disabled={running}/></label>
-   <label>Начальное отклонение e(0)<input aria-label="Начальное отклонение" type="number" min="-100" max="100" step=".1" value={initialError} onChange={e=>setInitialError(Number(e.target.value))} disabled={running}/></label>
-   <label>Допуск по состоянию ε<input aria-label="Допуск по состоянию" type="number" min=".001" max="100" step=".01" value={tolerance} onChange={e=>setTolerance(Number(e.target.value))} disabled={running}/></label>
-   <label>Число независимых прогонов R<input aria-label="Число прогонов устойчивости" type="number" min="1" max="200" step="1" value={runs} onChange={e=>setRuns(Number(e.target.value))} disabled={running}/></label>
+   <label><span className="lyapunov-field-label">Коэффициент обратной связи k <ParameterTooltip text="Коэффициент k задаёт скорость коррекции состояния по коллективной оценке. Для номинальной модели требуется 0 < k < 2; большие значения могут вызвать перерегулирование."/></span><input aria-label="Коэффициент обратной связи k" type="number" min=".01" max="1.99" step=".05" value={gain} onChange={e=>setGain(Number(e.target.value))} disabled={running}/></label>
+   <label><span className="lyapunov-field-label">Начальное отклонение e(0) <ParameterTooltip text="Значение ошибки состояния e=x−x* в начале моделирования. Влияет на начальную функцию Ляпунова V(0)=e(0)²."/></span><input aria-label="Начальное отклонение" type="number" min="-100" max="100" step=".1" value={initialError} onChange={e=>setInitialError(Number(e.target.value))} disabled={running}/></label>
+   <label><span className="lyapunov-field-label">Допуск по состоянию ε <ParameterTooltip text="Допустимое абсолютное отклонение |e| от целевого состояния. Используется при определении момента окончательного входа в область допуска."/></span><input aria-label="Допуск по состоянию" type="number" min=".001" max="100" step=".01" value={tolerance} onChange={e=>setTolerance(Number(e.target.value))} disabled={running}/></label>
+   <label><span className="lyapunov-field-label">Число независимых прогонов R <ParameterTooltip text="Число повторных моделирований с разными воспроизводимыми случайными реализациями. Определяет статистическую точность средних оценок и сравнений."/></span><input aria-label="Число прогонов устойчивости" type="number" min="1" max="200" step="1" value={runs} onChange={e=>setRuns(Number(e.target.value))} disabled={running}/></label>
   </div>
-  <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} disabled={running}/>
+  <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} basisSteps={phaseBasisSteps} onAutoStepsChange={onAutoStepsChange} disabled={running}/>
   <Panel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
    <ResponsiveContainer width="100%" height={215}><LineChart data={timeline}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis domain={[0,5]} tick={{fontSize:10}}/><Tooltip/><Line name="Множитель атаки" dataKey="intensity" stroke="#c75c4d" strokeWidth={2.4} dot={false} type="linear" isAnimationActive={false}/></LineChart></ResponsiveContainer>
   </Panel>
