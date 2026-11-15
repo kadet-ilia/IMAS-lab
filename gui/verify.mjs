@@ -122,6 +122,12 @@ async function assertStandardWorkspace(section) {
   }
 }
 await assertStandardWorkspace("Расчет доверия");
+const trustSummary=page.locator(".trust-summary-table tbody tr");
+if((await trustSummary.count())!==4)throw Error("One-run results must contain four shared trust methods");
+const trustNames=await trustSummary.locator("td:first-child").allTextContents();
+if(!trustNames.some(x=>x.includes("без доверительной фильтрации"))||
+   !trustNames.some(x=>x.includes("комбинированный метод")))
+ throw Error("One-run table conflates robust trimming with combined method");
 
 // UP-02: editing is transactional. Replacing N or T must never mutate f, trim,
 // attack start, or other fields, including during intermediate typing.
@@ -338,6 +344,12 @@ if(archive.archiveFormat!=="imas-lyapunov-research-archive"||
    archive.results.runs[0].feedback.proposed_robust.length!==212)
  throw Error("Full research archive does not contain sufficient inputs or per-run traces");
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true,phaseExport:true,archive:true};
+await modeGroup.getByRole("button",{name:"Данные",exact:true}).click();
+const registryRow=page.locator(".data-row").filter({hasText:"Реестр четырёх методов"});
+const stabilityRow=page.locator(".data-row").filter({hasText:"Устойчивость и точность: полная запись"});
+if((await registryRow.count())!==1||(await stabilityRow.getByRole("button",{name:"Скачать JSON"}).isDisabled()))
+ throw Error("Data tab must preserve the shared four-method catalog and complete Lyapunov output");
+await modeGroup.getByRole("button",{name:"Устойчивость и точность",exact:true}).click();
 await stepInput.fill("200");await stepInput.press("Tab");
 await gapInput.fill("20");await gapInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
@@ -887,6 +899,18 @@ try{
  await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
  await secondTab.close();
 }
+// Real browser check for four-method Monte Carlo summaries and selectable bands.
+await page.getByRole("spinbutton",{name:"Число прогонов",exact:true}).fill("2");
+await page.getByRole("spinbutton",{name:"Число прогонов",exact:true}).press("Tab");
+await modeGroup.getByRole("button",{name:"Монте-Карло"}).click();
+await page.getByRole("button",{name:"Выполнить серию"}).click();
+await page.locator(".kpi-grid.four > .kpi").first().waitFor({timeout:60000});
+if((await page.locator(".kpi-grid.four > .kpi").count())!==4)
+ throw Error("Monte Carlo must show all four method KPI cards");
+const mcRow=page.locator("section.panel").filter({hasText:"Статистические результаты"}).locator("tbody tr");
+if((await mcRow.count())!==4)throw Error("Monte Carlo summary must include four methods");
+await page.getByRole("combobox",{name:"Метод статистических областей"}).selectOption("trimmed_unweighted");
+report.unifiedFourMethods={oneRun:trustNames.length,monteCarlo:await mcRow.count(),stability:lyapunovVerification.methods,dataRegistry:true,selectableBands:true};
 report.lyapunovStudy=lyapunovVerification;
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
