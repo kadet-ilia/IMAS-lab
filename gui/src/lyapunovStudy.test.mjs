@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {simulateRun,validateConfig,attackIntensity} from "./trustEngine.js";
 import {
- defaultAttackPhases,validateAttackPhases,feedbackTrajectory,runLyapunovStudy,attackIntensityAt
+ defaultAttackPhases,validateAttackPhases,feedbackTrajectory,runLyapunovStudy,attackIntensityAt,buildLyapunovArchive
 } from "./lyapunovStudy.js";
 
 const config={n_agents:7,n_byzantine:2,n_steps:8,attack_start_step:2,
@@ -126,7 +126,6 @@ test("progress reports within a single long run, and complete archive retains al
  assert.deepEqual(events.at(-1),{completed:1,total:1,step:0,totalSteps:config.n_steps});
  assert.equal(result.runs[0].trajectory.length,config.n_steps);
  assert.equal(result.runs[0].feedback.proposed_robust.length,config.n_steps+1);
- const {buildLyapunovArchive}=await import("./lyapunovStudy.js");
  const archive=buildLyapunovArchive(result,"2026-11-15T00:00:00.000Z");
  assert.equal(archive.inputs.trustConfiguration.n_agents,config.n_agents);
  assert.deepEqual(archive.inputs.dynamicAttackPhases,result.options.phases);
