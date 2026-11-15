@@ -85,7 +85,7 @@ test("complete experiment compares identical random realizations across methods"
 
 test("representative 50-agent 30-step dynamic study returns a finite output",()=>{
  const start=performance.now();
- const study=runLyapunovStudy({n_steps:30,n_agents:50,n_byzantine:10,attack_start_step:20},
+ const study=runLyapunovStudy({n_steps:30,n_agents:50,n_byzantine:10,attack_start_step:1},
   {runs:1,gain:.5,initialError:1,tolerance:.1,
    phases:[{start:1,intensity:0},{start:20,intensity:1},{start:22,intensity:1.5},{start:23,intensity:0}]});
  assert.equal(study.series.length,31);
@@ -116,4 +116,21 @@ test("five-phase exponential and hyperbolic attack shapes are used by the simula
  const study=runLyapunovStudy(config,{gain:.5,initialError:1,tolerance:.1,runs:1,phases:schedule});
  assert.deepEqual(study.series.slice(1).map(x=>x.attack_intensity),expected);
  assert.equal(study.summary.length,4);
+});
+
+test("progress reports within a single long run, and complete archive retains all raw trajectories",()=>{
+ const events=[];
+ const result=runLyapunovStudy(config,{gain:.5,initialError:1,tolerance:.1,runs:1,phases},
+  (completed,total,step,totalSteps)=>events.push({completed,total,step,totalSteps}));
+ assert.ok(events.some(x=>x.completed===0&&x.step>0&&x.step<config.n_steps));
+ assert.deepEqual(events.at(-1),{completed:1,total:1,step:0,totalSteps:config.n_steps});
+ assert.equal(result.runs[0].trajectory.length,config.n_steps);
+ assert.equal(result.runs[0].feedback.proposed_robust.length,config.n_steps+1);
+ const {buildLyapunovArchive}=await import("./lyapunovStudy.js");
+ const archive=buildLyapunovArchive(result,"2026-11-15T00:00:00.000Z");
+ assert.equal(archive.inputs.trustConfiguration.n_agents,config.n_agents);
+ assert.deepEqual(archive.inputs.dynamicAttackPhases,result.options.phases);
+ assert.equal(archive.results.runs[0].trajectory.length,config.n_steps);
+ assert.equal(archive.results.runs[0].feedback.trimmed_unweighted.length,config.n_steps+1);
+ assert.equal(JSON.parse(JSON.stringify(archive)).archiveFormat,"imas-lyapunov-research-archive");
 });
