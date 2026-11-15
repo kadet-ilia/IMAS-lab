@@ -9,7 +9,8 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "build": "vite build",
     "test": "node --test src/*.test.mjs",
-    "verify": "node verify.mjs"
+    "verify": "node verify.mjs",
+    "adaptive:pilot": "node scripts/adaptivePilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
