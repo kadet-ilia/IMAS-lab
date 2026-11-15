@@ -20,7 +20,7 @@ function edgeSegment(a,b){
  const dx=b.x-a.x,dy=b.y-a.y,len=Math.max(1,Math.hypot(dx,dy)),margin=19;
  return {x1:a.x+dx/len*margin,y1:a.y+dy/len*margin,x2:b.x-dx/len*margin,y2:b.y-dy/len*margin};
 }
-export function TopologyPlayback({replay,compact=false}){
+export function TopologyPlayback({replay,compact=false,onExportSvg=null}){
  const [cursor,setCursor]=useState(0),[playing,setPlaying]=useState(false),[rate,setRate]=useState(1),[selected,setSelected]=useState(null);
  const frames=replay?.frames||[],edges=replay?.edges||[],vertices=replay?.vertices||[];
  const total=frames.length;
@@ -51,7 +51,16 @@ export function TopologyPlayback({replay,compact=false}){
   </g>;})}
  </svg>;
  return <section className={"r27-replay"+(compact?" r27-replay-compact":"")} aria-label="Пошаговое воспроизведение">
-  <div className="r27-replay-heading"><div><h3>{title}</h3><p>Такты и изменение состояния вершин; выделенные рёбра — события текущего шага.</p></div><strong>Такт {frame.step} / {frames.at(-1)?.step}</strong></div>
+  <div className="r27-replay-heading">
+   <div><h3>{title}</h3><p>Такты и изменение состояния вершин; выделенные рёбра — события текущего шага.</p></div>
+   <div className="r27-replay-heading-actions">
+    <strong>Такт {frame.step} / {frames.at(-1)?.step}</strong>
+    {compact&&onExportSvg?<button type="button" className="r27-export-control"
+      title="Экспорт графиков в SVG" aria-label="Экспорт графиков в SVG" onClick={onExportSvg}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0 4-4m-4 4-4-4M5 18v2h14v-2" stroke="currentColor" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>SVG
+     </button>:null}
+   </div>
+  </div>
   <div className="r27-playback-grid"><div className="r27-playback-figure">{graph}</div>
    <div className="r27-playback-aside"><h4>Состояние модели</h4><p className="r27-playback-event">{frame.info||"Нет событий"}</p><div className="r27-status-legend">{counts.map(([k,v])=><div key={k}><i style={{background:PALETTE[k]}}/><span>{LABELS[k]||k}</span><b>{v}</b></div>)}</div>
     {frame.value!==null&&frame.value!==undefined?<div className="r27-playback-value">{replay.valueLabel||"Показатель"}<strong>{round(frame.value)}</strong></div>:null}
