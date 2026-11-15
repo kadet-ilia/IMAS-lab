@@ -696,7 +696,7 @@ function Formula({ number, children }) {
 
 const HELP_SECTIONS = [
   ["purpose", "Назначение и постановка задачи"], ["configuration", "Исходные параметры и сценарии"], ["agents", "Агенты и модель нарушителя"],
-  ["trust", "Дисконтированная Beta-модель"], ["reputation", "Глобальная репутация EigenTrust"], ["isolation", "Изоляция и восстановление"],
+  ["trust", "Модель доверия"], ["reputation", "Глобальная репутация EigenTrust"], ["isolation", "Изоляция и восстановление"],
   ["aggregation", "Четыре агрегатора"], ["network", "Сетевая модель и транспорт"], ["sybil", "Sybil-атака"],
   ["statistics", "Межпрогонная статистика"], ["bootstrap", "Парный bootstrap"], ["distributions", "Распределения"],
   ["sensitivity", "Анализ чувствительности"], ["lyapunov", "Устойчивость по Ляпунову и точность"], ["ablation", "Абляционный эксперимент"],
