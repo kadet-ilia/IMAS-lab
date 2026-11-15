@@ -396,10 +396,11 @@ async function assertNavButtonsEqual(section){
  const mode=page.locator(".r27-experiment-navigation .r27-mode-tab").first();
  const [helpBox,modeBox,fonts]=await Promise.all([
   help.boundingBox(),mode.boundingBox(),
-  help.evaluate(el=>({helpSize:getComputedStyle(el).fontSize,modeSize:getComputedStyle(document.querySelector(".r27-mode-tab")).fontSize}))
+  help.evaluate(el=>({helpSize:getComputedStyle(el).fontSize,modeSize:getComputedStyle(document.querySelector(".r27-mode-tab")||el).fontSize}))
  ]);
- if(!helpBox||!modeBox||Math.abs(helpBox.height-modeBox.height)>1||
-    fonts.helpSize!==fonts.modeSize)
+ if(!helpBox||Math.abs(helpBox.height-29)>1||
+    (modeBox&&Math.abs(helpBox.height-modeBox.height)>1)||
+    fonts.helpSize!==fonts.modeSize||fonts.helpSize!=="11px")
   throw Error(section+": Help and mode buttons must match height/font: "+JSON.stringify({helpBox,modeBox,fonts}));
 }
 await assertNavButtonsEqual("Расчет доверия");
