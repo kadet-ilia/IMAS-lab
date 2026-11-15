@@ -95,18 +95,73 @@ async function tableToPng(table,title){
  if(!blob)throw Error("Не удалось сформировать PNG таблицы");
  saveBlob(blob,slug(title)+".png");
 }
+
+/** Export the entire agent heatmap (including content outside the scroll viewport). */
+async function heatmapToPng(wrap,title){
+ const heatmap=wrap.querySelector(".heatmap");
+ if(!heatmap)throw Error("Не найдена тепловая карта");
+ const base=wrap.getBoundingClientRect();
+ const width=Math.ceil(Math.max(wrap.scrollWidth,heatmap.scrollWidth,wrap.clientWidth));
+ const height=Math.ceil(Math.max(wrap.scrollHeight,heatmap.scrollHeight,wrap.clientHeight));
+ if(!width||!height)throw Error("Тепловая карта не имеет размеров");
+ const scale=2;
+ const canvas=document.createElement("canvas");
+ canvas.width=width*scale;canvas.height=height*scale;
+ const ctx=canvas.getContext("2d");
+ if(!ctx)throw Error("Canvas недоступен");
+ ctx.scale(scale,scale);
+ ctx.fillStyle="#ffffff";ctx.fillRect(0,0,width,height);
+ const position=element=>{
+  const rect=element.getBoundingClientRect();
+  return {x:rect.left-base.left+wrap.scrollLeft,y:rect.top-base.top+wrap.scrollTop,width:rect.width,height:rect.height};
+ };
+ const paintRect=element=>{
+  const {x,y,width:w,height:h}=position(element),style=getComputedStyle(element);
+  if(style.backgroundColor!=="rgba(0, 0, 0, 0)"&&style.backgroundColor!=="transparent"){
+   ctx.fillStyle=style.backgroundColor;ctx.fillRect(x,y,w,h);
+  }
+ };
+ const paintText=(element,align)=>{
+  const text=element.textContent?.trim();
+  if(!text)return;
+  const rect=position(element),style=getComputedStyle(element);
+  ctx.fillStyle=style.color;
+  ctx.font=`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  ctx.textBaseline="middle";
+  ctx.textAlign=align;
+  const inset=align==="right"?parseFloat(style.paddingRight)||4:0;
+  const x=align==="right"?rect.x+rect.width-inset:align==="center"?rect.x+rect.width/2:rect.x;
+  ctx.fillText(text,x,rect.y+rect.height/2);
+ };
+ heatmap.querySelectorAll(".heat-cell").forEach(paintRect);
+ heatmap.querySelectorAll(".heat-label").forEach(label=>paintText(label,label.classList.contains("top")?"center":"right"));
+ wrap.querySelectorAll(".heat-legend span").forEach(item=>{
+  const icon=item.querySelector("i");if(icon)paintRect(icon);
+  const iconPos=icon?position(icon):null;
+  const labelPos=position(item),style=getComputedStyle(item);
+  ctx.fillStyle=style.color;
+  ctx.font=`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  ctx.textAlign="left";ctx.textBaseline="middle";
+  ctx.fillText(item.textContent?.trim()||"",iconPos?iconPos.x+iconPos.width+5:labelPos.x,labelPos.y+labelPos.height/2);
+ });
+ const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/png"));
+ if(!blob)throw Error("Не удалось сформировать PNG тепловой карты");
+ saveBlob(blob,slug(title)+".png");
+}
+
 export function availablePanelFormats(root){
  if(!root)return [];
- const svg=chartSvg(root),table=root.querySelector(".panel-body table");
- return [...(svg?["SVG","PNG"]:table?["PNG"]:[]),...(table?["CSV"]:[])];
+ const svg=chartSvg(root),table=root.querySelector(".panel-body table"),heatmap=root.querySelector(".panel-body .heatmap-wrap");
+ return [...(svg?["SVG","PNG"]:heatmap?["PNG"]:table?["PNG"]:[]),...(table?["CSV"]:[])];
 }
 export async function savePanelAsset(root,title,format){
  if(!root)throw Error("Не найден контейнер для экспорта");
- const svg=chartSvg(root),table=root.querySelector(".panel-body table"),name=slug(title);
+ const svg=chartSvg(root),table=root.querySelector(".panel-body table"),heatmap=root.querySelector(".panel-body .heatmap-wrap"),name=slug(title);
  if(format==="SVG"&&svg){
   saveBlob(new Blob([chartMarkup(svg).markup],{type:"image/svg+xml;charset=utf-8"}),name+".svg");return;
  }
  if(format==="PNG"&&svg)return svgToPng(svg,title);
+  if(format==="PNG"&&heatmap)return heatmapToPng(heatmap,title);
  if(format==="PNG"&&table)return tableToPng(table,title);
  if(format==="CSV"&&table){
   saveBlob(new Blob([tableCsv(table)],{type:"text/csv;charset=utf-8"}),name+".csv");return;
