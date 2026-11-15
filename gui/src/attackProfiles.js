@@ -72,8 +72,8 @@ export function shapeFraction(u,profile){
 
 export function attackIntensityAt(step,phases,steps){
  if(!Number.isInteger(step)||step<1)return 0;
- let index=-1;
- for(let i=0;i<phases.length;i++){if(phases[i].start>step)break;index=i;}
+ let low=0,high=phases.length-1,index=-1;
+ while(low<=high){const mid=(low+high)>>>1;if(phases[mid].start<=step){index=mid;low=mid+1;}else high=mid-1;}
  if(index<0)return 0;
  const p=phases[index],profile=p.profile??"constant";
  if(profile==="constant")return p.intensity;
