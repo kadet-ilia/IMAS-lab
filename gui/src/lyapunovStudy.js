@@ -124,12 +124,16 @@ export function buildLyapunovResult(runs,config,options){
   return row;
  });
  return {
-  schemaVersion:2,modelVersion:TRUST_MODEL_VERSION,studyVersion:LYAPUNOV_STUDY_VERSION,
+  schemaVersion:3,modelVersion:TRUST_MODEL_VERSION,studyVersion:LYAPUNOV_STUDY_VERSION,
   object:"scalar_feedback_driven_by_trust_decision_errors",configuration:c,options:o,
   nominal:{rho:Math.abs(1-o.gain),nominal_asymptotically_stable:o.gain>0&&o.gain<2,
    equilibrium_requires_zero_disturbance:true,unforced_lyapunov_factor:(1-o.gain)**2},
   series,trace:evaluated[0].data,summary,comparison,
-  runs:evaluated.map(x=>({run:x.run,metrics:Object.fromEntries(STABILITY_METHODS.map(m=>[m,x.data[m].metrics]))})),
+  runs:evaluated.map(x=>({run:x.run,
+   metrics:Object.fromEntries(STABILITY_METHODS.map(m=>[m,x.data[m].metrics])),
+   trajectory:runs[x.run],
+   feedback:Object.fromEntries(STABILITY_METHODS.map(m=>[m,x.data[m].points]))
+  })),
   independence:"Independent pseudo-random seeds by run index; within-run paired methods",
   limits:"Sampled bounds use observed disturbances only. Asymptotic stability of full IMAS, learned trust, and arbitrary switching attacks is NOT established."
  };
@@ -139,9 +143,33 @@ export function runLyapunovStudy(config,options,onProgress=()=>{}){
  const {config:c,options:o}=validateLyapunovOptions(config,options),runs=[];
  const dynamicConfig={...c,attack_schedule:o.phases,paired_exogenous_events:false};
  for(let i=0;i<o.runs;i++){
-  const run=simulateRun(dynamicConfig,"dynamic",i,0,false);
+  const run=simulateRun(dynamicConfig,"dynamic",i,0,false,(step,totalSteps)=>{
+   onProgress(i,o.runs,step,totalSteps);
+  });
   runs.push(run.trajectory);
-  onProgress(i+1,o.runs);
+  onProgress(i+1,o.runs,0,c.n_steps);
  }
  return buildLyapunovResult(runs,c,o);
+}
+
+/** Self-contained, machine-readable experiment record for external reanalysis. */
+export function buildLyapunovArchive(result,exportedAt=new Date().toISOString()){
+ if(!result||!Array.isArray(result.runs)||!Array.isArray(result.summary)||!result.configuration||!result.options)
+  throw Error("Невозможно выгрузить полный протокол без результатов расчёта");
+ return {
+  archiveFormat:"imas-lyapunov-research-archive",archiveVersion:1,exportedAt,
+  title:"Устойчивость по Ляпунову и точность коллективных оценок",
+  researchGoal:"Сопоставление точности коллективных оценок и поведения вспомогательной скалярной системы при динамических атаках",
+  models:{trust:result.modelVersion,feedback:result.studyVersion},
+  methods:[...STABILITY_METHODS],
+  inputs:{trustConfiguration:result.configuration,lyapunovParameters:result.options,
+   dynamicAttackPhases:result.options.phases},
+  methodology:{feedback:"e[t+1]=(1-k)e[t]-k*(decision[t]-truth) for accepted decisions, otherwise e[t+1]=e[t]",
+   lyapunov:"V=e^2; deltaV=V[t+1]-V[t]",
+   scope:"Auxiliary scalar feedback only; no claim of full IMAS Lyapunov stability",
+   missingDecisions:"Abstentions count as incorrect for unconditional accuracy"},
+  results:result,
+  reproducibility:{seed:result.configuration.seed,numberOfRuns:result.runs.length,
+   included:"all input parameters, phase schedule, per-run raw decisions, per-run feedback trajectories, aggregated series, confidence descriptors and pairwise comparisons"}
+ };
 }
