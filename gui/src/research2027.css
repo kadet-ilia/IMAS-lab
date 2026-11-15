@@ -140,8 +140,6 @@
 .r27-study-content .r27-results{border:0;box-shadow:none;border-radius:0;background:transparent;padding:0;display:block}
 .r27-study-content .r27-replay,.r27-study-content .r27-chart,.r27-study-content .r27-petri-report,.r27-study-content .r27-table-scroll{border-radius:2px}
 .r27-study-content .r27-theory-short{background:#fff;border:1px solid var(--border);padding:16px;margin-top:15px}
-.r27-experiment-navigation button.r27-export-control{padding:4px 7px;height:27px;display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#48617a;white-space:nowrap}
-.r27-experiment-navigation button.r27-export-control svg{height:11px;width:11px}
 .r27-manual-layout{min-height:0;flex:1;overflow:auto;display:grid;grid-template-columns:310px minmax(0,1fr);gap:14px;padding:14px;background:#f5f7f9;align-items:start}
 .r27-help-tree{position:sticky;top:0;max-height:calc(100vh - 170px);min-width:0;padding:14px 12px;overflow:auto}
 .r27-help-tree nav{display:flex;flex-direction:column;gap:6px}
@@ -229,8 +227,7 @@
   line-height:1.35;
 }
 .content[data-study="trust"] > .r27-kicker{margin:8px 12px 5px}
-.r27-experiment-navigation button.r27-nav-right,
-.r27-experiment-navigation button.r27-export-control{
+.r27-experiment-navigation button.r27-nav-right{
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -247,7 +244,6 @@
   line-height:1;
   white-space:nowrap;
 }
-.r27-experiment-navigation button.r27-export-control svg{height:11px;width:11px;flex:none}
 
 /* E1 title uses the same typography as the other five experiment headings. */
 .content[data-study="trust"] > .r27-study-title{
@@ -719,7 +715,7 @@
 .r27-experiment-navigation button.r27-nav-right.active{
  color:#fff;background:#155c92;border-color:#155c92;
 }
-/* SVG export for E1 trace resides inside the compact replay top-right corner. */
+/* SVG export for all six experiments lives in the compact replay upper-right header. */
 .r27-replay-compact .r27-replay-heading{align-items:flex-start}
 .r27-replay-compact .r27-replay-heading-actions{
  display:flex;align-items:center;justify-content:flex-end;
@@ -734,12 +730,3 @@
 .r27-replay-compact button.r27-export-control svg{width:13px;height:13px}
 .r27-replay-compact button.r27-export-control:hover{border-color:#2672ff;color:#2672ff}
 
-/* Equal dimensions for export and Help controls across every experiment. */
-.r27-experiment-navigation button.r27-export-control{
- width:auto;min-width:0;max-width:none;
- height:29px;min-height:29px;max-height:29px;
- padding:4px 9px;border-radius:3px;
- border:1px solid #bdcddd;background:#fff;color:#375b79;
- font-size:11px;font-weight:600;line-height:1.15;
- box-sizing:border-box;
-}
