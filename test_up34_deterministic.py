@@ -333,7 +333,7 @@ def reconstruct_no_network_trust_trace(result):
     low=[0]*n
     hist=[]
     decisions={name:[] for name in
-               ("arithmetic_mean","trust_weighted_mean","proposed_robust")}
+               ("arithmetic_mean","trust_weighted_mean","trimmed_unweighted","proposed_robust")}
     expected_isolations=[]
     expected_attempted=0
     for t in range(c["n_steps"]):
@@ -381,11 +381,14 @@ def reconstruct_no_network_trust_trace(result):
             center=quantile(values,.5)
             clipped=[max(center-c["clip_radius"],
                          min(center+c["clip_radius"],x)) for x in values]
+            unweighted=trim_reference({"values":clipped,"weights":[1.0]*len(values),
+                                       "k":c["trim_each_side"]})
+            unweighted=min(c["safe_action_max"],max(c["safe_action_min"],unweighted))
             robust=trim_reference({"values":clipped,"weights":weights,
                                    "k":c["trim_each_side"]})
             robust=min(c["safe_action_max"],max(c["safe_action_min"],robust))
             tick_results={"arithmetic_mean":average,"trust_weighted_mean":weighted,
-                          "proposed_robust":robust}
+                          "trimmed_unweighted":unweighted,"proposed_robust":robust}
         else:
             tick_results={key:None for key in decisions}
         for method,value in tick_results.items():
