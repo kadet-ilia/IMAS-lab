@@ -9,11 +9,12 @@
  * not be an equilibrium. The scalar nominal feedback is ISS for 0<k<2.
  */
 import {STABILITY_METHODS, simulateRun, validateConfig, TRUST_MODEL_VERSION} from "./trustEngine.js";
+import {TRUST_METHOD_DEFINITIONS} from "./trustMethods.js";
 import {defaultAttackPhases,validateAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 import {validatePhaseGaps} from "./phaseScheduling.js";
 export {defaultAttackPhases,validateAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 
-export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-2.0";
+export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-2.1-four-unified-methods";
 const finite=x=>typeof x==="number"&&Number.isFinite(x);
 const mean=x=>x.length?x.reduce((s,v)=>s+v,0)/x.length:null;
 const sd=x=>x.length<2?null:Math.sqrt(x.reduce((s,v)=>s+(v-mean(x))**2,0)/(x.length-1));
@@ -127,6 +128,7 @@ export function buildLyapunovResult(runs,config,options){
   schemaVersion:3,modelVersion:TRUST_MODEL_VERSION,studyVersion:LYAPUNOV_STUDY_VERSION,
   object:"scalar_feedback_driven_by_trust_decision_errors",configuration:c,options:o,
   nominal:{rho:Math.abs(1-o.gain),nominal_asymptotically_stable:o.gain>0&&o.gain<2,
+   nominal_condition:"all steps produce decisions and disturbance is identically zero; persistent abstentions prevent asymptotic convergence",
    equilibrium_requires_zero_disturbance:true,unforced_lyapunov_factor:(1-o.gain)**2},
   series,trace:evaluated[0].data,summary,comparison,
   runs:evaluated.map(x=>({run:x.run,
@@ -161,7 +163,7 @@ export function buildLyapunovArchive(result,exportedAt=new Date().toISOString())
   title:"Устойчивость по Ляпунову и точность коллективных оценок",
   researchGoal:"Сопоставление точности коллективных оценок и поведения вспомогательной скалярной системы при динамических атаках",
   models:{trust:result.modelVersion,feedback:result.studyVersion},
-  methods:[...STABILITY_METHODS],
+  methods:TRUST_METHOD_DEFINITIONS,
   inputs:{trustConfiguration:result.configuration,lyapunovParameters:result.options,
    dynamicAttackPhases:result.options.phases},
   methodology:{feedback:"e[t+1]=(1-k)e[t]-k*(decision[t]-truth) for accepted decisions, otherwise e[t+1]=e[t]",
