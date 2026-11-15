@@ -1,0 +1,45 @@
+name: E1-A adaptive research (test branch)
+on:
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/**'
+      - '.github/workflows/adaptive-e1a.yml'
+  pull_request:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/**'
+      - '.github/workflows/adaptive-e1a.yml'
+permissions:
+  contents: read
+concurrency:
+  group: imas-e1a-test-branch
+  cancel-in-progress: true
+jobs:
+  adaptive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install reproducible dependencies
+        working-directory: gui
+        run: npm ci
+      - name: Run all JavaScript scientific regressions
+        working-directory: gui
+        run: npm test
+      - name: Compile production frontend
+        working-directory: gui
+        run: npm run build
+      - name: Browser UI verification
+        working-directory: gui
+        run: |
+          npm run preview > /tmp/imas-e1a-preview.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4173 >/dev/null; then break; fi
+            sleep 1
+          done
+          npm run verify
