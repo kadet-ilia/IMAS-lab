@@ -13,7 +13,7 @@ function download(name,body,type){
  const blob=new Blob([body],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");
  link.href=url;link.download=name;link.click();URL.revokeObjectURL(url);
 }
-function PhaseEditor({phases,setPhases,steps,attackStart,basisSteps,onAutoStepsChange,disabled}){
+function PhaseEditor({phases,setPhases,steps,attackStart,onAutoStepsChange,disabled}){
  const [phaseError,setPhaseError]=useState("");
  const edit=(index,key,value)=>setPhases(prev=>prev.map((p,i)=>i===index?{...p,[key]:value}:p));
  const setProfile=(index,profile)=>setPhases(prev=>prev.map((p,i)=>i!==index?p:{
@@ -22,7 +22,7 @@ function PhaseEditor({phases,setPhases,steps,attackStart,basisSteps,onAutoStepsC
  const add=()=>{
   try{
    validatePhaseGaps(phases,attackStart);
-   const proposed=addAttackPhase(phases,attackStart,basisSteps);
+   const proposed=addAttackPhase(phases,attackStart);
    setPhases(proposed.phases);
    onAutoStepsChange(proposed.steps);
    setPhaseError("");
@@ -34,14 +34,14 @@ function PhaseEditor({phases,setPhases,steps,attackStart,basisSteps,onAutoStepsC
    validatePhaseGaps(normalized,attackStart);
    const document={format:"imas-dynamic-attack-profile",schemaVersion:1,
     savedAt:new Date().toISOString(),numberOfPhases:normalized.length,
-    simulationSteps:steps,phaseBasisSteps:basisSteps,minimumPhaseGap:attackStart,
+    simulationSteps:steps,automaticHorizon:(normalized.length+1)*attackStart,minimumPhaseGap:attackStart,
     phaseParameters:normalized,curveSemantics:"initial and final attack intensity, 0..5; phase ends before next phase"};
    download("imas-attack-phases.json",JSON.stringify(document,null,2),"application/json;charset=utf-8");
    setPhaseError("");
   }catch(reason){setPhaseError(reason.message||String(reason));}
  };
- return <Panel title="Динамическая активность атаки"
-  subtitle="Добавляемая фаза начинается не раньше чем через заданное в боковой панели «Время начала атаки» число шагов. Расширение горизонта: T = количество фаз × опорное T + 1. Все значения можно изменять вручную.">
+ return <Panel title="Динамическая активность атаки" exportAction={saveProfile}
+  subtitle="Каждая новая фаза начинается не ранее чем через A шагов после предыдущей, где A — «Время начала атаки (шаг)». При добавлении T = (M + 1) × A, M — число фаз. Все значения допускают ручную корректировку.">
   <div className="lyapunov-phase-grid" aria-label="Фазы динамической атаки">
    {phases.map((phase,i)=><div className="lyapunov-phase" key={i}>
     <div className="lyapunov-phase-heading"><strong>Фаза {i+1}</strong>
@@ -72,14 +72,13 @@ function PhaseEditor({phases,setPhases,steps,attackStart,basisSteps,onAutoStepsC
     onClick={add}>Добавить фазу (сейчас {phases.length})</button>
    <button className="secondary-button" type="button" disabled={disabled}
     onClick={()=>{setPhases(defaultAttackPhases(steps,attackStart));setPhaseError("");}}>Типовой профиль on–off–усиление</button>
-   <button className="secondary-button" type="button" onClick={saveProfile}>Сохранить фазы JSON</button>
   </div>
   {phaseError?<p className="imas-validation-error" role="alert">{phaseError}</p>:null}
-  <p className="r27-note">Опорное T: {basisSteps} шагов; минимальный интервал между началами фаз: {attackStart} шагов. Линейный: u; экспоненциальный: (e⁴ᵘ−1)/(e⁴−1); параболический: u²; гиперболический: 5u/(1+4u), где u∈[0;1] — нормированное время внутри фазы. При постоянной форме начальная интенсивность сохраняется до следующей фазы.</p>
+  <p className="r27-note">Автоматический горизонт для {phases.length} фаз: {(phases.length+1)*attackStart} шагов; текущее T: {steps}; минимальный интервал между началами фаз: {attackStart} шагов. Линейный: u; экспоненциальный: (e⁴ᵘ−1)/(e⁴−1); параболический: u²; гиперболический: 5u/(1+4u), где u∈[0;1] — нормированное время внутри фазы. При постоянной форме начальная интенсивность сохраняется до следующей фазы.</p>
  </Panel>;
 }
 
-const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,phaseBasisSteps,onAutoStepsChange,onStudyResult},ref){
+const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,onAutoStepsChange,onStudyResult},ref){
  const [phases,setPhases]=useState(()=>defaultAttackPhases(config.n_steps,config.attack_start_step));
  const [gain,setGain]=useState(.5);
  const [initialError,setInitialError]=useState(1);
@@ -169,7 +168,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,ph
    <label><span className="lyapunov-field-label">Допуск по состоянию ε <ParameterTooltip text="Допустимое абсолютное отклонение |e| от целевого состояния. Используется при определении момента окончательного входа в область допуска."/></span><input aria-label="Допуск по состоянию" type="number" min=".001" max="100" step=".01" value={tolerance} onChange={e=>setTolerance(Number(e.target.value))} disabled={running}/></label>
    <label><span className="lyapunov-field-label">Число независимых прогонов R <ParameterTooltip text="Число повторных моделирований с разными воспроизводимыми случайными реализациями. Определяет статистическую точность средних оценок и сравнений."/></span><input aria-label="Число прогонов устойчивости" type="number" min="1" max="200" step="1" value={runs} onChange={e=>setRuns(Number(e.target.value))} disabled={running}/></label>
   </div>
-  <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} basisSteps={phaseBasisSteps} onAutoStepsChange={onAutoStepsChange} disabled={running}/>
+  <PhaseEditor phases={phases} setPhases={setPhases} steps={config.n_steps} attackStart={config.attack_start_step} onAutoStepsChange={onAutoStepsChange} disabled={running}/>
   <Panel title="Профиль атакующего воздействия" subtitle="Интенсивность воздействует на значения византийских предложений и достоверность свидетельств о поведении агентов.">
    <ResponsiveContainer width="100%" height={215}><LineChart data={timeline}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis domain={[0,5]} tick={{fontSize:10}}/><Tooltip/><Line name="Множитель атаки" dataKey="intensity" stroke="#c75c4d" strokeWidth={2.4} dot={false} type="linear" isAnimationActive={false}/></LineChart></ResponsiveContainer>
   </Panel>
