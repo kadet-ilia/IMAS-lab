@@ -125,11 +125,11 @@ await assertStandardWorkspace("Расчет доверия");
 const titleGeometry=await page.locator(".topbar").evaluate(el=>{
  const brand=el.querySelector(".brand h1"),toolbar=el.querySelector(".toolbar");
  const a=brand.getBoundingClientRect(),b=toolbar.getBoundingClientRect(),bar=el.getBoundingClientRect();
- return {text:brand.innerText,left:a.left,right:a.right,bottom:a.bottom,toolbarTop:b.top,top:bar.top,bottomBar:bar.bottom,scrollWidth:brand.scrollWidth,clientWidth:brand.clientWidth};
+ return {text:brand.innerText,left:a.left,right:a.right,bottom:a.bottom,toolbarTop:b.top,top:bar.top,bottomBar:bar.bottom,viewportWidth:window.innerWidth,scrollWidth:brand.scrollWidth,clientWidth:brand.clientWidth};
 });
 if(titleGeometry.text!=="Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности"||
  titleGeometry.bottom>titleGeometry.toolbarTop+2||
- titleGeometry.right>window.innerWidth+2||
+ titleGeometry.right>titleGeometry.viewportWidth+2||
  titleGeometry.scrollWidth>titleGeometry.clientWidth+2)
  throw Error("Full long laboratory heading must remain visible above toolbar: "+JSON.stringify(titleGeometry));
 const trustSummary=page.locator(".trust-summary-table tbody tr");
