@@ -196,6 +196,7 @@ async function pageChromeSnapshot(){
     content?.querySelector(":scope > .r27-study-topline > .r27-topology-full");
   const topology=overview?.querySelector(":scope > section.r27-replay");
   const summary=overview?.querySelector(":scope > section.panel")||
+    content?.querySelector(":scope > .r27-study-topline > section.r27-summary-panel")||
     content?.querySelector(":scope > section.r27-summary-panel");
   const kpis=content?.querySelector(":scope > .kpi-grid");
   const controls=sidebar?.querySelector(":scope > button.run-button");
@@ -570,9 +571,20 @@ for (let i=0; i<researchTabs.length; i++) {
     throw Error(researchTabs[i]+": research layout must share the trust content scroller and independent panels: "+JSON.stringify(surface));
   }
   const researchOverview=researchMain.locator(":scope > .r27-study-topline > .r27-topology-full");
+  const summaryInTopline=researchMain.locator(":scope > .r27-study-topline > section.panel.r27-summary-panel");
+  const summaryBelowTopline=researchMain.locator(":scope > section.panel.r27-summary-panel");
+  const petriStudy=researchValues[i]==="study-petri";
   if((await researchOverview.locator(":scope > .r27-replay-compact").count())!==1||
-     (await researchMain.locator(":scope > section.panel.r27-summary-panel").count())!==1){
-    throw Error(researchTabs[i]+": missing topology or relocated full-width summary");
+     (await summaryInTopline.count())!==(petriStudy?1:0)||
+     (await summaryBelowTopline.count())!==(petriStudy?0:1)){
+    throw Error(researchTabs[i]+": summary must be beside Petri replay only in E4; remaining studies retain below-summary placement");
+  }
+  if(petriStudy){
+    const left=await researchOverview.boundingBox(),right=await summaryInTopline.boundingBox();
+    if(!left||!right||Math.abs(left.y-right.y)>3||
+       Math.abs(left.width-right.width)>3||Math.abs(right.x-left.x-left.width-12)>5){
+      throw Error("E4: Petri graph and results table must occupy adjacent equal-width columns: "+JSON.stringify({left,right}));
+    }
   }
   // All six studies must show exactly one SVG action in the replay header,
   // with none left in the navigation bar.
@@ -723,6 +735,18 @@ for(const [studyId,name] of [
    el.querySelector(":scope > .r27-summary-panel"));
   if(!positioned)throw Error("UI: summary must follow study summary for "+name);
  }else{
+  const petriTopline=page.locator("main[data-study='petri'] > .r27-study-topline");
+  const graphBox=await petriTopline.locator(":scope > .r27-topology-full").boundingBox();
+  const tablePanel=petriTopline.locator(":scope > .r27-summary-panel");
+  const tableBox=await tablePanel.boundingBox();
+  const actualRows=await tablePanel.locator("tbody tr").count();
+  if(!graphBox||!tableBox||actualRows!==result.rows.length||
+     Math.abs(graphBox.y-tableBox.y)>3||
+     Math.abs(graphBox.width-tableBox.width)>3||
+     Math.abs(tableBox.x-graphBox.x-graphBox.width-12)>5)
+    throw Error("E4: summary must remain beside the Petri graph and show all "+result.rows.length+" rows: "+JSON.stringify({graphBox,tableBox,actualRows}));
+  if((await page.locator("main[data-study='petri'] > section.r27-summary-panel").count())!==0)
+    throw Error("E4: duplicate results table left below Petri graph");
   if((await page.locator(".r27-study-topline .r27-comparison-matrix").count())!==0)
    throw Error("E4 must not invent a probabilistic comparison matrix");
   const widths=await page.locator(".r27-analytics").evaluate(root=>[...root.children].slice(0,2).map(x=>x.getBoundingClientRect().width));
