@@ -44,6 +44,7 @@ test("noise-free nominal feedback has exact V(t+1)=0.25V(t)",()=>{
  }
  assert.equal(result.proposed_robust.metrics.positive_delta_v_fraction,0);
  assert.equal(result.proposed_robust.metrics.decision_rmse,0);
+ assert.equal(result.proposed_robust.metrics.settling_step,7); // .5^7 <= .01 for first time
 });
 
 test("with nonzero disturbances positive deltaV is possible, ISS sampled bound holds",()=>{
@@ -132,4 +133,15 @@ test("progress reports within a single long run, and complete archive retains al
  assert.equal(archive.results.runs[0].trajectory.length,config.n_steps);
  assert.equal(archive.results.runs[0].feedback.trimmed_unweighted.length,config.n_steps+1);
  assert.equal(JSON.parse(JSON.stringify(archive)).archiveFormat,"imas-lyapunov-research-archive");
+});
+
+test("linear-time settling time equals the earliest permanently admissible tick",()=>{
+ const c=validateConfig(config);
+ const trajectory=Array.from({length:c.n_steps},(_,i)=>({
+  step:i+1,arithmetic_mean:c.desired_action,
+  trust_weighted_mean:c.desired_action,trimmed_unweighted:c.desired_action,proposed_robust:c.desired_action
+ }));
+ const result=feedbackTrajectory(trajectory,c,{gain:.5,initialError:1,tolerance:.1,runs:1,phases:[{start:1,intensity:0}]});
+ for(const method of ["arithmetic_mean","trust_weighted_mean","trimmed_unweighted","proposed_robust"])
+  assert.equal(result[method].metrics.settling_step,4);
 });
