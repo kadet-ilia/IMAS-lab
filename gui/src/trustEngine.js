@@ -169,12 +169,18 @@ export function eigenTrust(direct,active,damping){
  if(!idx.length)return scores;
  const size=idx.length,c=idx.map(i=>idx.map(j=>Math.max(0,direct[i][j]-.5)));
  for(const row of c){const total=sum(row);for(let j=0;j<size;j++)row[j]=total>1e-15?row[j]/total:1/size;}
- let v=Array(size).fill(1/size);
- for(let it=0;it<150;it++){
+ let v=Array(size).fill(1/size),converged=false;
+ // Since C is row-stochastic, the iteration is an L1 contraction with
+ // coefficient damping < 1; residual /(1-damping) bounds the remaining error.
+ const threshold=1e-9*(1-damping);
+ for(let it=0;it<5000;it++){
   const next=Array(size).fill((1-damping)/size);
   for(let i=0;i<size;i++)for(let j=0;j<size;j++)next[j]+=damping*c[i][j]*v[i];
-  const err=sum(next.map((x,i)=>Math.abs(x-v[i])));v=next;if(err<1e-10)break;
+  const err=sum(next.map((x,i)=>Math.abs(x-v[i])));
+  v=next;
+  if(err<=threshold){converged=true;break;}
  }
+ if(!converged)throw Error("EigenTrust: степенной метод не достиг заданной точности; уменьшите коэффициент затухания репутации");
  const scale=Math.max(...v,1e-15);idx.forEach((i,j)=>scores[i]=v[j]/scale);return scores;
 }
 export function trimmedWeightedMean(values,weights,k){
