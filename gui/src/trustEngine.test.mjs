@@ -84,7 +84,7 @@ test("fractional factorial sensitivity returns main and pair effects",()=>{
 });
 test("configuration limits are enforced before any simulation",()=>{
  assert.throws(()=>validateConfig({...cfg,n_byzantine:6}),/N>2f/);
- assert.throws(()=>validateConfig({...cfg,n_steps:501}),/500/);
+ assert.throws(()=>validateConfig({...cfg,n_steps:50001}),/50000/);
  assert.throws(()=>validateConfig({...cfg,network_topology:"unknown"}),/топология/);
 });
 
