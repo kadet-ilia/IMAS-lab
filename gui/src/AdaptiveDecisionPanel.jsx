@@ -83,6 +83,15 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   percent:progress.percent,cacheHit:Boolean(result)&&cacheHit,hasResult:Boolean(result),stage});},
   [running,progress.completed,progress.total,progress.percent,cacheHit,Boolean(result),stage]);
  const trace=result?.trace||[],summary=result?.summary||[],paired=result?.paired||[];
+ const methodState=result?.runs?.[0]?.methodStates||null;
+ const coupledTrace=methodState?trace.map((row,i)=>({
+  step:row.step,trimmedIsolation:methodState.trimmed_unweighted[i].isolated_agents,
+  combinedIsolation:methodState.proposed_robust[i].isolated_agents,
+  adaptiveIsolation:methodState.adaptive_robust[i].isolated_agents,
+  trimmedReputation:methodState.trimmed_unweighted[i].mean_reputation,
+  combinedReputation:methodState.proposed_robust[i].mean_reputation,
+  adaptiveReputation:methodState.adaptive_robust[i].mean_reputation
+ })):[];
  const adaptive=summary.find(x=>x.method==="adaptive_robust");
  const baseline=summary.find(x=>x.method==="trimmed_unweighted");
  const comparable=paired.find(x=>x.baseline==="trimmed_unweighted");
@@ -104,7 +113,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    <div className="tab-action-description">
     <h2>Адаптивное формирование коллективных решений (E1-А)</h2>
     <p>Сравнение исходных доверительно-усечённых методов E1 с адаптивным агрегатором на одних и тех же предложениях, репутациях и сообщениях.</p>
-    <p><strong>Область исследования:</strong> общий контур доверия и изоляции, независимое изменение только агрегатора. Оценка устойчивости относится к вспомогательной скалярной обратной связи.</p>
+    <p><strong>Область исследования:</strong> сравнение оценивателей при общем контуре либо раздельных контуров с обратной связью по решению. Раздельные контуры требуют поведенческих свидетельств и отключённых сетевых ограничений. Устойчивость относится только к вспомогательному скалярному объекту.</p>
    </div>
    <div className="action-controls">
     <button className="secondary-button" type="button" disabled={running||Boolean(validationError)} onClick={start}>Выполнить исследование</button>
@@ -113,6 +122,16 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   </div>
   <Panel title="Адаптивное правило и робастное усечение" subtitle="Новый метод рассчитывается отдельно от четырёх неизменённых методов E1.">
    <div className="lyapunov-inputs">
+    <label>Режим сравнительного исследования
+     <select aria-label="Режим сравнительного исследования" disabled={running}
+      value={options.comparisonMode}
+      onChange={e=>setOptions(o=>({...o,comparisonMode:e.target.value,
+       evidenceModel:e.target.value==="decision_feedback"&&o.evidenceModel==="legacy"
+        ?"behavior_linked":o.evidenceModel}))}>
+      <option value="estimator_only">Общий контур: сравнение агрегаторов</option>
+      <option value="decision_feedback">Раздельные контуры: влияние решения на доверие</option>
+     </select>
+    </label>
     <label>Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
       onChange={e=>set("alphaMode",e.target.value)}>
@@ -241,6 +260,24 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <td>{num(p.mean,5)}</td><td>{p.ci95_half_width===null?"—":num(p.mean-p.ci95_half_width,5)+" … "+num(p.mean+p.ci95_half_width,5)}</td>
       <td>{p.wins}</td><td>{p.losses}</td></tr>)}</tbody></table></div>
    </Panel>
+   <React.Fragment>
+   {methodState?<Panel title="Независимая динамика доверия и изоляции" subtitle="Методоспецифические контуры получают одинаковые ключевые внешние случайные события, но формируют собственные репутации, изоляцию и решения.">
+    <ResponsiveContainer width="100%" height={290}><LineChart data={coupledTrace}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>
+     <YAxis yAxisId="isolation" orientation="left" allowDecimals={false}/><YAxis yAxisId="reputation" orientation="right" domain={[0,1]}/>
+     <Tooltip formatter={v=>num(v,4)}/><Legend/>
+     <Line dataKey="trimmedIsolation" name="Изоляция: усечённое" yAxisId="isolation" stroke="#d18a31" dot={false} isAnimationActive={false}/>
+     <Line dataKey="combinedIsolation" name="Изоляция: комбинированное" yAxisId="isolation" stroke="#123a63" dot={false} isAnimationActive={false}/>
+     <Line dataKey="adaptiveIsolation" name="Изоляция: адаптивное" yAxisId="isolation" stroke="#c13f62" dot={false} isAnimationActive={false}/>
+     <Line dataKey="adaptiveReputation" name="Средняя репутация: адаптивное" yAxisId="reputation" stroke="#079b91" dot={false} strokeDasharray="4 3" isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>
+    <p className="r27-note">Режим отражает модельную обратную связь «решение → свидетельства → доверие и изоляция» и не является доказательством устойчивости ИМАС; распространение решений по сетевым компонентам не реализовано.</p>
+    <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Среднее число изолированных агентов</th><th>Средняя репутация</th></tr></thead><tbody>
+     {summary.map(x=><tr key={x.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
+      <td>{num(x.mean_isolated_agents?.mean,3)}</td><td>{num(x.mean_reputation?.mean,3)}</td>
+     </tr>)}
+    </tbody></table></div>
+   </Panel>:null}
    <Panel title="Диагностика генератора событий" subtitle="Показатели относятся к первому прогону и не используются адаптивным оценивателем.">
     <div className="table-wrap"><table><thead><tr><th>Показатель</th><th>Значение</th></tr></thead><tbody>
      <tr><td>Стратегия атакующего</td><td>{result.options.attackStrategy}</td></tr>
@@ -252,6 +289,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <tr><td>Свидетельства по устаревшим наблюдениям</td><td>{result.runs[0].scenarioDiagnostics?.laggedObservationCount??0}</td></tr>
     </tbody></table></div>
    </Panel>
+   </React.Fragment>
    <Panel title="Полный протокол вычислений и экспорт">
     <p>JSON содержит конфигурацию, версии моделей, расписание фаз, значения показателей каждого прогона, диагностические переменные и траектории вспомогательной обратной связи. CSV содержит трассу первого прогона.</p>
     <div className="action-controls">
