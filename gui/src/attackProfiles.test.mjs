@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {ATTACK_SHAPES,MAX_ATTACK_PHASES,defaultAttackPhases,validateAttackPhases,
+import {ATTACK_SHAPES,defaultAttackPhases,validateAttackPhases,
  attackIntensityAt,shapeFraction} from "./attackProfiles.js";
 
 const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-12,a+" != "+b);
@@ -39,15 +39,25 @@ test("decreasing intensity is allowed, with nonnegative bounded values",()=>{
 test("legacy constant phases and short horizons are preserved",()=>{
  for(const T of [1,2,3,5,8,30]){
   const p=defaultAttackPhases(T,Math.min(2,T));
-  assert.ok(p.length>=1&&p.length<=MAX_ATTACK_PHASES);
+  assert.ok(p.length>=1&&p.length<=T);
   assert.equal(validateAttackPhases(p,T).length,p.length);
   assert.equal(p[0].start,1);
  }
  near(attackIntensityAt(7,[{start:1,intensity:0},{start:7,intensity:2}],8),2);
 });
-test("rejects invalid shapes, endpoints, overlaps and more than five phases",()=>{
+test("rejects invalid shapes, endpoints and overlapping phases",()=>{
  assert.throws(()=>validateAttackPhases([{start:1,intensity:1,profile:"sinus"}],10),/неизвестная/);
  assert.throws(()=>validateAttackPhases([{start:1,intensity:0,endIntensity:6,profile:"linear"}],10),/интенсивности/);
  assert.throws(()=>validateAttackPhases([{start:1,intensity:1},{start:1,intensity:2}],10),/возрастать/);
- assert.throws(()=>validateAttackPhases(Array.from({length:6},(_,i)=>({start:i+1,intensity:0})),10),/5 фаз/);
+ assert.throws(()=>validateAttackPhases(Array.from({length:11},(_,i)=>({start:i+1,intensity:0})),10),/горизонт T/);
+});
+
+test("no arbitrary cap: 6, 25, 100 and 500 attack phases remain valid",()=>{
+ for(const T of [6,25,100,500]){
+  const phases=Array.from({length:T},(_,i)=>({start:i+1,intensity:i%6,profile:"constant"}));
+  const validated=validateAttackPhases(phases,T);
+  assert.equal(validated.length,T);
+  for(let t=1;t<=T;t++)assert.equal(attackIntensityAt(t,validated,T),(t-1)%6);
+ }
+ assert.equal(ATTACK_SHAPES.find(x=>x.id==="linear").label,"Линейное");
 });
