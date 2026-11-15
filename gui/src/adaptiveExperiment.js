@@ -123,7 +123,7 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    const value=data.decisions[method];
    generator.onFeedbackDecision({step:observable.step,value});
    observed.push({step:observable.step,value,diagnostics:data.diagnostics,
-    meanReputation:average(observable.reputation.filter(finite)),
+    meanReputation:average(observable.reputation.filter((r,i)=>observable.available[i]&&finite(r))),
     availableAgents:observable.available.filter(Boolean).length});
   },generator);
   if(simulation.trajectory.length!==core.n_steps||observed.length!==core.n_steps)
