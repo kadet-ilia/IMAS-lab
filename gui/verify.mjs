@@ -262,6 +262,12 @@ for(const [id,name] of trustModes){
     throw Error("Stability tab must expose an attack phase editor");
   }
 }
+// Wait for the mount-triggered baseline E1 run to release the shared
+// same-origin Web Lock. Starting E1-A while E1 holds it must fail closed.
+await page.waitForFunction(async()=>{
+ const current=await navigator.locks.query();
+ return !current.held.some(lock=>lock.name==="imas-lab-test-trust-storage-exclusive-v1");
+},null,{timeout:60000});
 // E1-A: actual React -> worker -> IndexedDB -> archival export workflow.
 // Exercise E1-A with the initial E1 configuration (N=50, T=200).
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Адаптивные решения"}).click();
