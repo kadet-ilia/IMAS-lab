@@ -84,12 +84,12 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={}){
  if(!finite(core.clip_radius)||core.clip_radius<0||!Number.isInteger(core.trim_each_side)||core.trim_each_side<0||
   !finite(core.safe_action_min)||!finite(core.safe_action_max)||core.safe_action_min>=core.safe_action_max)
   throw Error("Некорректные параметры исходного агрегатора");
- const legacy=aggregateProposals(x.map(v=>v===null?NaN:v),w,a,core);
  const used=[];for(let i=0;i<x.length;i++){
   if(!a[i]||!finite(x[i]))continue;
   if(!finite(w[i])||w[i]<0)throw Error("Некорректная репутация агента");
   used.push({value:x[i],reputation:w[i]});
  }
+ const legacy=aggregateProposals(x.map(v=>v===null?NaN:v),w,a,core);
  if(!used.length){
   return {decisions:{trimmed_unweighted:null,proposed_robust:null,adaptive_unweighted:null,
    adaptive_weighted:null,adaptive_robust:null},
