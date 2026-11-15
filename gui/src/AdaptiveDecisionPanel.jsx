@@ -5,6 +5,7 @@ import {ADAPTIVE_DEFAULTS,ADAPTIVE_METHODS,validateAdaptiveOptions} from "./adap
 import {validateAdaptiveStudy} from "./adaptiveExperiment.js";
 import {runAdaptiveBrowser,stopAdaptiveBrowser,loadAdaptiveCheckpoint} from "./adaptiveBrowserClient.js";
 import {ATTACK_SHAPES,defaultAttackPhases,attackIntensityAt} from "./attackProfiles.js";
+import {ADAPTIVE_ATTACK_STRATEGIES,ADAPTIVE_EVIDENCE_MODELS} from "./adaptiveScenario.js";
 
 const num=(x,places=4)=>Number.isFinite(x)?x.toFixed(places):"—";
 const percent=x=>Number.isFinite(x)?(100*x).toFixed(1)+"%":"—";
@@ -138,8 +139,8 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    </div>
    <p className="r27-note">Коэффициент α — проверяемая эвристика: готовность истории свидетельств × ограничение концентрации весов × штраф за расхождение двух агрегаторов. Он не является апостериорной вероятностью честности.</p>
   </Panel>
-  <Panel title="Атакующее воздействие и фазовое расписание">
-   <label>Стратегия воздействия
+  <Panel title="Временной сценарий атаки и фазовое расписание">
+   <label>Временной сценарий воздействия
     <select aria-label="Сценарий адаптивного исследования" disabled={running} value={options.scenario} onChange={e=>set("scenario",e.target.value)}>
      <option value="dynamic">Динамическое смещение с фазами</option>
      <option value="static_bias">Постоянное смещение</option>
@@ -167,6 +168,35 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     }))}><CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,5]}/>
      <Tooltip/><Line name="Интенсивность атаки" type="stepAfter" dataKey="intensity" dot={false} stroke="#c13f62" isAnimationActive={false}/></LineChart></ResponsiveContainer>
    </>:<p className="r27-note">Используется базовая генерация указанного сценария E1; фазовый редактор доступен в режиме динамического воздействия.</p>}
+  </Panel>
+  <Panel title="Модель поведения нарушителей и доверительных свидетельств" subtitle="Стратегия поведения задаётся независимо от временного профиля активности. Скрытые метки доступны только генератору событий.">
+   <div className="lyapunov-inputs">
+    <label>Стратегия поведения нарушителей
+     <select aria-label="Стратегия поведения нарушителей" disabled={running} value={options.attackStrategy}
+      onChange={e=>setOptions(o=>({...o,attackStrategy:e.target.value,
+       evidenceModel:e.target.value==="reputation_boost"&&o.evidenceModel==="legacy"?"behavior_linked":o.evidenceModel}))}>
+      {ADAPTIVE_ATTACK_STRATEGIES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+     </select>
+    </label>
+    <label>Модель доверительных свидетельств
+     <select aria-label="Модель доверительных свидетельств" disabled={running} value={options.evidenceModel}
+      onChange={e=>set("evidenceModel",e.target.value)}>
+      {ADAPTIVE_EVIDENCE_MODELS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+     </select>
+    </label>
+    <NumberOption label="Смещение согласованной атаки" title="Модуль общего смещения предложений нарушителей относительно модельного эталона. Истина применяется генератором событий, а не оценивателем." value={options.coordinatedBias} min={0} max={100} step={0.1} disabled={running||!["coordinated","pulsed","reputation_boost"].includes(options.attackStrategy)} onChange={v=>set("coordinatedBias",v)}/>
+    <NumberOption label="Малозаметное смещение" title="Модуль искажения предложения нарушителя в малозаметном режиме." value={options.stealthBias} min={0} max={100} step={0.05} disabled={running||options.attackStrategy!=="stealth"} onChange={v=>set("stealthBias",v)}/>
+    <NumberOption label="Шум атакующих предложений" title="СКО дополнительного случайного отклонения при формировании атакующих предложений." value={options.attackNoiseSigma} min={0} max={10} step={0.005} disabled={running||options.attackStrategy==="legacy"} onChange={v=>set("attackNoiseSigma",v)}/>
+    <NumberOption label="Период атаки" title="Продолжительность полного цикла периодического поведения." value={options.attackPeriod} min={1} max={500} step={1} disabled={running||options.attackStrategy!=="pulsed"} onChange={v=>set("attackPeriod",v)}/>
+    <NumberOption label="Активных шагов в периоде" title="Первые d тактов из каждого периода заняты воздействием." value={options.attackDuty} min={1} max={500} step={1} disabled={running||options.attackStrategy!=="pulsed"} onChange={v=>set("attackDuty",v)}/>
+    <NumberOption label="Длительность накопления репутации" title="Число начальных шагов, когда скомпрометированные агенты отправляют корректные предложения перед переходом к атаке." value={options.reputationWarmup} min={0} max={50000} step={1} disabled={running||options.attackStrategy!=="reputation_boost"} onChange={v=>set("reputationWarmup",v)}/>
+    <NumberOption label="Порог согласованности свидетельств" title="Масштаб отклонения наблюдения от медианы остальных доступных предложений; не используется эталонная истина." value={options.evidenceTolerance} min={0.000001} max={100} step={0.05} disabled={running||options.evidenceModel==="legacy"} onChange={v=>set("evidenceTolerance",v)}/>
+    <NumberOption label="Шум свидетельства" title="СКО дополнительного шума оценки поведения." value={options.evidenceNoiseSigma} min={0} max={1} step={0.005} disabled={running||options.evidenceModel==="legacy"} onChange={v=>set("evidenceNoiseSigma",v)}/>
+    <NumberOption label="Искажение свидетельств нарушителем" title="Степень подмены оценок наблюдателя: 0 — без подмены, 1 — полностью согласованная ложная оценка." value={options.witnessCorruption} min={0} max={1} step={0.05} disabled={running||options.evidenceModel==="legacy"} onChange={v=>set("witnessCorruption",v)}/>
+    <NumberOption label="Корреляция свидетельств" title="Доля общего случайного возмущения для оценок одного объекта разными наблюдателями." value={options.evidenceCorrelation} min={0} max={1} step={0.05} disabled={running||options.evidenceModel!=="correlated_witnesses"} onChange={v=>set("evidenceCorrelation",v)}/>
+    <NumberOption label="Запаздывание наблюдений, шагов" title="Свидетельства вычисляются по доставленным предложениям прошлых тактов. Это задержка источника наблюдения, а не эмуляция транспортной задержки свидетельства." value={options.evidenceLag} min={0} max={500} step={1} disabled={running||options.evidenceModel!=="lagged_observation"} onChange={v=>set("evidenceLag",v)}/>
+   </div>
+   <p className="r27-note">В новом режиме свидетельство является ограниченной оценкой согласованности наблюдения с другими доставленными предложениями, а не апостериорной вероятностью честности. При отсутствии информации возвращается нейтральная оценка 0,5. Согласованная группа нарушителей может сместить опорную медиану.</p>
   </Panel>
   {validationError?<p role="alert" className="imas-validation-error">{validationError}</p>:null}
   {error?<p role="alert" className="imas-validation-error">{error}</p>:null}
@@ -210,6 +240,17 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <tbody>{paired.map(p=><tr key={p.baseline}><td>{ADAPTIVE_METHODS.find(m=>m.id===p.baseline)?.label}</td>
       <td>{num(p.mean,5)}</td><td>{p.ci95_half_width===null?"—":num(p.mean-p.ci95_half_width,5)+" … "+num(p.mean+p.ci95_half_width,5)}</td>
       <td>{p.wins}</td><td>{p.losses}</td></tr>)}</tbody></table></div>
+   </Panel>
+   <Panel title="Диагностика генератора событий" subtitle="Показатели относятся к первому прогону и не используются адаптивным оценивателем.">
+    <div className="table-wrap"><table><thead><tr><th>Показатель</th><th>Значение</th></tr></thead><tbody>
+     <tr><td>Стратегия атакующего</td><td>{result.options.attackStrategy}</td></tr>
+     <tr><td>Модель свидетельств</td><td>{result.options.evidenceModel}</td></tr>
+     <tr><td>Сгенерировано модифицированных предложений</td><td>{result.runs[0].scenarioDiagnostics?.generatedAttackProposals??0}</td></tr>
+     <tr><td>Оценено синтетических свидетельств</td><td>{result.runs[0].scenarioDiagnostics?.behaviorEvidenceGenerated??0}</td></tr>
+     <tr><td>Нейтральные свидетельства (нет наблюдений)</td><td>{result.runs[0].scenarioDiagnostics?.uninformativeEvidence??0}</td></tr>
+     <tr><td>Модифицировано свидетельств нарушителями</td><td>{result.runs[0].scenarioDiagnostics?.maliciousWitnessed??0}</td></tr>
+     <tr><td>Свидетельства по устаревшим наблюдениям</td><td>{result.runs[0].scenarioDiagnostics?.laggedObservationCount??0}</td></tr>
+    </tbody></table></div>
    </Panel>
    <Panel title="Полный протокол вычислений и экспорт">
     <p>JSON содержит конфигурацию, версии моделей, расписание фаз, значения показателей каждого прогона, диагностические переменные и траектории вспомогательной обратной связи. CSV содержит трассу первого прогона.</p>
