@@ -28,7 +28,7 @@ async function saveCheckpoint(key,runs,result=null){
   completedRuns:runs.length,runs:[...runs],result
  });
 }
-export async function runAdaptiveBrowser(config,options,onProgress=()=>{}){
+export async function runAdaptiveBrowser(config,options,onProgress=()=>{},runtime={}){
  return withOriginStorageLock(async()=>{
   if(activeJob)throw Error("Исследование E1-А уже выполняется");
   const {core,options:o}=validateAdaptiveStudy(config,options);
@@ -41,7 +41,7 @@ export async function runAdaptiveBrowser(config,options,onProgress=()=>{}){
   if(runs.length>o.runs)throw Error("Кэш содержит больше прогонов, чем план");
   return new Promise((resolve,reject)=>{
    let worker;
-   try{worker=new Worker(new URL("./adaptiveWorker.js",import.meta.url),{type:"module"});}
+   try{worker=runtime.workerFactory?runtime.workerFactory():new Worker(new URL("./adaptiveWorker.js",import.meta.url),{type:"module"});}
    catch(error){reject(error);return;}
    let settled=false,writing=Promise.resolve();
    const job={worker,stop:()=>{}};
@@ -66,7 +66,7 @@ export async function runAdaptiveBrowser(config,options,onProgress=()=>{}){
       runs.push(data.value);
       await saveCheckpoint(key,runs);
       onProgress({completed:runs.length,total:o.runs,percent:100*runs.length/o.runs,cacheHit:false});
-     }).catch(e=>{finish(e);throw e;});
+     }).catch(e=>{finish(e);});
     }else if(data?.type==="finished"){
      writing.then(async()=>{
       if(runs.length!==o.runs)throw Error("Worker завершился до выполнения всех прогонов");
