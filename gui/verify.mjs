@@ -269,7 +269,13 @@ const e1aRuns=page.getByRole("spinbutton",{name:"Повторения R",exact:t
 await e1aRuns.fill("2");await e1aRuns.press("Tab");
 const e1aAction=page.locator(".tab-action").getByRole("button",{name:"Выполнить исследование"});
 await e1aAction.click();
-await page.getByRole("heading",{name:"Парные сравнения RMSE"}).waitFor({timeout:45000});
+try{
+ await page.getByRole("heading",{name:"Парные сравнения RMSE"}).waitFor({timeout:18000});
+}catch(error){
+ const messages=await page.locator(".imas-validation-error, .r27-note[role='status']").allTextContents();
+ const state=await page.locator(".tab-action").allTextContents();
+ throw Error("E1-A browser computation did not finish: "+JSON.stringify({messages,state}).slice(0,2200)+"; "+String(error));
+}
 await page.getByRole("heading",{name:"Итоговые показатели по методам"}).waitFor({timeout:45000});
 const e1aRows=await page.locator("section.panel").filter({hasText:"Итоговые показатели по методам"}).locator("tbody tr").count();
 if(e1aRows!==5)throw Error("E1-A: expected five paired method metrics, got "+e1aRows);
