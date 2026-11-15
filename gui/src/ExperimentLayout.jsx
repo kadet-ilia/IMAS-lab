@@ -24,7 +24,7 @@ export function ExperimentLayout({sidebar,navigation,authors,title,description=n
 }
 
 /** Common card components: all experiments use the same class names and DOM shape. */
-export function ExperimentPanel({title,subtitle,children,className="",headerAside=null}){
+export function ExperimentPanel({title,subtitle,children,className="",headerAside=null,exportAction=null}){
  const root=useRef(null),[open,setOpen]=useState(false),[error,setError]=useState("");
  const formats=open?availablePanelFormats(root.current):[];
  const save=format=>{
@@ -35,9 +35,11 @@ export function ExperimentPanel({title,subtitle,children,className="",headerAsid
   <header className="panel-header"><div><h2>{title}</h2>{subtitle?<p>{subtitle}</p>:null}</div>
    <div className="panel-header-actions">{headerAside}
     <div className="panel-export">
-     <button type="button" className="panel-export-trigger" aria-label={"Сохранить объект: "+title}
-      aria-expanded={open} onClick={()=>setOpen(v=>!v)}>Сохранить</button>
-     {open?<div className="panel-export-menu" role="group" aria-label={"Форматы экспорта: "+title}>
+     <button type="button" className="panel-export-trigger"
+      aria-label={(exportAction?"Сохранить: ":"Сохранить объект: ")+title}
+      aria-expanded={exportAction?undefined:open}
+      onClick={exportAction||(()=>setOpen(v=>!v))}>Сохранить</button>
+     {open&&!exportAction?<div className="panel-export-menu" role="group" aria-label={"Форматы экспорта: "+title}>
       {formats.length?formats.map(format=><button type="button" key={format} onClick={()=>save(format)}>{format}</button>)
        :<span>Нет графика или таблицы</span>}
      </div>:null}
