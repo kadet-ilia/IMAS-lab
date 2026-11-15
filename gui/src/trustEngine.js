@@ -218,7 +218,7 @@ function samples(t,scenario,c,bad,sybil,r){
  if(c.n_sybil_agents){const common=v+c.attack_direction*c.collusion_bias*scale+.005*r.normal();for(let i=c.n_agents;i<n;i++)x[i]=common+.002*r.normal();}
  return x;
 }
-export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,record=null){
+export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,record=null,simulationAdapter=null,deliveredContext=null){
  const n=bad.length,intensity=attackIntensity(t,scenario,c),attack=intensity>0,e=makeMat(n,NaN);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++){
   // Exclude inactive, isolated and not-yet-activated identities, even offline.
@@ -227,6 +227,14 @@ export function observations(t,scenario,c,bad,active,labels,r,budget,runIndex=0,
   const eventRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"observation",t,i,j):r;
   let v=attack&&bad[i]?(bad[j]?.98:.02):clamp((eventRng.random()<quality?1:0)+eventRng.normal()*c.observer_noise_sigma,0,1);
   if(i===j)v=c.honest_quality;
+  else if(simulationAdapter?.evidenceValue){
+   v=simulationAdapter.evidenceValue({
+    step:t+1,observer:i,target:j,values:deliveredContext?.values,
+    available:deliveredContext?.available,byzantine:bad,
+    intensity,active
+   });
+   if(!good(v)||v<0||v>1)throw Error("E1-A: недопустимое синтетическое свидетельство");
+  }
   e[i][j]=v;
  }
  const generatedEvidence=record?e.map(row=>[...row]):null;
@@ -381,7 +389,7 @@ function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,
  topology_semantics:c.network_enabled&&c.n_sybil_agents>0&&c.network_topology!=="complete"?
   "base_"+c.network_topology+"+forced_sybil_clique_and_index_anchors":
   c.network_enabled?c.network_topology:"complete_without_transport_constraints"};}
-export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false,onStep=null,decisionObserver=null){
+export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenarioIndex=0,detail=false,onStep=null,decisionObserver=null,simulationAdapter=null){
  const c=validateConfig(rawConfig),startWall=performance.now(),n=c.n_agents+c.n_sybil_agents,r=createRng(c.seed,scenarioIndex,runIndex);
  const sybil=all(n).map(i=>i>=c.n_agents),bad=sybil.slice(),badIds=r.choice(all(c.n_agents),c.n_byzantine);badIds.forEach(i=>bad[i]=true);
  const a=buildAdjacency(c,r,bad),groups=Array(n).fill(0);
@@ -411,13 +419,26 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
-  const proposed=samples(t,scenario,c,bad,sybil,proposalsRng),trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
+  const baselineProposed=samples(t,scenario,c,bad,sybil,proposalsRng);
+  const proposed=simulationAdapter?.transformProposals
+   ?simulationAdapter.transformProposals({
+    step:t+1,values:Object.freeze([...baselineProposed]),
+    byzantine:Object.freeze([...bad]),sybil:Object.freeze([...sybil]),
+    intensity:attackIntensity(t,scenario,c)
+   }):baselineProposed;
+  if(!Array.isArray(proposed)||proposed.length!==n||proposed.some(x=>!good(x)))
+   throw Error("E1-A: генератор атак вернул недопустимые предложения");
+  const trustT0=performance.now(),direct=betaTrust(hist,c,n),scores=Array(n).fill(c.initial_trust);
    if(record)for(let i=0;i<n;i++)record({kind:"proposal_generated",step:t+1,source:i+1,value:proposed[i],
     active:running[i],byzantine:bad[i],sybil:sybil[i]});
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
   const transportT0=performance.now();
   const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex,record);
+  if(simulationAdapter?.onProposalsDelivered)
+   simulationAdapter.onProposalsDelivered({
+    step:t+1,values:Object.freeze([...tx.values]),available:Object.freeze([...tx.available])
+   });
   transportWallMs+=performance.now()-transportT0;
   const aggregateT0=performance.now();
   const decisions=aggregateProposals(tx.values,rep,tx.available,c);
@@ -445,7 +466,7 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     if(good(half))cover[m].push(Math.abs(e)<=half?1:0);
   }
   const evidenceT0=performance.now();
-  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record);
+  const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record,simulationAdapter,tx);
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
    communicationState=accountCommunicationStep(communicationState,tx.stats,evidence.stats,queue.length,t+1);
