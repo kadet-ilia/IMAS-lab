@@ -587,3 +587,34 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 /* Four trust algorithms retain a readable KPI grid on narrow screens. */
 @media(max-width:1150px){.kpi-grid.four{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.kpi-grid.four{grid-template-columns:minmax(0,1fr);}}
+
+/* A long scientific project title is displayed in full without masking controls. */
+.app-shell{grid-template-rows:110px minmax(0,1fr) 30px}
+.topbar,.topbar:is(:where(*)){
+ grid-template-columns:minmax(0,1fr) auto;
+ grid-template-rows:minmax(0,1fr) auto;
+ gap:5px 12px;
+ align-content:center;
+ padding:9px 18px 9px 22px;
+}
+.topbar .brand{grid-column:1/-1;grid-row:1;min-width:0;align-self:center}
+.topbar .brand h1{
+ margin:0;
+ font-size:15px;
+ line-height:1.25;
+ white-space:normal;
+ overflow-wrap:break-word;
+ letter-spacing:-.01em;
+}
+.topbar .top-meta{grid-column:1;grid-row:2;min-width:0;justify-content:flex-start}
+.topbar .toolbar{grid-column:2;grid-row:2;min-width:0}
+@media(max-width:1280px){
+ .topbar{grid-template-columns:minmax(0,1fr) auto}
+ .topbar .top-meta{display:none}
+ .topbar .toolbar{grid-column:2}
+}
+.lyapunov-study .tab-action{align-items:flex-start;flex-wrap:wrap}
+.lyapunov-study .tab-action-description{min-width:0;flex:1 1 590px}
+.lyapunov-study .tab-action-description p{margin:6px 0 0;line-height:1.45;font-size:12px}
+.lyapunov-study .tab-action-description strong{color:#354556}
+.lyapunov-study .tab-action > .action-controls{flex:0 0 auto}
