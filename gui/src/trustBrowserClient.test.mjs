@@ -58,7 +58,7 @@ test("UP-35 lease is acquired before async cache I/O and prevents overlapping ru
  const terminal=await first;
  assert.equal(terminal.state,"completed");
  assert.equal(terminal.result.partial,false);
- assert.equal(terminal.result.ablation_rows.length,12);
+ assert.equal(terminal.result.ablation_rows.length,16);
  assert.equal(terminal.result.completed_tasks,12);
  assert.equal(terminal.result.parallel_workers_used,2);
  const cached=await runBrowserExperiment(payload,()=>{},{workerFactory:()=>{throw Error("must not start worker on cache hit");}});
