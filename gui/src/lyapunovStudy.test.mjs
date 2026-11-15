@@ -113,7 +113,7 @@ test("five-phase exponential and hyperbolic attack shapes are used by the simula
  const expected=Array.from({length:8},(_,i)=>attackIntensityAt(i+1,schedule,8));
  const run=simulateRun({...config,attack_schedule:schedule},"dynamic",0,0,false);
  for(let i=0;i<8;i++)assert.ok(Math.abs(run.trajectory[i].attack_intensity-expected[i])<1e-12);
- const study=runLyapunovStudy(config,{gain:.5,initialError:1,tolerance:.1,runs:1,phases:schedule});
+ const study=runLyapunovStudy({...config,attack_start_step:1},{gain:.5,initialError:1,tolerance:.1,runs:1,phases:schedule});
  assert.deepEqual(study.series.slice(1).map(x=>x.attack_intensity),expected);
  assert.equal(study.summary.length,4);
 });
