@@ -10,7 +10,7 @@
  */
 import {createRng} from "./trustEngine.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.1.0";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.2.0";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -70,6 +70,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
  const observedHistory=new Map();
+ const qualityCache=new Map();
  let lastDeliveredStep=0;
  let feedbackDecision=null;
  const debug={behaviorEvidenceGenerated:0,uninformativeEvidence:0,maliciousWitnessed:0,
@@ -112,6 +113,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   if(o.comparisonMode==="decision_feedback"&&lastDeliveredStep!==step)
    throw Error("Обратная связь должна следовать после доставки предложений текущего такта");
   feedbackDecision={step,value};
+  qualityCache.clear();
  };
  const effectiveIntensity=(step,intensity)=>
   o.attackStrategy==="legacy"||isActive(step,intensity)?intensity:0;
@@ -121,6 +123,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   if(lastDeliveredStep!==step-1)
    throw Error("Запаздывание свидетельств: обнаружено нарушение порядка тактов");
   lastDeliveredStep=step;
+  qualityCache.clear();
   if(o.evidenceModel==="lagged_observation"){
    observedHistory.set(step,copy);
    // Only the most recent lag+1 source samples can be addressed by the
@@ -134,25 +137,40 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   const lag=o.evidenceModel==="lagged_observation"?o.evidenceLag:0;
   const sample=lag?observedHistory.get(step-lag):{values,available};
   if(lag)debug.laggedObservationCount++;
-  // No directly observable proposal -> uninformative witness. Network delivery
-  // still follows E1's existing transport ledger; this is not evidence latency.
-  if(!sample||!sample.available[target]||!finite(sample.values[target])){
-   debug.uninformativeEvidence++;return 0.5;
-  }
-  const peers=sample.values.filter((x,i)=>i!==target&&sample.available[i]&&finite(x));
-  if(peers.length<2){debug.uninformativeEvidence++;return 0.5;}
-  let reference=med(peers);
-  if(o.comparisonMode==="decision_feedback"){
-   if(feedbackDecision?.step!==step)throw Error("Отсутствует коллективное решение текущего такта");
-   if(!finite(feedbackDecision.value)){
-    debug.uninformativeEvidence++;debug.feedbackAbstentions++;return 0.5;
+  // Quality depends only on (step,target) and, in decision_feedback mode,
+  // the method-specific current decision. Cache it once per target, while
+  // retaining separate per-witness random and malicious components.
+  let qualityState=qualityCache.get(target);
+  if(!qualityState){
+   if(!sample||!sample.available[target]||!finite(sample.values[target]))
+    qualityState={reason:"missing",quality:null};
+   else{
+    const peers=sample.values.filter((x,i)=>i!==target&&sample.available[i]&&finite(x));
+    if(peers.length<2)qualityState={reason:"insufficient_peers",quality:null};
+    else{
+     let reference=med(peers);
+     if(o.comparisonMode==="decision_feedback"){
+      if(feedbackDecision?.step!==step)
+       throw Error("Отсутствует коллективное решение текущего такта");
+      if(!finite(feedbackDecision.value))
+       qualityState={reason:"abstention",quality:null};
+      else reference=feedbackDecision.value;
+     }
+     if(!qualityState){
+      const residual=Math.abs(sample.values[target]-reference);
+      qualityState={reason:"ok",quality:1/(1+(residual/o.evidenceTolerance)**2)};
+     }
+    }
    }
-   reference=feedbackDecision.value;
-   debug.feedbackDecisionUsed++;
+   qualityCache.set(target,qualityState);
   }
-  const residual=Math.abs(sample.values[target]-reference);
-  // A bounded quality score based on observable disagreement, not oracle truth.
-  const quality=1/(1+(residual/o.evidenceTolerance)**2);
+  if(qualityState.reason!=="ok"){
+   debug.uninformativeEvidence++;
+   if(qualityState.reason==="abstention")debug.feedbackAbstentions++;
+   return 0.5;
+  }
+  if(o.comparisonMode==="decision_feedback")debug.feedbackDecisionUsed++;
+  const quality=qualityState.quality;
   const random=rngFor(step,observer,target,4);
   let score=quality;
   if(o.evidenceModel==="correlated_witnesses"){
