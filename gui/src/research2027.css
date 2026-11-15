@@ -707,3 +707,29 @@
  background:#eaf2fa;border-color:#2672ff;
 }
 .r27-experiment-navigation.r27-help-navigation button.r27-nav-right{margin-left:0}
+
+/* Shared navigation help must match the mode tabs in font, height and padding. */
+.r27-experiment-navigation button.r27-nav-right{
+ width:auto;min-width:0;max-width:none;
+ height:29px;min-height:29px;max-height:29px;
+ padding:4px 9px;border-radius:3px;
+ border-color:#bdcddd;background:#fff;color:#375b79;
+ font-size:11px;font-weight:600;line-height:1.15;
+}
+.r27-experiment-navigation button.r27-nav-right.active{
+ color:#fff;background:#155c92;border-color:#155c92;
+}
+/* SVG export for E1 trace resides inside the compact replay top-right corner. */
+.r27-replay-compact .r27-replay-heading{align-items:flex-start}
+.r27-replay-compact .r27-replay-heading-actions{
+ display:flex;align-items:center;justify-content:flex-end;
+ gap:8px;flex:0 0 auto;white-space:nowrap;
+}
+.r27-replay-compact button.r27-export-control{
+ height:29px;display:inline-flex;align-items:center;justify-content:center;
+ gap:5px;padding:4px 9px;border:1px solid #bdcddd;
+ border-radius:3px;background:#fff;color:#375b79;
+ font-size:11px;font-weight:600;line-height:1.15;cursor:pointer;
+}
+.r27-replay-compact button.r27-export-control svg{width:13px;height:13px}
+.r27-replay-compact button.r27-export-control:hover{border-color:#2672ff;color:#2672ff}
