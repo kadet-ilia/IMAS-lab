@@ -65,7 +65,13 @@ export function feedbackTrajectory(trajectory,config,options){
    stateErrors.push(eNext);
    e=eNext;bound=boundNext;
   }
-  const settling=points.findIndex((p,i)=>i>0&&points.slice(i).every(z=>Math.abs(z.e)<=o.tolerance));
+  // Earliest suffix entirely within the tolerance. A backward scan is O(T),
+  // whereas checking a fresh slice at every tick would be O(T^2).
+  let settling=-1,withinSuffix=true;
+  for(let i=points.length-1;i>=1;i--){
+   withinSuffix=withinSuffix&&Math.abs(points[i].e)<=o.tolerance;
+   if(withinSuffix)settling=i;
+  }
   const metrics={
    method,decision_coverage:valid/c.n_steps,
    decision_mae:valid?mean(decisionErrors.map(Math.abs)):null,
