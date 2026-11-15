@@ -508,7 +508,7 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 }
 
 
-/* Up to five phases always share one horizontal row; narrow screens scroll. */
+/* Arbitrary phase count in one horizontally scrollable row. */
 .lyapunov-study .lyapunov-phase-grid{
  display:grid;grid-auto-flow:column;grid-auto-columns:minmax(190px,1fr);
  grid-template-columns:none;overflow-x:auto;gap:9px;padding-bottom:8px;
