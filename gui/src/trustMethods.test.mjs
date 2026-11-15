@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {TRUST_METHOD_IDS,TRUST_METHOD_DEFINITIONS,assertAllTrustMethods} from "./trustMethods.js";
-import {METHODS,STABILITY_METHODS,aggregateProposals,trimmedWeightedMean,validateConfig,simulateRun,runActionSync} from "./trustEngine.js";
+import {METHODS,STABILITY_METHODS,aggregateProposals,trimmedWeightedMean,eigenTrust,validateConfig,simulateRun,runActionSync} from "./trustEngine.js";
 
 test("all trust experiment modes use the same four immutable IDs",()=>{
  assert.deepEqual(METHODS,TRUST_METHOD_IDS);
@@ -74,4 +74,17 @@ test("Monte Carlo, single run, sensitivity and factorial all expose four methods
  assert.equal(factorial.main_effects.length,4*6*4);
  assert.equal(factorial.interaction_effects.length,4*15*4);
  assertAllTrustMethods(factorial.main_effects.filter(x=>x.metric==="probability_correct"&&x.factorIndex===0));
+});
+
+test("regularized EigenTrust stationary distribution has a bounded fixed-point residual",()=>{
+ const direct=[[.9,.7,.6],[.65,.9,.78],[.74,.55,.9]],d=.97;
+ const p=eigenTrust(direct,[true,true,true],d);
+ const pi=p.map(x=>x/p.reduce((a,b)=>a+b,0));
+ const C=direct.map(row=>{
+  const w=row.map(x=>Math.max(0,x-.5)),sum=w.reduce((a,b)=>a+b,0);
+  return w.map(x=>sum?x/sum:1/row.length);
+ });
+ const next=pi.map((_,j)=>(1-d)/3+d*pi.reduce((t,x,i)=>t+x*C[i][j],0));
+ assert.ok(next.reduce((total,x,j)=>total+Math.abs(x-pi[j]),0)<1e-9);
+ assert.ok(pi.every(x=>x>0&&x<1));
 });
