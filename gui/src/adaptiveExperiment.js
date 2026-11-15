@@ -102,6 +102,88 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
  return {run:runIndex,metrics,trajectory,feedback,original_metrics:simulation.rows,
   scenarioDiagnostics:generator?.getDiagnostic()??null};
 }
+
+/**
+ * Reduced closed-loop study: each estimator independently changes the
+ * collective reference used to create the NEXT trust state via witnesses.
+ * It recomputes the whole E1 execution five times with the same keyed
+ * exogenous random-event stream. Network is restricted to unrestricted
+ * broadcast until per-component decision dissemination is implemented.
+ */
+function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
+ const methodPaths={},methodStates={},methodDiagnostics={},originalMetrics={};
+ let adaptiveDiagnostics=[];
+ for(const method of ADAPTIVE_METHOD_IDS){
+  const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
+  if(!generator?.evidenceValue)throw Error("Для раздельного контура требуется модель наблюдаемых свидетельств");
+  const observed=[];
+  const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
+   const data=estimateAdaptiveDecision(observable,o,core);
+   const value=data.decisions[method];
+   generator.onFeedbackDecision({step:observable.step,value});
+   observed.push({step:observable.step,value,diagnostics:data.diagnostics,
+    meanReputation:average(observable.reputation.filter(finite)),
+    availableAgents:observable.available.filter(Boolean).length});
+  },generator);
+  if(simulation.trajectory.length!==core.n_steps||observed.length!==core.n_steps)
+   throw Error("Неполный методоспецифический контур "+method);
+  const paths=[],states=[];
+  for(let index=0;index<core.n_steps;index++){
+   const row=simulation.trajectory[index],ob=observed[index];
+   if(row.step!==ob.step)throw Error("Нарушен порядок тактов "+method);
+   if((method==="trimmed_unweighted"||method==="proposed_robust")&&
+     !(row[method]===ob.value||(row[method]===null&&ob.value===null)))
+    throw Error("Не совпала формула контрольного оценивателя "+method);
+   const nominal=o.scenario==="dynamic"?
+    attackIntensityAt(row.step,o.phases,core.n_steps):row.attack_intensity;
+   const effective=generator.effectiveIntensity(row.step,nominal);
+   paths.push({step:row.step,truth:row.truth,
+    attack_intensity:effective,nominal_attack_intensity:nominal,[method]:ob.value});
+   states.push({step:row.step,active_agents:row.active_agents,
+    isolated_agents:row.isolated_agents,available_agents:row.available_agents,
+    mean_reputation:ob.meanReputation,largest_component:row.largest_component});
+  }
+  methodPaths[method]=paths;
+  methodStates[method]=states;
+  methodDiagnostics[method]=generator.getDiagnostic();
+  originalMetrics[method]=simulation.rows;
+  if(method==="adaptive_robust")adaptiveDiagnostics=observed.map(x=>x.diagnostics);
+ }
+ const trajectory=Array.from({length:core.n_steps},(_,index)=>{
+  const base=methodPaths.adaptive_robust[index];
+  return {...base,...Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
+   method,methodPaths[method][index][method]
+  ])),diagnostics:adaptiveDiagnostics[index]};
+ });
+ const metrics=ADAPTIVE_METHOD_IDS.map(method=>{
+  const accepted=trajectory.filter(row=>finite(row[method]));
+  const errors=accepted.map(row=>row[method]-core.desired_action);
+  const attackErrors=accepted.filter(row=>row.attack_intensity>0)
+   .map(row=>row[method]-core.desired_action);
+  const abs=errors.map(Math.abs),feedback=feedbackMetrics(
+   trajectory,method,o.feedbackGain,o.feedbackInitialError);
+  const state=methodStates[method];
+  return {method,run:runIndex,decision_coverage:accepted.length/core.n_steps,
+   probability_correct:errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/core.n_steps,
+   accuracy_accepted:accepted.length?
+    errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/accepted.length:null,
+   rmse:errors.length?Math.sqrt(average(errors.map(e=>e*e))):null,
+   mae:average(abs),p95_abs_error:quantile(abs,.95),
+   max_abs_error:abs.length?Math.max(...abs):null,
+   attack_rmse:attackErrors.length?Math.sqrt(average(attackErrors.map(e=>e*e))):null,
+   mean_isolated_agents:average(state.map(v=>v.isolated_agents)),
+   max_isolated_agents:Math.max(...state.map(v=>v.isolated_agents)),
+   mean_reputation:average(state.map(v=>v.mean_reputation)),
+   ...feedback.metrics};
+ });
+ const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
+  method,feedbackMetrics(trajectory,method,o.feedbackGain,o.feedbackInitialError).points
+ ]));
+ return {run:runIndex,metrics,trajectory,feedback,methodStates,
+  original_metrics:originalMetrics,scenarioDiagnostics:methodDiagnostics.adaptive_robust,
+  scenarioDiagnosticsByMethod:methodDiagnostics};
+}
+
 export function summarizeAdaptiveRuns(runs,config={},options={}){
  const {core,options:o}=validateAdaptiveStudy(config,options);
  if(!Array.isArray(runs)||!runs.length||runs.length>o.runs)throw Error("Неполный список прогонов E1-А");
@@ -109,7 +191,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
  if(new Set(ordered.map(r=>r.run)).size!==ordered.length||ordered.some((r,i)=>r.run!==i||r.trajectory?.length!==core.n_steps))
   throw Error("Нарушен состав или порядок прогонов");
  const metrics=["decision_coverage","probability_correct","accuracy_accepted","rmse","mae",
-  "p95_abs_error","max_abs_error","attack_rmse","state_rmse","final_abs_error","positive_delta_v_fraction"];
+  "p95_abs_error","max_abs_error","attack_rmse","state_rmse","final_abs_error","positive_delta_v_fraction",
+  "mean_isolated_agents","max_isolated_agents","mean_reputation"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
