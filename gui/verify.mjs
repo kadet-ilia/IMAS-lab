@@ -95,7 +95,7 @@ try {
   throw error;
 }
 
-const standardHeading = "IMAS_LaB_test · Лабораторный стенд ИМАС";
+const standardHeading = "Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности";
 async function assertStandardWorkspace(section) {
   const workspace = page.locator(".workspace");
   const structure = await workspace.evaluate(el => ({
@@ -122,6 +122,16 @@ async function assertStandardWorkspace(section) {
   }
 }
 await assertStandardWorkspace("Расчет доверия");
+const titleGeometry=await page.locator(".topbar").evaluate(el=>{
+ const brand=el.querySelector(".brand h1"),toolbar=el.querySelector(".toolbar");
+ const a=brand.getBoundingClientRect(),b=toolbar.getBoundingClientRect(),bar=el.getBoundingClientRect();
+ return {text:brand.innerText,left:a.left,right:a.right,bottom:a.bottom,toolbarTop:b.top,top:bar.top,bottomBar:bar.bottom,scrollWidth:brand.scrollWidth,clientWidth:brand.clientWidth};
+});
+if(titleGeometry.text!=="Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности"||
+ titleGeometry.bottom>titleGeometry.toolbarTop+2||
+ titleGeometry.right>window.innerWidth+2||
+ titleGeometry.scrollWidth>titleGeometry.clientWidth+2)
+ throw Error("Full long laboratory heading must remain visible above toolbar: "+JSON.stringify(titleGeometry));
 const trustSummary=page.locator(".trust-summary-table tbody tr");
 if((await trustSummary.count())!==4)throw Error("One-run results must contain four shared trust methods");
 const trustNames=await trustSummary.locator("td:first-child").allTextContents();
@@ -224,6 +234,12 @@ for(const [id,name] of trustModes){
   await assertStandardWorkspace(name);
   if(id==="stability"){
    await page.getByText("Устойчивость по Ляпунову и точность коллективных оценок").waitFor();
+   const header=page.locator(".lyapunov-study .tab-action");
+   if((await header.getByText("Четыре метода:",{exact:false}).count())!==1||
+      (await header.getByText("Цель:",{exact:false}).count())!==1)
+     throw Error("Research description and goal must be inside tab-action");
+   if((await page.locator(".lyapunov-study > p.r27-note").count())!==0)
+     throw Error("Research description must not be split outside tab-action");
    if((await page.getByRole("spinbutton",{name:"Коэффициент обратной связи k"}).count())!==1)
     throw Error("Stability tab must expose Lyapunov feedback control");
    if((await page.getByText("Динамическая активность атаки").count())!==1)
@@ -674,7 +690,7 @@ await page.locator(".topbar").getByRole("button",{name:"Запустить",exac
 await page.locator(".progress-strip").getByText("Результат восстановлен из IndexedDB",{exact:false}).waitFor({timeout:30000});
 report.researchCacheAfterNavigation=true;
 await page.reload({waitUntil:"domcontentloaded"});
-await page.getByRole("heading",{name:"IMAS_LaB_test · Лабораторный стенд ИМАС"}).waitFor();
+await page.getByRole("heading",{name:"Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности"}).waitFor();
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("study-uncertainty");
 await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
 await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
@@ -797,7 +813,7 @@ if(!report.ablationCacheHit)throw Error("UP-35: repeated ablation was not cached
 // Reload discards the JS in-memory Map. A cache hit after reconstructing the
 // identical configuration confirms that the result survived in IndexedDB.
 await page.reload({waitUntil:"domcontentloaded"});
-await page.getByRole("heading",{name:"IMAS_LaB_test · Лабораторный стенд ИМАС"}).waitFor();
+await page.getByRole("heading",{name:"Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности"}).waitFor();
 await page.locator("aside.sidebar summary").filter({hasText:"Дополнительно"}).click();
 await field("Усечение с каждой стороны",2);
 await field("f — число византийских агентов",2);
@@ -908,7 +924,7 @@ await browser.close();
 
 const controlsPresent = Object.values(report.requiredControls).every((count) => count > 0);
 if (
-  report.title !== "IMAS_LaB_test — Лабораторный стенд ИМАС" ||
+  report.title !== "Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности" ||
   report.bodyLength < 2000 ||
   report.helpSections < 18 ||
   !controlsPresent ||
