@@ -1,4 +1,5 @@
 import {attackIntensityAt,validateAttackPhases} from "./attackProfiles.js";
+import {MAX_STABILITY_STEPS} from "./phaseScheduling.js";
 import {pairedDifference95,pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 import {auditFactorialDesign,estimateFactorialContrasts,FACTORIAL_AUDIT_VERSION} from "./factorialAudit.js";
 import {METRIC_PASSPORT_VERSION,passportForStudy,auditResultMetrics} from "./metricPassport.js";
@@ -66,12 +67,12 @@ export const EXOGENOUS_EVENT_STAGES=Object.keys(EXOGENOUS_STAGES);
 export const TRUST_MODEL_VERSION="trust-js-2.12.0-attack-profiles-four-aggregators";
 const integerRanges={
  seed:[-2147483648,2147483647],n_agents:[3,160],n_byzantine:[0,159],n_sybil_agents:[0,160],
- sybil_activation_step:[1,500],n_steps:[1,500],n_runs:[1,10000],n_sensitivity_runs:[1,100],
+ sybil_activation_step:[1,MAX_STABILITY_STEPS],n_steps:[1,MAX_STABILITY_STEPS],n_runs:[1,10000],n_sensitivity_runs:[1,100],
  factorial_runs_per_point:[1,50],factorial_max_points:[32,64],bootstrap_samples:[100,10000],parallel_workers:[0,32],
- attack_start_step:[1,500],on_off_period:[1,500],on_off_attack_steps:[1,500],trust_window_steps:[2,100],
+ attack_start_step:[1,MAX_STABILITY_STEPS],on_off_period:[1,500],on_off_attack_steps:[1,500],trust_window_steps:[2,100],
  isolation_patience:[1,100],minimum_evidence_steps:[1,500],isolation_cooldown_steps:[0,500],trim_each_side:[0,159],
  small_world_neighbors:[2,160],message_delay_min_steps:[0,500],message_delay_max_steps:[0,500],
- max_message_staleness_steps:[0,500],bandwidth_messages_per_step:[0,1000000],partition_start_step:[1,500],partition_end_step:[1,500],source_event_limit:[1,250000]
+ max_message_staleness_steps:[0,500],bandwidth_messages_per_step:[0,1000000],partition_start_step:[1,MAX_STABILITY_STEPS],partition_end_step:[1,MAX_STABILITY_STEPS],source_event_limit:[1,250000]
 };
 const numericRanges={
  desired_action:[-2,2],honest_quality:[0,1],byzantine_quality:[0,1],honest_noise_sigma:[0,10],
