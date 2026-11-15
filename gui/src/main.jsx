@@ -25,6 +25,7 @@ import LyapunovPanel from "./LyapunovPanel.jsx";
 import FigureExportPicker from "./FigureExportPicker.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
 import {validateConfig} from "./trustEngine.js";
+import {MAX_STABILITY_STEPS} from "./phaseScheduling.js";
 import {passportForStudy,METRIC_PASSPORT_VERSION} from "./metricPassport.js";
 import {ExperimentLayout,ExperimentPanel as Panel,ExperimentKpi as Kpi,ExperimentParameterTooltip as ParameterTooltip,ExperimentProgress as ProgressStrip} from "./ExperimentLayout.jsx";
 
@@ -304,14 +305,14 @@ function StateHeatmap({ states, agents, steps }) {
   );
 }
 
-function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running }) {
+function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAttackLevel, onRun, running,onManualStepsChange }) {
   const set = (key) => (value) => setConfig((current) => ({ ...current, [key]: value }));
   const ratio = ((config.n_byzantine / Math.max(config.n_agents, 1)) * 100).toFixed(1);
   const effectiveTotal = config.n_agents + config.n_sybil_agents;
   const effectiveBad = config.n_byzantine + config.n_sybil_agents;
   const honestMajority = effectiveTotal > 2 * effectiveBad;
   const updateAgents = (value) => set("n_agents")(value);
-  const updateSteps = (value) => set("n_steps")(value);
+  const updateSteps = (value) => onManualStepsChange(value);
   let configError=null;
   try{validateConfig(config);}catch(e){configError=e.message;}
   const changeLevel = (value) => {
@@ -325,7 +326,7 @@ function Sidebar({ config, setConfig, scenario, setScenario, attackLevel, setAtt
         <h2>Параметры эксперимента</h2>
         <NumberField label="N — число легитимных агентов" value={config.n_agents} min={3} max={120} onChange={updateAgents} tooltip={PARAMETER_TOOLTIPS.n_agents} />
         <NumberField label="f — число византийских агентов" value={config.n_byzantine} min={0} max={Math.floor((config.n_agents - 1) / 2)} onChange={set("n_byzantine")} hint={`f/N = ${ratio} %`} tooltip={PARAMETER_TOOLTIPS.n_byzantine} />
-        <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={20} max={500} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={10000} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
+        <div className="two-fields"><NumberField label="Число шагов (T)" value={config.n_steps} min={1} max={MAX_STABILITY_STEPS} onChange={updateSteps} tooltip={PARAMETER_TOOLTIPS.n_steps} /><NumberField label="Число прогонов" value={config.n_runs} min={2} max={10000} onChange={set("n_runs")} tooltip={PARAMETER_TOOLTIPS.n_runs} /></div>
 
         <div className="sidebar-section">
           <h3>Сценарий атаки</h3>
@@ -698,6 +699,12 @@ function TrustHelpArticle() {
 
 function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const stabilityPhaseBasisRef=useRef(DEFAULT_CONFIG.n_steps);
+  const onManualStepsChange=(value)=>{
+    if(Number.isInteger(value)&&value>0)stabilityPhaseBasisRef.current=value;
+    setConfig(current=>({...current,n_steps:value}));
+  };
+  const onAutoStepsChange=(value)=>setConfig(current=>({...current,n_steps:value}));
   const [scenario, setScenario] = useState("collusion");
   const [attackLevel, setAttackLevel] = useState("high");
   const [activeTab, setActiveTab] = useState("trace");
@@ -753,6 +760,7 @@ function App() {
     stop();
     lyapunovActionsRef.current?.stop();
     setLyapunovRuntime(null);
+    stabilityPhaseBasisRef.current=DEFAULT_CONFIG.n_steps;
     setConfig(DEFAULT_CONFIG);
     setScenario("collusion");
     setAttackLevel("high");
@@ -827,16 +835,20 @@ function App() {
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
-              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={runForTab} running={visibleRunning}/>}
+              sidebar={<Sidebar config={config} setConfig={setConfig} scenario={scenario} setScenario={setScenario} attackLevel={attackLevel} setAttackLevel={setAttackLevel} onRun={runForTab} running={visibleRunning} onManualStepsChange={onManualStepsChange}/>}
               navigation={experimentNavigation}
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
               title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
               description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
-              progress={activeTab==="stability"?null:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
+              progress={activeTab==="stability"?<ProgressStrip running={visibleRunning} progress={{
+                 message:lyapunovRuntime?.running?"Исследование устойчивости: вычисление траекторий":lyapunovRuntime?.hasResult?"Исследование устойчивости завершено":"Готов к исследованию устойчивости",
+                 completed:lyapunovRuntime?.completed??0,total:lyapunovRuntime?.total||1,
+                 percent:lyapunovRuntime?.percent??0
+               }}/>:<ProgressStrip progress={progress} running={running} cacheHit={cacheHit}/>}
               error={error?<div className="error-banner">{error}</div>:null}
             >
-              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime}/>:null}
+              {activeTab==="stability"?<LyapunovPanel ref={lyapunovActionsRef} config={config} onRuntimeChange={setLyapunovRuntime} phaseBasisSteps={stabilityPhaseBasisRef.current} onAutoStepsChange={onAutoStepsChange}/>:null}
               {activeTab==="trace"?<SingleRun data={currentTrace} config={config} trajectoryStatistics={currentMonteCarlo?.trajectory_statistics} onRunBands={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="mc"?<MonteCarlo data={currentMonteCarlo} onRun={() => request("monte_carlo")} running={running}/>:null}
               {activeTab==="sensitivity"?<Sensitivity data={currentSensitivity} mode={sensitivityMode} setMode={setSensitivityMode} onRun={mode=>request("sensitivity",{sensitivityMode:mode})} running={running}/>:null}
