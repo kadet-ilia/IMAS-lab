@@ -254,11 +254,11 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <td>{percent(s.decision_coverage.mean)}</td><td>{num(s.p95_abs_error.mean,5)}</td><td>{num(s.state_rmse.mean,5)}</td>
      </tr>)}</tbody></table></div>
    </Panel>
-   <Panel title="Парные сравнения RMSE" subtitle="Интервалы — нормальная аппроксимация 95% по независимым разностям, без поправки на множественные проверки.">
-    <div className="table-wrap"><table><thead><tr><th>Контрольный метод</th><th>ΔRMSE</th><th>95%-й интервал</th><th>Выигрыши</th><th>Проигрыши</th></tr></thead>
+   <Panel title="Парные сравнения RMSE" subtitle="Интервалы — нормальная аппроксимация 95%, не скорректированная на множественность. Двусторонний sign-flip p скорректирован Холмом для четырёх контрастов при R≥2. Выводы остаются исследовательскими.">
+    <div className="table-wrap"><table><thead><tr><th>Контрольный метод</th><th>ΔRMSE</th><th>95%-й интервал</th><th>p (sign-flip)</th><th>p (Холм)</th><th>Выигрыши</th><th>Проигрыши</th></tr></thead>
      <tbody>{paired.map(p=><tr key={p.baseline}><td>{ADAPTIVE_METHODS.find(m=>m.id===p.baseline)?.label}</td>
       <td>{num(p.mean,5)}</td><td>{p.ci95_half_width===null?"—":num(p.mean-p.ci95_half_width,5)+" … "+num(p.mean+p.ci95_half_width,5)}</td>
-      <td>{p.wins}</td><td>{p.losses}</td></tr>)}</tbody></table></div>
+      <td>{num(p.p_value,5)}</td><td>{num(p.p_holm,5)}</td><td>{p.wins}</td><td>{p.losses}</td></tr>)}</tbody></table></div>
    </Panel>
    <React.Fragment>
    {methodState?<Panel title="Независимая динамика доверия и изоляции" subtitle="Методоспецифические контуры получают одинаковые ключевые внешние случайные события, но формируют собственные репутации, изоляцию и решения.">
@@ -297,7 +297,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <button type="button" className="secondary-button" onClick={prepareCsv}>Скачать CSV первого прогона</button>
     </div>
    </Panel>
-   <p className="r27-note">Результаты относятся к модельной скалярной задаче при общей политике доверия и изоляции. Положительная динамика показателя не подтверждает устойчивость полной ИМАС. Формула α является гипотезой и подлежит независимой проверке.</p>
+   <p className="r27-note">Результаты относятся к модельной скалярной задаче. Режим сравнения указывается в протоколе: общий контур estimator_only либо методоспецифическая обратная связь decision_feedback без сетевых ограничений. Наличие малых p-значений не подтверждает состоятельность модели угроз и требует независимой подтверждающей серии. Функция V=e² не доказывает устойчивость полной ИМАС.</p>
   </React.Fragment>:<div className="empty">Настройте адаптивный алгоритм, фазы атак и выполните исследование. Результаты исходного E1 сохраняются без изменений.</div>}
  </div>;
 });
