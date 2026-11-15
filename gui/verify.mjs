@@ -236,10 +236,10 @@ const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigatio
 const trustNavigation=await navSignature();
 const toolbarSignature=()=>page.locator(".topbar .toolbar").evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:child.className||"",title:child.title||""})));
 const trustToolbar=await toolbarSignature();
-// All five trust modes must preserve the shared page shell.
+// All six trust modes must preserve the shared page shell.
 const modeGroup=page.getByRole("group",{name:"Режим эксперимента"});
-const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["data","Данные"]];
-if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Five trust mode buttons must be visible");
+const trustModes=[["trace","Один прогон"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["stability","Устойчивость и точность"],["adaptive","Адаптивные решения"],["data","Данные"]];
+if((await modeGroup.getByRole("button").count())!==trustModes.length)throw Error("Six trust mode buttons must be visible");
 for(const [id,name] of trustModes){
   const button=modeGroup.getByRole("button",{name,exact:true});
   await button.click();
