@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'IMAS_LaB_test'
+      - 'IMAS_Lab'
     paths:
       - 'gui/**'
       - 'README.md'
