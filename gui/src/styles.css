@@ -567,3 +567,18 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 .figure-export-row button{font-size:10px;padding:5px 7px;background:#f1f5fa;border:1px solid #cbd5df;border-radius:3px;color:var(--navy);cursor:pointer}
 .figure-export-menu p{font-size:11px;padding:6px}
 .figure-export-error{position:absolute;top:100%;right:0;width:260px;color:#a52d2d;background:white;padding:6px;font-size:11px;border:1px solid #cbd5df}
+
+/* Help affordances for the four independent Lyapunov study inputs. */
+.lyapunov-study .lyapunov-field-label{
+ position:relative;display:flex;align-items:center;justify-content:space-between;
+ gap:6px;min-height:19px;color:#46535f;
+}
+.lyapunov-study .lyapunov-field-label > .parameter-tooltip{
+ flex-shrink:0;align-self:center;margin:0;
+}
+.lyapunov-study .lyapunov-field-label [role="tooltip"]{
+ top:calc(100% + 5px);right:0;max-width:260px;
+}
+@media(max-width:700px){
+ .lyapunov-study .lyapunov-field-label [role="tooltip"]{max-width:195px;}
+}
