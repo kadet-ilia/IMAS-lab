@@ -311,6 +311,30 @@ const e1aAdaptiveSummary={methods:e1aRows,runs:e1a.completedRuns,
  paired:e1a.paired.length};
 
 
+// E1-A reduced decision-feedback loop: real React -> Worker simulation with
+// independent trust/isolation per estimator and observable-only testimony.
+await page.getByRole("combobox",{name:"Режим сравнительного исследования"}).selectOption("decision_feedback");
+await page.getByRole("combobox",{name:"Стратегия поведения нарушителей"}).selectOption("coordinated");
+await page.getByRole("combobox",{name:"Модель доверительных свидетельств"}).selectOption("behavior_linked");
+await e1aRuns.fill("1");await e1aRuns.press("Tab");
+if(await e1aAction.isDisabled())throw Error("E1-A feedback controls unexpectedly invalid");
+await e1aAction.click();
+try{
+ await page.getByRole("heading",{name:"Независимая динамика доверия и изоляции"}).waitFor({timeout:60000});
+}catch(error){
+ const messages=await page.locator(".imas-validation-error, .r27-note[role='status']").allTextContents();
+ throw Error("E1-A feedback browser mode failed: "+JSON.stringify(messages)+"; "+String(error));
+}
+const [coupledFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),e1aDownload.click()]);
+const coupled=JSON.parse(fs.readFileSync(await coupledFile.path(),"utf8"));
+if(coupled.options.comparisonMode!=="decision_feedback"||
+ coupled.options.evidenceModel!=="behavior_linked"||
+ coupled.runs?.[0]?.methodStates?.adaptive_robust?.length!==200||
+ Object.keys(coupled.runs?.[0]?.methodStates||{}).length!==5||
+ coupled.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.feedbackDecisionUsed<=0)
+ throw Error("E1-A: feedback archive missing independent states or feedback witness counters");
+e1aAdaptiveSummary.feedbackVerified=true;
+
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
