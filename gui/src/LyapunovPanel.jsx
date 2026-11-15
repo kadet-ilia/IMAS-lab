@@ -2,7 +2,7 @@ import React, {forwardRef,useEffect,useImperativeHandle,useRef,useState} from "r
 import {CartesianGrid,Line,LineChart,ReferenceLine,ResponsiveContainer,Tooltip,XAxis,YAxis,Legend} from "recharts";
 import {ExperimentPanel as Panel,ExperimentKpi as Kpi} from "./ExperimentLayout.jsx";
 import {defaultAttackPhases,validateLyapunovOptions,LYAPUNOV_STUDY_VERSION} from "./lyapunovStudy.js";
-import {ATTACK_SHAPES,MAX_ATTACK_PHASES,attackIntensityAt} from "./attackProfiles.js";
+import {ATTACK_SHAPES,attackIntensityAt} from "./attackProfiles.js";
 
 const METHODS=[
  ["arithmetic_mean","Арифметическое среднее","#2672ff"],
@@ -23,11 +23,11 @@ function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
  }));
  const add=()=>{
   const last=phases.at(-1).start;
-  if(last<steps&&phases.length<MAX_ATTACK_PHASES)
+  if(last<steps)
    setPhases(prev=>[...prev,{start:last+1,intensity:0,profile:"constant"}]);
  };
  return <Panel title="Динамическая активность атаки"
-  subtitle="До пяти последовательных фаз в одном ряду. Для изменяемого профиля интенсивность переходит от начальной к конечной за время фазы; граница фазы — следующий заданный шаг или T.">
+  subtitle="Число фаз не ограничено искусственным пределом. Все фазы размещаются в одном горизонтальном ряду с прокруткой; каждый шаг может быть началом отдельной фазы. Для изменяемого профиля интенсивность переходит от начальной к конечной за время фазы.">
   <div className="lyapunov-phase-grid" aria-label="Фазы динамической атаки">
    {phases.map((phase,i)=><div className="lyapunov-phase" key={i}>
     <div className="lyapunov-phase-heading"><strong>Фаза {i+1}</strong>
@@ -54,8 +54,8 @@ function PhaseEditor({phases,setPhases,steps,attackStart,disabled}){
   </div>
   <div className="action-controls lyapunov-phase-actions">
    <button className="secondary-button" type="button"
-    disabled={disabled||phases.length>=MAX_ATTACK_PHASES||phases.at(-1).start>=steps}
-    onClick={add}>Добавить фазу ({phases.length}/{MAX_ATTACK_PHASES})</button>
+    disabled={disabled||phases.at(-1).start>=steps}
+    onClick={add}>Добавить фазу (сейчас {phases.length})</button>
    <button className="secondary-button" type="button" disabled={disabled}
     onClick={()=>setPhases(defaultAttackPhases(steps,attackStart))}>Типовой профиль on–off–усиление</button>
   </div>
