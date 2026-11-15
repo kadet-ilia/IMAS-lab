@@ -583,3 +583,7 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 @media(max-width:700px){
  .lyapunov-study .lyapunov-field-label [role="tooltip"]{max-width:195px;}
 }
+
+/* Four trust algorithms retain a readable KPI grid on narrow screens. */
+@media(max-width:1150px){.kpi-grid.four{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:600px){.kpi-grid.four{grid-template-columns:minmax(0,1fr);}}
