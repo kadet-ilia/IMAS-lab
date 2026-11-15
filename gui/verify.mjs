@@ -262,6 +262,34 @@ for(const [id,name] of trustModes){
     throw Error("Stability tab must expose an attack phase editor");
   }
 }
+// E1-A: actual React -> worker -> IndexedDB -> archival export workflow.
+// Exercise E1-A with the initial E1 configuration (N=50, T=200).
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Адаптивные решения"}).click();
+const e1aRuns=page.getByRole("spinbutton",{name:"Повторения R",exact:true});
+await e1aRuns.fill("2");await e1aRuns.press("Tab");
+const e1aAction=page.locator(".tab-action").getByRole("button",{name:"Выполнить исследование"});
+await e1aAction.click();
+await page.getByRole("heading",{name:"Парные сравнения RMSE"}).waitFor({timeout:45000});
+await page.getByRole("heading",{name:"Итоговые показатели по методам"}).waitFor({timeout:45000});
+const e1aRows=await page.locator("section.panel").filter({hasText:"Итоговые показатели по методам"}).locator("tbody tr").count();
+if(e1aRows!==5)throw Error("E1-A: expected five paired method metrics, got "+e1aRows);
+const e1aDownload=page.getByRole("button",{name:"Скачать полный JSON"});
+const [e1aFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),e1aDownload.click()]);
+const e1a=JSON.parse(fs.readFileSync(await e1aFile.path(),"utf8"));
+if(e1a.archiveFormat!=="imas-adaptive-collective-decisions"||
+ e1a.completedRuns!==2||e1a.partial||e1a.summary?.length!==5||e1a.trace?.length!==200||
+ e1a.runs?.length!==2||e1a.paired?.length!==4)
+ throw Error("E1-A: incomplete or inconsistent complete JSON research record");
+if(e1a.trace.some(x=>!(x.alpha===null||(x.alpha>=0&&x.alpha<=1))||
+ !(x.k===null||Number.isInteger(x.k))))
+ throw Error("E1-A: invalid adaptive control parameters in exported trace");
+await e1aAction.click();
+await page.locator(".topbar .cache-badge").waitFor({timeout:15000});
+report.e1aAdaptive={methods:e1aRows,runs:e1a.completedRuns,
+ cacheReloaded:Boolean(await page.locator(".topbar .cache-badge").count()),
+ paired:e1a.paired.length};
+
+
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
@@ -991,33 +1019,6 @@ try{
  await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
  await secondTab.close();
 }
-// E1-A: actual React -> worker -> IndexedDB -> archival export workflow.
-// Use the small E1 configuration already prepared above (N=11, T=20).
-await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Адаптивные решения"}).click();
-const e1aRuns=page.getByRole("spinbutton",{name:"Повторения R",exact:true});
-await e1aRuns.fill("2");await e1aRuns.press("Tab");
-const e1aAction=page.locator(".tab-action").getByRole("button",{name:"Выполнить исследование"});
-await e1aAction.click();
-await page.getByRole("heading",{name:"Парные сравнения RMSE"}).waitFor({timeout:45000});
-await page.getByRole("heading",{name:"Итоговые показатели по методам"}).waitFor({timeout:45000});
-const e1aRows=await page.locator("section.panel").filter({hasText:"Итоговые показатели по методам"}).locator("tbody tr").count();
-if(e1aRows!==5)throw Error("E1-A: expected five paired method metrics, got "+e1aRows);
-const e1aDownload=page.getByRole("button",{name:"Скачать полный JSON"});
-const [e1aFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),e1aDownload.click()]);
-const e1a=JSON.parse(fs.readFileSync(await e1aFile.path(),"utf8"));
-if(e1a.archiveFormat!=="imas-adaptive-collective-decisions"||
- e1a.completedRuns!==2||e1a.partial||e1a.summary?.length!==5||e1a.trace?.length!==20||
- e1a.runs?.length!==2||e1a.paired?.length!==4)
- throw Error("E1-A: incomplete or inconsistent complete JSON research record");
-if(e1a.trace.some(x=>!(x.alpha===null||(x.alpha>=0&&x.alpha<=1))||
- !(x.k===null||Number.isInteger(x.k))))
- throw Error("E1-A: invalid adaptive control parameters in exported trace");
-await e1aAction.click();
-await page.locator(".topbar .cache-badge").waitFor({timeout:15000});
-report.e1aAdaptive={methods:e1aRows,runs:e1a.completedRuns,
- cacheReloaded:Boolean(await page.locator(".topbar .cache-badge").count()),
- paired:e1a.paired.length};
-
 report.unifiedFourMethods={oneRun:trustNames.length,stability:lyapunovVerification.methods,
  ablation:report.ablationRows,dataRegistry:true,monteCarloVerifiedByNodeTests:true};
 report.lyapunovStudy=lyapunovVerification;
