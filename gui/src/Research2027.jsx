@@ -127,7 +127,7 @@ function ResearchKpis({studyId,result}){
   <ExperimentKpi key={label} label={label} value={value} note={result?(i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"):"После запуска эксперимента"} tone={i===3?"teal":"blue"}/>
  )}</div>;
 }
-export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation,onRuntimeChange},actionsRef){
+export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation,onRuntimeChange,onExportSvg},actionsRef){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
  const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),
   [running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),
@@ -196,7 +196,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
  >
    <div className={"r27-study-topline"+(studyId==="petri"?" r27-study-topline-formal":"")}>
      <div className="r27-topology-full">
-       <TopologyPlayback replay={result?.replay||previewReplay} compact/>
+       <TopologyPlayback replay={result?.replay||previewReplay} compact onExportSvg={onExportSvg}/>
      </div>
      {studyId!=="petri"?<ScenarioComparisonMatrix result={result} metric={metric}/>:null}
    </div>
