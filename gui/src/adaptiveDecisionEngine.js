@@ -4,8 +4,9 @@
  * All calculations are deterministic, including fractional treatment of ties.
  */
 import {aggregateProposals} from "./trustEngine.js";
+import {ADAPTIVE_SCENARIO_DEFAULTS,validateAdaptiveScenarioOptions} from "./adaptiveScenario.js";
 
-export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.0.0";
+export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.1.0";
 export const ADAPTIVE_METHODS=Object.freeze([
  Object.freeze({id:"trimmed_unweighted",label:"Усечённое среднее E1",color:"#d18a31"}),
  Object.freeze({id:"proposed_robust",label:"Комбинированное среднее E1",color:"#123a63"}),
@@ -21,7 +22,8 @@ export const ADAPTIVE_DEFAULTS=Object.freeze({
  gamma:1,minWeight:0.05,maxWeight:1,
  warmupSteps:8,minimumEffectiveFraction:0.75,disagreementPenalty:1.5,
  feedbackGain:0.5,feedbackInitialError:1,
- runs:30,scenario:"dynamic",phases:null
+ runs:30,scenario:"dynamic",phases:null,
+ ...ADAPTIVE_SCENARIO_DEFAULTS
 });
 const finite=Number.isFinite;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
@@ -54,6 +56,7 @@ export function validateAdaptiveOptions(input={}){
  ])assertNumber(key,o[key],lo,hi,Boolean(int));
  if(o.minWeight>o.maxWeight||o.maxWeight===0)throw Error("Ограничения весов несовместимы");
  if(o.phases!==null&&!Array.isArray(o.phases))throw Error("Фазы атаки должны быть массивом");
+ validateAdaptiveScenarioOptions(o);
  return o;
 }
 function fractionalRetained(values,trim){
