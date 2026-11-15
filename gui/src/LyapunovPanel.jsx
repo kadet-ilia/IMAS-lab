@@ -151,14 +151,18 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,ph
   return row;
  })||[];
  return <div className="tab-stack lyapunov-study">
-  <div className="tab-action"><div><h2>Устойчивость по Ляпунову и точность коллективных оценок</h2>
-   <p>Связанная модель обратной связи с погрешностями решений из действующего ядра расчёта доверия. Фазы атаки задаются независимо по шагам.</p></div>
+  <div className="tab-action">
+   <div className="tab-action-description">
+    <h2>Устойчивость по Ляпунову и точность коллективных оценок</h2>
+    <p>Скалярная модель обратной связи с погрешностями коллективных решений ядра расчёта доверия. Интенсивность атаки задаётся последовательностью независимо настраиваемых фаз.</p>
+    <p><strong>Четыре метода:</strong> {TRUST_METHOD_DEFINITIONS.map(m=>m.label).join("; ")}. Для двух усечённых методов одинаковы границы и симметричное усечение, различаются только доверительные веса. Политика изоляции общая.</p>
+    <p><strong>Цель:</strong> сопоставить точность решений и динамику замкнутой скалярной модели при включении, прекращении и усилении атак. Результаты не доказывают устойчивость полной ИМАС.</p>
+   </div>
    <div className="action-controls">
     <button className="secondary-button" type="button" onClick={start} disabled={running||!valid}>Выполнить исследование</button>
     <button className="secondary-button" type="button" onClick={stop} disabled={!running}>Остановить</button>
-   </div></div>
-  <p className="r27-note"><strong>Четыре сравниваемых метода:</strong> {TRUST_METHOD_DEFINITIONS.map(m=>m.label).join("; ")}. Для двух усечённых методов используются одинаковые ограничения значений и одинаковое симметричное усечение; различаются только веса. Общая политика изоляции агентов задаётся в параметрах эксперимента.</p>
-  <p className="r27-note"><strong>Цель:</strong> количественно сопоставить методы по точности решений и поведению замкнутой скалярной модели при произвольной заданной последовательности включения, выключения и усиления атаки. Числовые результаты иллюстрируют модель, а не доказывают устойчивость полной ИМАС.</p>
+   </div>
+  </div>
   <div className="lyapunov-inputs">
    <label><span className="lyapunov-field-label">Коэффициент обратной связи k <ParameterTooltip text="Коэффициент k задаёт скорость коррекции состояния по коллективной оценке. Для номинальной модели требуется 0 < k < 2; большие значения могут вызвать перерегулирование."/></span><input aria-label="Коэффициент обратной связи k" type="number" min=".01" max="1.99" step=".05" value={gain} onChange={e=>setGain(Number(e.target.value))} disabled={running}/></label>
    <label><span className="lyapunov-field-label">Начальное отклонение e(0) <ParameterTooltip text="Значение ошибки состояния e=x−x* в начале моделирования. Влияет на начальную функцию Ляпунова V(0)=e(0)²."/></span><input aria-label="Начальное отклонение" type="number" min="-100" max="100" step=".1" value={initialError} onChange={e=>setInitialError(Number(e.target.value))} disabled={running}/></label>
