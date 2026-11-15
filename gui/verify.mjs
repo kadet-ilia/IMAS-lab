@@ -216,7 +216,7 @@ async function pageChromeSnapshot(){
 }
 const baselineChrome=await pageChromeSnapshot();
 if(baselineChrome.kpiCount!==4)throw Error("Trust must have four KPI cards");
-const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigation').evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:typeof child.className==="string"?child.className:"",role:child.getAttribute("role"),type:child.getAttribute("type")})));
+const navSignature=()=>page.locator('main.content > nav.r27-experiment-navigation').evaluate(node=>Array.from(node.children).filter(child=>!child.classList?.contains("r27-export-control")).map(child=>({tag:child.tagName.toLowerCase(),className:typeof child.className==="string"?child.className:"",role:child.getAttribute("role"),type:child.getAttribute("type")})));
 const trustNavigation=await navSignature();
 const toolbarSignature=()=>page.locator(".topbar .toolbar").evaluate(node=>Array.from(node.children).map(child=>({tag:child.tagName.toLowerCase(),className:child.className||"",title:child.title||""})));
 const trustToolbar=await toolbarSignature();
@@ -249,32 +249,26 @@ for(const [id,name] of trustModes){
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
-await stepInput.fill("30");await stepInput.press("Tab");
-// Manual edits to the attack-start interval determine minimum phase spacing.
+await stepInput.fill("40");await stepInput.press("Tab");
+// "Время начала атаки" is the interval A between phases.
 const gapInput=page.getByRole("spinbutton",{name:"Время начала атаки (шаг)"});
-await gapInput.fill("1");await gapInput.press("Tab");
+await gapInput.fill("5");await gapInput.press("Tab");
 await page.getByRole("spinbutton",{name:"Число прогонов устойчивости"}).fill("1");
-// Give phase 2 enough steps to verify that the chosen intensity curve is computed.
-for(const [phase,start] of [[3,25],[4,27],[5,29]]){
- await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).fill(String(start));
- await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).press("Tab");
-}
-// A phase count greater than five must be editable on the same row.
-await page.getByRole("spinbutton",{name:"Начало фазы 5"}).fill("28");
-await page.getByRole("spinbutton",{name:"Начало фазы 5"}).press("Tab");
+await page.getByRole("button",{name:"Типовой профиль on–off–усиление"}).click();
+// A sixth and seventh phase must use T=(M+1)*A, independently of manual T.
 for(const phase of [6,7]){
  await page.getByRole("button",{name:/Добавить фазу/}).click();
  if((await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).count())!==1)
   throw Error("Cannot add phase "+phase);
- if((await stepInput.inputValue())!==String(phase*30+1))
-  throw Error("Automatic T calculation must use phase count * manual base T + 1");
+ if((await stepInput.inputValue())!==String((phase+1)*5))
+  throw Error("Automatic T must be (phase count + 1)*attack interval A");
 }
-if((await page.getByRole("spinbutton",{name:"Начало фазы 6"}).inputValue())!=="29"||
-   (await page.getByRole("spinbutton",{name:"Начало фазы 7"}).inputValue())!=="30")
- throw Error("New phase must start at the previous boundary plus attack-start interval");
-await stepInput.fill("220");await stepInput.press("Tab");
-if((await stepInput.inputValue())!=="220")throw Error("Automatic T must allow manual override");
-await stepInput.fill("211");await stepInput.press("Tab");
+if((await page.getByRole("spinbutton",{name:"Начало фазы 6"}).inputValue())!=="26"||
+   (await page.getByRole("spinbutton",{name:"Начало фазы 7"}).inputValue())!=="31")
+ throw Error("New phase must begin after the configured interval");
+await stepInput.fill("70");await stepInput.press("Tab");
+if((await stepInput.inputValue())!=="70")throw Error("Automatic T must permit manual override");
+await stepInput.fill("40");await stepInput.press("Tab");
 await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).selectOption("linear");
 if((await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).locator('option:checked').innerText())!=="Линейное")
  throw Error("Linear profile must be labeled Линейное");
@@ -287,11 +281,11 @@ if(Math.max(...phasePositions)-Math.min(...phasePositions)>3)
 // Profile-only export is available even before computing a result.
 const [phaseJsonFile]=await Promise.all([
  page.waitForEvent("download",{timeout:15000}),
- page.getByRole("button",{name:"Сохранить фазы JSON"}).click()
+ page.getByRole("button",{name:"Сохранить: Динамическая активность атаки"}).click()
 ]);
 const phaseJson=JSON.parse(fs.readFileSync(await phaseJsonFile.path(),"utf8"));
-if(phaseJson.numberOfPhases!==7||phaseJson.minimumPhaseGap!==1||
-   phaseJson.phaseParameters.length!==7||phaseJson.simulationSteps!==211)
+if(phaseJson.numberOfPhases!==7||phaseJson.minimumPhaseGap!==5||
+   phaseJson.phaseParameters.length!==7||phaseJson.simulationSteps!==40||phaseJson.automaticHorizon!==40)
  throw Error("Phase JSON export missed attack schedule and sidebar parameters");
 const helpMarkers=page.locator(".lyapunov-inputs .parameter-tooltip");
 if((await helpMarkers.count())!==4)throw Error("All four stability parameters need help tooltips");
@@ -317,7 +311,7 @@ if(lyapData.runs?.length!==1 || lyapData.summary?.length!==4 ||
   !Number.isFinite(lyapData.nominal.unforced_lyapunov_factor) ||
   !lyapData.series.some(row=>row.attack_intensity>1) ||
   !lyapData.series.some(row=>row.attack_intensity===0) ||
-  !(lyapData.series[22].attack_intensity>1&&lyapData.series[22].attack_intensity<2)){
+  !(lyapData.series[8].attack_intensity>1&&lyapData.series[8].attack_intensity<2)){
  throw Error("Lyapunov worker: incomplete trajectories or incorrect dynamic activity");
 }
 // Export one specific chart, one table, and check the MIME formats.
@@ -354,11 +348,17 @@ const [archiveFile]=await Promise.all([
 ]);
 const archive=JSON.parse(fs.readFileSync(await archiveFile.path(),"utf8"));
 if(archive.archiveFormat!=="imas-lyapunov-research-archive"||
-   archive.inputs.trustConfiguration.n_steps!==211||
+   archive.inputs.trustConfiguration.n_steps!==40||
    archive.inputs.lyapunovParameters.phases.length!==7||
-   archive.results.runs[0].trajectory.length!==211||
-   archive.results.runs[0].feedback.proposed_robust.length!==212)
+   archive.results.runs[0].trajectory.length!==40||
+   archive.results.runs[0].feedback.proposed_robust.length!==41)
  throw Error("Full research archive does not contain sufficient inputs or per-run traces");
+// A repeat of identical inputs must load the committed full result from IndexedDB.
+await page.getByRole("button",{name:"Выполнить исследование"}).click();
+await page.locator(".progress-strip").getByText("Результаты загружены из локального кэша").waitFor({timeout:15000});
+if(!(await page.locator(".progress-strip").innerText()).includes("100.0%")||
+ (await page.locator(".progress-strip em").innerText())!=="кэш")
+ throw Error("Lyapunov result was not restored from persistent cache with 100% indicator");
 const lyapunovVerification={methods:lyapData.summary.length,steps:lyapData.configuration.n_steps,runs:lyapData.runs.length,export:true,individualExports:["SVG","PNG","CSV","table-PNG"],universalPicker:true,phaseExport:true,archive:true};
 await modeGroup.getByRole("button",{name:"Данные",exact:true}).click();
 const registryRow=page.locator(".data-row").filter({hasText:"Реестр четырёх методов"});
@@ -368,6 +368,12 @@ if((await registryRow.count())!==1||(await stabilityRow.getByRole("button",{name
 await modeGroup.getByRole("button",{name:"Устойчивость и точность",exact:true}).click();
 await stepInput.fill("200");await stepInput.press("Tab");
 await gapInput.fill("20");await gapInput.press("Tab");
+await page.getByRole("button",{name:"Типовой профиль on–off–усиление"}).click();
+for(let phase=6;phase<=14;phase++)await page.getByRole("button",{name:/Добавить фазу/}).click();
+if((await stepInput.inputValue())!=="300"||
+ (await page.locator(".lyapunov-phase-grid > .lyapunov-phase").count())!==14)
+ throw Error("Regression: 14 phases at 20 steps must produce T=300");
+await stepInput.fill("200");await stepInput.press("Tab");
 await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
 await modeGroup.getByRole("button",{name:"Чувствительность",exact:true}).click();
 const ablationMode=page.locator(".sensitivity-action select");
@@ -386,12 +392,15 @@ const trustTitle = "Математическая модель интеллект
 if((await page.locator('main[data-study="trust"] > .imas-experiment-heading > h2.r27-study-title').innerText()).trim()!==trustTitle) throw Error("Trust experiment title is absent or differs from the required wording");
 
 async function assertNavButtonsEqual(section){
- const help=await page.locator(".r27-experiment-navigation .r27-nav-right").boundingBox();
- const svg=await page.locator(".r27-experiment-navigation .r27-export-control").boundingBox();
- if(!help || !svg || Math.abs(help.width-85)>1 || Math.abs(help.height-35)>1 ||
-    Math.abs(svg.width-85)>1 || Math.abs(svg.height-35)>1){
-  throw Error(section+": Help and SVG buttons must both be 85×35 px: "+JSON.stringify({help,svg}));
- }
+ const help=page.locator(".r27-experiment-navigation .r27-nav-right");
+ const mode=page.locator(".r27-experiment-navigation .r27-mode-tab").first();
+ const [helpBox,modeBox,fonts]=await Promise.all([
+  help.boundingBox(),mode.boundingBox(),
+  help.evaluate(el=>({helpSize:getComputedStyle(el).fontSize,modeSize:getComputedStyle(document.querySelector(".r27-mode-tab")).fontSize}))
+ ]);
+ if(!helpBox||!modeBox||Math.abs(helpBox.height-modeBox.height)>1||
+    fonts.helpSize!==fonts.modeSize)
+  throw Error(section+": Help and mode buttons must match height/font: "+JSON.stringify({helpBox,modeBox,fonts}));
 }
 await assertNavButtonsEqual("Расчет доверия");
 
@@ -402,6 +411,17 @@ await trustOverview.waitFor();
 const topologyBox = await trustOverview.locator(".r27-replay").boundingBox();
 const summaryBox = await trustOverview.locator(".panel").boundingBox();
 const replay = trustOverview.locator(".r27-replay-compact");
+const replaySvgButton=replay.getByRole("button",{name:"Экспорт графиков в SVG"});
+if((await page.locator(".r27-experiment-navigation .r27-export-control").count())!==0||
+   (await replaySvgButton.count())!==1)
+ throw Error("SVG export must appear only in the compact replay header for trust tracing");
+const replayHeader=await replay.locator(".r27-replay-heading").boundingBox();
+const svgHeaderButton=await replaySvgButton.boundingBox();
+if(!replayHeader||!svgHeaderButton||svgHeaderButton.y<replayHeader.y-1||
+  svgHeaderButton.y>replayHeader.y+replayHeader.height+1||
+  svgHeaderButton.x<replayHeader.x+replayHeader.width*.5)
+ throw Error("SVG export button is not at the upper-right of compact replay");
+
 const figureBox = await replay.locator(".r27-playback-figure").boundingBox();
 const playbackInfo = await replay.locator(".r27-playback-aside").boundingBox();
 const playbackControls = await replay.locator(".r27-playback-controls").boundingBox();
