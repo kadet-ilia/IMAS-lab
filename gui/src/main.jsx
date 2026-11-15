@@ -854,7 +854,6 @@ function App() {
 {activeTab==="help2027"?<button type="button" className="r27-manual-return" onClick={()=>setActiveTab(lastExperimentRef.current)}>Вернуться к экспериментам</button>:null}
 <button type="button" className={"r27-nav-right"+(activeTab==="help2027"?" active":"")} onClick={()=>setActiveTab("help2027")}>Справка</button>
 
-{activeTab!=="trace"?<button type="button" className="r27-export-control" title="Экспорт графиков в SVG" onClick={exportVisibleCharts} disabled={["data","help2027"].includes(activeTab)}><Icon name="export"/>SVG</button>:null}
 </nav>
   );
 
@@ -871,7 +870,7 @@ function App() {
 </div></header>
     <div className={"workspace"+(activeTab==="help2027"?" research-2027-workspace":"")}>
       {isResearch
-        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime}/>
+        ? <ResearchStudy key={activeTab} studyId={activeTab.slice(6)} navigation={experimentNavigation} ref={researchActionsRef} onRuntimeChange={setResearchRuntime} onExportSvg={exportVisibleCharts}/>
         : activeTab==="help2027"
           ? <main className="content r27-research-content">{experimentNavigation}<ResearchHelp baselineArticle={<TrustHelpArticle/>} baselineSections={HELP_SECTIONS}/></main>
           : <ExperimentLayout
