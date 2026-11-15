@@ -198,7 +198,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
      <div className="r27-topology-full">
        <TopologyPlayback replay={result?.replay||previewReplay} compact onExportSvg={onExportSvg}/>
      </div>
-     {studyId!=="petri"?<ScenarioComparisonMatrix result={result} metric={metric}/>:null}
+     {studyId==="petri"?summaryPanel:<ScenarioComparisonMatrix result={result} metric={metric}/>}
    </div>
    <ResearchKpis studyId={studyId} result={result}/>
    {result?<>
@@ -209,7 +209,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
          <div className="r27-meta"><span>Зерно: {result.config.seed}</span><span>Прогонов: {result.config.runs}</span><span>Расчёт: {fmt(result.elapsedMs)} мс</span><span>Модель: синтетическая</span></div>
        </div>
      </section>
-     {summaryPanel}
+     {studyId!=="petri"?summaryPanel:null}
      {studyId==="petri"?
        <section className="panel r27-petri-report">
          <header className="panel-header"><div><h2>Результат верификации</h2><p>Достижимость опасной маркировки</p></div></header>
@@ -227,7 +227,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
          <div className="panel-body"><ScientificGraph result={result} metric={metric}/></div>
        </section>}
      <StudyVisualization result={result} metric={metric}/>
-   </>:summaryPanel}
+   </>:studyId==="petri"?null:summaryPanel}
 
    {result?.metricPassport?.length?<ExperimentPanel title="Паспорта ключевых показателей" subtitle={"Реализованная формула, знаменатель, единица измерения и правило для отсутствующих значений · "+result.metricPassportVersion}>
      <ResultTable rows={result.metricPassport}/>
