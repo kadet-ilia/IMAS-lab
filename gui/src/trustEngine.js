@@ -363,7 +363,7 @@ export function accountCommunicationStep(previous,transportStats,evidenceStats,p
  total.balance=proposal.balance+evidence.balance;
  return {step,proposal,evidence,total};
 }
-const finiteMean=a=>mean(valid(a));
+const finiteMean=a=>{const numbers=valid(a);return numbers.length?mean(numbers):null;};
 function configDetail(c){return {...c,modelVersion:TRUST_MODEL_VERSION,
  effective_agent_count:c.n_agents+c.n_sybil_agents,
  effective_byzantine_count:c.n_byzantine+c.n_sybil_agents,
