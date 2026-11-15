@@ -5,7 +5,7 @@
 import {validateAdaptiveStudy,summarizeAdaptiveRuns,ADAPTIVE_STUDY_VERSION} from "./adaptiveExperiment.js";
 import {ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {TRUST_MODEL_VERSION} from "./trustEngine.js";
-import {withOriginStorageLock,loadLyapunovCacheRecord,saveLyapunovCacheRecord} from "./trustBrowserClient.js";
+import {withOriginStorageLock,loadAdaptiveCacheWithinOriginLock,saveAdaptiveCacheWithinOriginLock} from "./trustBrowserClient.js";
 
 export const ADAPTIVE_CACHE_SCHEMA=1;
 export const adaptiveCacheKey=(core,options)=>JSON.stringify({
@@ -14,8 +14,10 @@ export const adaptiveCacheKey=(core,options)=>JSON.stringify({
  config:core,options
 });
 let activeJob=null;
-export async function loadAdaptiveCheckpoint(core,options){
- const key=adaptiveCacheKey(core,options),record=await loadLyapunovCacheRecord(key);
+export async function loadAdaptiveCheckpoint(core,options,{alreadyLocked=false}={}){
+ const key=adaptiveCacheKey(core,options),record=alreadyLocked
+  ?await loadAdaptiveCacheWithinOriginLock(key)
+  :await withOriginStorageLock(()=>loadAdaptiveCacheWithinOriginLock(key));
  if(!record)return null;
  if(record.key!==key||record.schema!==ADAPTIVE_CACHE_SCHEMA||
   !Array.isArray(record.runs)||record.runs.some((r,i)=>r?.run!==i))
@@ -23,7 +25,7 @@ export async function loadAdaptiveCheckpoint(core,options){
  return record;
 }
 async function saveCheckpoint(key,runs,result=null){
- await saveLyapunovCacheRecord(key,{
+ await saveAdaptiveCacheWithinOriginLock(key,{
   schema:ADAPTIVE_CACHE_SCHEMA,key,updatedAt:new Date().toISOString(),
   completedRuns:runs.length,runs:[...runs],result
  });
@@ -32,7 +34,7 @@ export async function runAdaptiveBrowser(config,options,onProgress=()=>{},runtim
  return withOriginStorageLock(async()=>{
   if(activeJob)throw Error("Исследование E1-А уже выполняется");
   const {core,options:o}=validateAdaptiveStudy(config,options);
-  const key=adaptiveCacheKey(core,o),cached=await loadAdaptiveCheckpoint(core,o);
+  const key=adaptiveCacheKey(core,o),cached=await loadAdaptiveCheckpoint(core,o,{alreadyLocked:true});
   if(cached?.result&&!cached.result.partial&&cached.runs.length===o.runs){
    onProgress({completed:o.runs,total:o.runs,percent:100,cacheHit:true});
    return {result:cached.result,state:"completed",cacheHit:true};
