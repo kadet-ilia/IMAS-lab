@@ -588,30 +588,42 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 @media(max-width:1150px){.kpi-grid.four{grid-template-columns:repeat(2,minmax(0,1fr));}}
 @media(max-width:600px){.kpi-grid.four{grid-template-columns:minmax(0,1fr);}}
 
-/* A long scientific project title is displayed in full without masking controls. */
-.app-shell{grid-template-rows:110px minmax(0,1fr) 30px}
-.topbar,.topbar:is(:where(*)){
+/* Compact two-line brand at the left; toolbar follows experiment navigation sizing. */
+.app-shell{grid-template-rows:76px minmax(0,1fr) 30px}
+.topbar{
  grid-template-columns:minmax(0,1fr) auto;
- grid-template-rows:minmax(0,1fr) auto;
- gap:5px 12px;
+ grid-template-rows:1fr 1fr;
+ column-gap:16px;
+ row-gap:0;
+ padding:5px 18px 5px 22px;
  align-content:center;
- padding:9px 18px 9px 22px;
 }
-.topbar .brand{grid-column:1/-1;grid-row:1;min-width:0;align-self:center}
-.topbar .brand h1{
- margin:0;
- font-size:15px;
- line-height:1.25;
- white-space:normal;
- overflow-wrap:break-word;
- letter-spacing:-.01em;
+.topbar .brand{grid-column:1;grid-row:1 / 3;min-width:0;align-self:center}
+.topbar .brand h1{margin:0;font-size:14px;line-height:1.3;white-space:normal;letter-spacing:-.01em}
+.topbar .brand .brand-line{display:block}
+.topbar .top-meta{grid-column:2;grid-row:2;min-width:0;justify-content:flex-end;font-size:12px}
+.topbar .toolbar{grid-column:2;grid-row:1;min-width:0;gap:5px}
+.topbar .toolbar button{
+ height:29px;min-height:29px;box-sizing:border-box;
+ padding:4px 9px;border-radius:3px;
+ font-size:11px;font-weight:600;line-height:1.15;
 }
-.topbar .top-meta{grid-column:1;grid-row:2;min-width:0;justify-content:flex-start}
-.topbar .toolbar{grid-column:2;grid-row:2;min-width:0}
+.topbar .toolbar button.icon-button{width:29px;padding:0}
+.topbar .toolbar button svg{width:13px;height:13px}
+.topbar .toolbar button.icon-button svg{width:16px;height:16px}
+.r27-experiment-navigation #imas-experiment-select{
+ box-sizing:border-box;width:250px;min-width:0;max-width:100%;font-size:16px;
+}
 @media(max-width:1280px){
- .topbar{grid-template-columns:minmax(0,1fr) auto}
  .topbar .top-meta{display:none}
- .topbar .toolbar{grid-column:2}
+ .topbar .toolbar{grid-row:1 / 3;align-self:center}
+}
+@media(max-width:1100px){
+ .topbar .brand h1{font-size:12px}
+ .topbar .brand .brand-line{overflow-wrap:anywhere}
+}
+@media(max-width:570px){
+ .r27-experiment-navigation #imas-experiment-select{width:100%}
 }
 .lyapunov-study .tab-action{align-items:flex-start;flex-wrap:wrap}
 .lyapunov-study .tab-action-description{min-width:0;flex:1 1 590px}
