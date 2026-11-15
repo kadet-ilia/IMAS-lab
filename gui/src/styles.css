@@ -599,7 +599,7 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
  align-content:center;
 }
 .topbar .brand{grid-column:1;grid-row:1 / 3;min-width:0;align-self:center}
-.topbar .brand h1{margin:0;font-size:14px;line-height:1.3;white-space:normal;letter-spacing:-.01em}
+.topbar .brand h1{margin:0;font-size:18px;line-height:1.3;white-space:normal;letter-spacing:-.01em}
 .topbar .brand .brand-line{display:block}
 .topbar .top-meta{grid-column:2;grid-row:2;min-width:0;justify-content:flex-end;font-size:12px}
 .topbar .toolbar{grid-column:2;grid-row:1;min-width:0;gap:5px}
@@ -611,15 +611,16 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 .topbar .toolbar button.icon-button{width:29px;padding:0}
 .topbar .toolbar button svg{width:13px;height:13px}
 .topbar .toolbar button.icon-button svg{width:16px;height:16px}
+.r27-experiment-navigation label[for="imas-experiment-select"]{font-size:16px}
 .r27-experiment-navigation #imas-experiment-select{
- box-sizing:border-box;width:250px;min-width:0;max-width:100%;font-size:16px;
+ box-sizing:border-box;width:250px;min-width:0;max-width:100%;font-size:12px;
 }
 @media(max-width:1280px){
  .topbar .top-meta{display:none}
  .topbar .toolbar{grid-row:1 / 3;align-self:center}
 }
 @media(max-width:1100px){
- .topbar .brand h1{font-size:12px}
+ .topbar .brand h1{font-size:18px}
  .topbar .brand .brand-line{overflow-wrap:anywhere}
 }
 @media(max-width:570px){
