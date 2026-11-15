@@ -234,10 +234,20 @@ for(const [phase,start] of [[3,25],[4,27],[5,29]]){
  await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).fill(String(start));
  await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).press("Tab");
 }
+// A phase count greater than five must be editable on the same row.
+await page.getByRole("spinbutton",{name:"Начало фазы 5"}).fill("28");
+await page.getByRole("spinbutton",{name:"Начало фазы 5"}).press("Tab");
+for(const phase of [6,7]){
+ await page.getByRole("button",{name:/Добавить фазу/}).click();
+ if((await page.getByRole("spinbutton",{name:"Начало фазы "+phase}).count())!==1)
+  throw Error("Cannot add phase "+phase);
+}
 await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).selectOption("linear");
+if((await page.getByRole("combobox",{name:"Закон изменения фазы 2"}).locator('option:checked').innerText())!=="Линейное")
+ throw Error("Linear profile must be labeled Линейное");
 await page.getByRole("spinbutton",{name:"Конечная интенсивность фазы 2"}).fill("2");
-if((await page.locator(".lyapunov-phase-grid > .lyapunov-phase").count())!==5)
- throw Error("Five attack phases must share the phase grid");
+if((await page.locator(".lyapunov-phase-grid > .lyapunov-phase").count())!==7)
+ throw Error("Seven attack phases must share the single-row phase grid");
 const phasePositions=await page.locator(".lyapunov-phase-grid > .lyapunov-phase").evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().top));
 if(Math.max(...phasePositions)-Math.min(...phasePositions)>3)
  throw Error("Attack phases unexpectedly wrapped to multiple rows");
