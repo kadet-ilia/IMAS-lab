@@ -611,10 +611,11 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
 .topbar .toolbar button.icon-button{width:29px;padding:0}
 .topbar .toolbar button svg{width:13px;height:13px}
 .topbar .toolbar button.icon-button svg{width:16px;height:16px}
-.r27-experiment-navigation label[for="imas-experiment-select"]{font-size:16px}
+.r27-experiment-navigation label[for="imas-experiment-select"]{font-size:12px}
 .r27-experiment-navigation #imas-experiment-select{
  box-sizing:border-box;width:250px;min-width:0;max-width:100%;font-size:12px;
 }
+.r27-experiment-navigation #imas-experiment-select option{font-size:12px;}
 @media(max-width:1280px){
  .topbar .top-meta{display:none}
  .topbar .toolbar{grid-row:1 / 3;align-self:center}
