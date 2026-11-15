@@ -276,3 +276,15 @@ export async function clearBrowserResults(){
  if(active)throw Error("Нельзя очищать результаты во время вычислений");
  return withOriginStorageLock(()=>clearBrowserResultsUnlocked());
 }
+
+/**
+ * The Lyapunov experiment uses the same durable, transactional IndexedDB store
+ * and origin-wide write lock as the five other trust experiment modes.
+ * Cache keys are fully versioned in lyapunovCache.js.
+ */
+export async function loadLyapunovCacheRecord(key){
+ return withOriginStorageLock(()=>storage("lyapunov:complete:"+key));
+}
+export async function saveLyapunovCacheRecord(key,record){
+ return withOriginStorageLock(()=>storage("lyapunov:complete:"+key,record));
+}
