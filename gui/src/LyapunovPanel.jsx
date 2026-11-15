@@ -118,7 +118,7 @@ const LyapunovPanel=forwardRef(function LyapunovPanel({config,onRuntimeChange,ph
    if(message.type==="result"||message.type==="error"){
     setWorkerStage(message.type);
     worker.terminate();workerRef.current=null;setRunning(false);
-    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});onStudyResult?.(message.result);setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});}
+    if(message.type==="result"){setSaved({signature:runSignature,value:message.result});onStudyResult?.({sourceConfig:config,result:message.result});setProgress({completed:runs,total:runs,percent:100,step:config.n_steps,totalSteps:config.n_steps});}
     else setError(message.message||"Ошибка вычислительного потока");
    }
   };
