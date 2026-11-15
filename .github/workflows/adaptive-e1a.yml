@@ -34,6 +34,17 @@ jobs:
       - name: Compile production frontend
         working-directory: gui
         run: npm run build
+      - name: Exploratory E1-A pilot (not confirmatory)
+        working-directory: gui
+        run: npm run adaptive:pilot
+      - name: Export exploratory pilot data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-adaptive-pilot
+          path: gui/adaptive-results/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Browser UI verification
         working-directory: gui
         run: |
