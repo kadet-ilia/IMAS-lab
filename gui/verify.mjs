@@ -395,7 +395,7 @@ async function assertNavButtonsEqual(section){
  const help=page.locator(".r27-experiment-navigation .r27-nav-right");
  const mode=page.locator(".r27-experiment-navigation .r27-mode-tab").first();
  const [helpBox,modeBox,fonts]=await Promise.all([
-  help.boundingBox(),mode.boundingBox(),
+  help.boundingBox(),mode.count().then(n=>n?mode.boundingBox():null),
   help.evaluate(el=>({helpSize:getComputedStyle(el).fontSize,modeSize:getComputedStyle(document.querySelector(".r27-mode-tab")||el).fontSize}))
  ]);
  if(!helpBox||Math.abs(helpBox.height-29)>1||
