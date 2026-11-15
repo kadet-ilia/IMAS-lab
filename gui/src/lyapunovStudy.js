@@ -10,6 +10,7 @@
  */
 import {STABILITY_METHODS, simulateRun, validateConfig, TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {defaultAttackPhases,validateAttackPhases,attackIntensityAt} from "./attackProfiles.js";
+import {validatePhaseGaps} from "./phaseScheduling.js";
 export {defaultAttackPhases,validateAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 
 export const LYAPUNOV_STUDY_VERSION="trust-feedback-lyapunov-2.0";
@@ -28,6 +29,7 @@ export function validateLyapunovOptions(config,options={}){
  if(!finite(opts.tolerance)||opts.tolerance<=0||opts.tolerance>100)throw Error("Допуск по состоянию должен лежать в пределах (0; 100]");
  if(!Number.isInteger(opts.runs)||opts.runs<1||opts.runs>200)throw Error("Число прогонов должно лежать в пределах 1…200");
  opts.phases=validateAttackPhases(opts.phases,c.n_steps);
+ validatePhaseGaps(opts.phases,c.attack_start_step);
  return {config:c,options:opts};
 }
 
