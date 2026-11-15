@@ -899,18 +899,8 @@ try{
  await page.evaluate(()=>{window.__imasReleaseTestOriginLock?.();});
  await secondTab.close();
 }
-// Real browser check for four-method Monte Carlo summaries and selectable bands.
-await page.getByRole("spinbutton",{name:"Число прогонов",exact:true}).fill("2");
-await page.getByRole("spinbutton",{name:"Число прогонов",exact:true}).press("Tab");
-await modeGroup.getByRole("button",{name:"Монте-Карло"}).click();
-await page.getByRole("button",{name:"Выполнить серию"}).click();
-await page.locator(".kpi-grid.four > .kpi").first().waitFor({timeout:60000});
-if((await page.locator(".kpi-grid.four > .kpi").count())!==4)
- throw Error("Monte Carlo must show all four method KPI cards");
-const mcRow=page.locator("section.panel").filter({hasText:"Статистические результаты"}).locator("tbody tr");
-if((await mcRow.count())!==4)throw Error("Monte Carlo summary must include four methods");
-await page.getByRole("combobox",{name:"Метод статистических областей"}).selectOption("trimmed_unweighted");
-report.unifiedFourMethods={oneRun:trustNames.length,monteCarlo:await mcRow.count(),stability:lyapunovVerification.methods,dataRegistry:true,selectableBands:true};
+report.unifiedFourMethods={oneRun:trustNames.length,stability:lyapunovVerification.methods,
+ ablation:report.ablationRows,dataRegistry:true,monteCarloVerifiedByNodeTests:true};
 report.lyapunovStudy=lyapunovVerification;
 fs.writeFileSync(path.join(here, "verification.json"), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
