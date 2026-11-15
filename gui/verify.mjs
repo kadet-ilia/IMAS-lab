@@ -262,6 +262,14 @@ for(const [id,name] of trustModes){
     throw Error("Stability tab must expose an attack phase editor");
   }
 }
+// An E1 job can continue behind another mode; finish it with E1 visible
+// before starting E1-A, which deliberately uses the same origin lease.
+await modeGroup.getByRole("button",{name:"Один прогон",exact:true}).click();
+await page.waitForFunction(()=>{
+ const stop=Array.from(document.querySelectorAll(".topbar .toolbar button"))
+  .find(b=>b.textContent?.includes("Остановить"));
+ return Boolean(stop&&stop.disabled);
+},null,{timeout:60000});
 // Wait for the mount-triggered baseline E1 run to release the shared
 // same-origin Web Lock. Starting E1-A while E1 holds it must fail closed.
 await page.waitForFunction(async()=>{
@@ -279,8 +287,9 @@ try{
  await page.getByRole("heading",{name:"Парные сравнения RMSE"}).waitFor({timeout:18000});
 }catch(error){
  const messages=await page.locator(".imas-validation-error, .r27-note[role='status']").allTextContents();
+ const locks=await page.evaluate(async()=>navigator.locks.query());
  const state=await page.locator(".tab-action").allTextContents();
- throw Error("E1-A browser computation did not finish: "+JSON.stringify({messages,state}).slice(0,2200)+"; "+String(error));
+ throw Error("E1-A browser computation did not finish: "+JSON.stringify({messages,state,locks}).slice(0,2200)+"; "+String(error));
 }
 await page.getByRole("heading",{name:"Итоговые показатели по методам"}).waitFor({timeout:45000});
 const e1aRows=await page.locator("section.panel").filter({hasText:"Итоговые показатели по методам"}).locator("tbody tr").count();
