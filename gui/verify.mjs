@@ -473,7 +473,7 @@ if(borrowRecord.options.decisionBandwidthPolicy!=="opportunistic"||
 e1aAdaptiveSummary.opportunisticSchedulerVerified=true;
 // Causal one-hop local packet diagnostic: prove browser worker exports actually
 // delivered PREVIOUS-TICK neighbor messages while sharing the same E1 budget.
-await page.getByRole("checkbox",{name:"Причинные соседские сообщения из свободной части общей полосы E1"}).check();
+await page.getByRole("checkbox",{name:"Причинные соседские сообщения (остаточная полоса или гарантированная квота)"}).check();
 await page.getByRole("spinbutton",{name:"Задержка соседского сообщения, шагов"}).fill("1");
 await page.getByRole("spinbutton",{name:"Потери соседских сообщений"}).fill("0.10");
 await page.getByRole("spinbutton",{name:"Максимальный возраст соседского сообщения, шагов"}).fill("5");
