@@ -12,7 +12,7 @@ test("local floor validates fractions and requires causal neighbor transport",()
   localTransportBandwidthFraction:.3}),/сумма гарантированных долей/);
  assert.throws(()=>validateRoutedChannelOptions({
   localTransportBandwidthFraction:NaN}),/доля локального транспорта/);
- const core={seed:444,n_agents:8,n_steps:6,network_enabled:true};
+ const core={seed:444,n_agents:8,n_byzantine:1,n_steps:6,network_enabled:true};
  assert.throws(()=>validateAdaptiveStudy(core,{comparisonMode:"network_routed",
   evidenceModel:"behavior_linked",decisionBandwidthPolicy:"local_floor"}),/локального транспорта/);
 });
