@@ -7,9 +7,10 @@ import {validateConfig,simulateRun,TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {validateAttackPhases,defaultAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 import {validateAdaptiveOptions,estimateAdaptiveDecision,ADAPTIVE_METHODS,ADAPTIVE_METHOD_IDS,ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
+import {createAdaptiveRiskController,ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.2.0-estimator-and-decision-feedback";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.3.0-risk-prequential";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -61,9 +62,10 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
  const {core,options:o}=validateAdaptiveStudy(config,options);
  if(o.comparisonMode==="decision_feedback")return runAdaptiveSingleDecisionFeedback(core,o,runIndex);
  const adaptive=[];
+ const risk=o.alphaMode==="risk_aware"?createAdaptiveRiskController(o):null;
  const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
  const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
-  const result=estimateAdaptiveDecision(observable,o,core);
+  const result=estimateAdaptiveDecision(observable,o,core,risk);
   adaptive.push({step:observable.step,...result.decisions,diagnostics:result.diagnostics});
  },generator);
  if(simulation.trajectory.length!==adaptive.length||adaptive.length!==core.n_steps)
@@ -118,8 +120,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
   const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
   if(!generator?.evidenceValue)throw Error("Для раздельного контура требуется модель наблюдаемых свидетельств");
   const observed=[];
+  const methodRisk=o.alphaMode==="risk_aware"?createAdaptiveRiskController(o):null;
   const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
-   const data=estimateAdaptiveDecision(observable,o,core);
+   const data=estimateAdaptiveDecision(observable,o,core,methodRisk);
    const value=data.decisions[method];
    generator.onFeedbackDecision({step:observable.step,value});
    observed.push({step:observable.step,value,diagnostics:data.diagnostics,
@@ -225,7 +228,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
  return {
   archiveFormat:"imas-adaptive-collective-decisions",archiveVersion:1,
   models:{base:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
-   scenario:ADAPTIVE_SCENARIO_VERSION},
+   scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
    evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
    comparisonMode:o.comparisonMode,
@@ -234,6 +237,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
     :"common reputation and isolation for all estimators",
    attack:"strategy independent of temporal intensity profile; attacker labels used by simulator only",
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
+   riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
    confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests; two-sided paired sign-flip p values Holm-adjusted across four planned RMSE contrasts",
