@@ -92,6 +92,8 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   combinedReputation:methodState.proposed_robust[i].mean_reputation,
   adaptiveReputation:methodState.adaptive_robust[i].mean_reputation,
   adaptiveReferenceCoverage:methodState.adaptive_robust[i].decision_reference_coverage,
+  adaptiveRoutingHops:methodState.adaptive_robust[i].decision_hops_routed,
+  adaptiveSharedUtilization:methodState.adaptive_robust[i].decision_shared_utilization,
   trimmedReferenceCoverage:methodState.trimmed_unweighted[i].decision_reference_coverage,
   combinedReferenceCoverage:methodState.proposed_robust[i].decision_reference_coverage
  })):[];
@@ -116,7 +118,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    <div className="tab-action-description">
     <h2>Адаптивное формирование коллективных решений (E1-А)</h2>
     <p>Сравнение исходных доверительно-усечённых методов E1 с адаптивным агрегатором на одних и тех же предложениях, репутациях и сообщениях.</p>
-    <p><strong>Область исследования:</strong> сравнение оценивателей при общем контуре либо раздельных контуров с обратной связью по решению. Раздельные контуры требуют поведенческих свидетельств и отключённых сетевых ограничений. Устойчивость относится только к вспомогательному скалярному объекту.</p>
+    <p><strong>Область исследования:</strong> сравнение оценивателей при общем контуре либо раздельных контуров с обратной связью по решению. Раздельные контуры требуют поведенческих свидетельств. Для decision_feedback сеть отключается; network_feedback и network_routed используют сетевые ограничения с различной детальностью распространения решения. Устойчивость относится только к вспомогательному скалярному объекту.</p>
    </div>
    <div className="action-controls">
     <button className="secondary-button" type="button" disabled={running||Boolean(validationError)} onClick={start}>Выполнить исследование</button>
@@ -134,14 +136,16 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <option value="estimator_only">Общий контур: сравнение агрегаторов</option>
       <option value="decision_feedback">Раздельные контуры: мгновенная обратная связь, без сети</option>
       <option value="network_feedback">Раздельные контуры: доставка решений по компонентам сети</option>
+      <option value="network_routed">Раздельные контуры: маршрутизация решений по рёбрам, общий бюджет</option>
      </select>
     </label>
-    {options.comparisonMode==="network_feedback"?<React.Fragment>
-     <p className="r27-note">Для сетевой обратной связи включите в боковой панели «Учитывать сетевые ограничения». Решение формирует единый расчётный узел и передаёт из назначенного агента только доступной компоненте связности; это не маршрутизация по рёбрам и не распределённый консенсус.</p>
+    {["network_feedback","network_routed"].includes(options.comparisonMode)?<React.Fragment>
+     <p className="r27-note">Для обоих сетевых режимов включите «Учитывать сетевые ограничения» в боковой панели. В network_feedback решение публикуется условно в компоненте без маршрута; в network_routed выполняется пошаговая маршрутизация по фактическим рёбрам и строгое резервирование общего лимита сообщений E1. Вычисление решения остаётся централизованным; распределённый консенсус не реализован.</p>
      <NumberOption label="Источник решения (индекс от 0)" title="Выбранный агент выступает источником публикации центрально рассчитанного решения. Если он недоступен или изолирован, передача не производится." value={options.decisionOriginAgent} min={0} max={159} step={1} disabled={running} onChange={v=>set("decisionOriginAgent",v)}/>
      <NumberOption label="Задержка доставки решения, шагов" title="Задержка не меньше одного шага; свидетельство никогда не использует недоставленное будущее решение." value={options.decisionDelaySteps} min={1} max={50} step={1} disabled={running} onChange={v=>set("decisionDelaySteps",v)}/>
      <NumberOption label="Вероятность потери решения" title="Независимый от транспортного бюджета E1 канал публикации решений. Потери ключуются по seed, такту, источнику и получателю." value={options.decisionLossProbability} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionLossProbability",v)}/>
      <NumberOption label="Срок актуальности решения, шагов" title="Не может быть меньше задержки; устаревшее или сетево недоступное решение не влияет на свидетельства." value={options.decisionMaxStalenessSteps} min={1} max={500} step={1} disabled={running} onChange={v=>set("decisionMaxStalenessSteps",v)}/>
+     {options.comparisonMode==="network_routed"?<NumberOption label="Доля пропускной способности для решений" title="Неработосохраняющее статическое резервирование floor(C·f) передач/шаг из общего бюджета C. Остальная часть C доступна исходным предложениям и свидетельствам E1; одна пересылка через ребро расходует одну единицу." value={options.decisionBandwidthFraction} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionBandwidthFraction",v)}/>:null}
     </React.Fragment>:null}
     <label>Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
@@ -295,7 +299,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Line dataKey="adaptiveIsolation" name="Изоляция: адаптивное" yAxisId="isolation" stroke="#c13f62" dot={false} isAnimationActive={false}/>
      <Line dataKey="adaptiveReputation" name="Средняя репутация: адаптивное" yAxisId="reputation" stroke="#079b91" dot={false} strokeDasharray="4 3" isAnimationActive={false}/>
     </LineChart></ResponsiveContainer>
-    {options.comparisonMode==="network_feedback"?<>
+    {["network_feedback","network_routed"].includes(options.comparisonMode)?<>
      <ResponsiveContainer width="100%" height={225}><LineChart data={coupledTrace}>
       <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>
       <YAxis domain={[0,1]}/><Tooltip formatter={v=>num(v,4)}/><Legend/>
@@ -303,7 +307,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <Line dataKey="combinedReferenceCoverage" name="Доступность решения: комбинированное" stroke="#123a63" dot={false} isAnimationActive={false}/>
       <Line dataKey="trimmedReferenceCoverage" name="Доступность решения: усечённое" stroke="#d18a31" dot={false} isAnimationActive={false}/>
      </LineChart></ResponsiveContainer>
-     <p className="r27-note">Доступность решения — доля агентов, имеющих неустаревшую запись решения в компоненте источника на начало такта. При отсутствии достижимых агентов показатель не определён. Канал решения имеет отдельный журнал попыток, потерь и доставки, не включённый в бюджет и баланс существующих каналов E1.</p>
+     <p className="r27-note">Доступность — доля активных агентов компоненты источника с актуальной записью доставленного решения к началу такта. {options.comparisonMode==="network_routed"?"Пересылка по каждому ребру расходует одну единицу из заранее зарезервированной доли общего бюджета E1; недостающие слоты вызывают очереди.":"При компонентной публикации канал имеет отдельный бюджет и не моделирует маршрутизацию по рёбрам."}</p>
      <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Средняя доступность решения</th><th>Доставлено</th><th>Потеряно</th><th>Недоставлено при разрыве сети</th></tr></thead><tbody>
       {summary.map(x=><tr key={x.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
        <td>{percent(x.mean_decision_reference_coverage?.mean)}</td>
@@ -312,8 +316,18 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        <td>{result.runs[0].scenarioDiagnosticsByMethod?.[x.method]?.decisionChannel?.blocked??0}</td>
       </tr>)}
      </tbody></table></div>
+     {options.comparisonMode==="network_routed"?<>
+      <ResponsiveContainer width="100%" height={225}><LineChart data={coupledTrace}>
+       <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>
+       <YAxis yAxisId="util" domain={[0,1]}/><YAxis yAxisId="hop" orientation="right" allowDecimals={false}/>
+       <Tooltip formatter={v=>num(v,4)}/><Legend/>
+       <Line dataKey="adaptiveSharedUtilization" yAxisId="util" name="Общая загрузка каналов E1 + решения" stroke="#0b7c9a" dot={false} isAnimationActive={false}/>
+       <Line dataKey="adaptiveRoutingHops" yAxisId="hop" name="Маршрутизированные переходы/такт" stroke="#8f50a2" dot={false} isAnimationActive={false}/>
+      </LineChart></ResponsiveContainer>
+      <p className="r27-note">Статическое резервирование общего бюджета C: E1 получает C−floor(C·f), маршрутизация — floor(C·f). Неиспользованные квоты не перераспределяются, поэтому это не оптимальный или работосохраняющий планировщик. Маршрут по кратчайшему пути вычисляется заново в узле при каждом переходе; обрыв действующего ребра во время передачи означает потерю пакета без ретрансляции.</p>
+     </>:null}
     </>:null}
-    <p className="r27-note">Показана модельная связь «решение → свидетельства → доверие и изоляция». Режим network_feedback ограничивает доставку решения фактическими компонентами графа E1, но не моделирует конкуренцию за полосу канала, маршруты и распределённое вычисление самого решения. Устойчивость всей ИМАС не доказана.</p>
+    <p className="r27-note">Показана модельная связь «решение → свидетельства → доверие и изоляция». network_feedback ограничивает доставку решения компонентами, а network_routed добавляет кратчайшие маршруты и статически разделяемый общий лимит передач. Оба варианта не выполняют распределённое вычисление решения; доказательство устойчивости ИМАС отсутствует. Устойчивость всей ИМАС не доказана.</p>
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Среднее число изолированных агентов</th><th>Средняя репутация</th></tr></thead><tbody>
      {summary.map(x=><tr key={x.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
       <td>{num(x.mean_isolated_agents?.mean,3)}</td><td>{num(x.mean_reputation?.mean,3)}</td>
@@ -339,7 +353,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <button type="button" className="secondary-button" onClick={prepareCsv}>Скачать CSV первого прогона</button>
     </div>
    </Panel>
-   <p className="r27-note">Результаты относятся к модельной скалярной задаче. Режим сравнения: estimator_only, decision_feedback без сетевых ограничений либо network_feedback с компонентной доставкой решения и отдельным каналом. Наличие малых p-значений не подтверждает состоятельность модели угроз и требует независимой подтверждающей серии. Функция V=e² не доказывает устойчивость полной ИМАС.</p>
+   <p className="r27-note">Результаты относятся к модельной скалярной задаче. Режим сравнения: estimator_only, decision_feedback без сети, network_feedback с компонентной публикацией либо network_routed с многопереходной маршрутизацией и резервированием общего бюджета. Наличие малых p-значений не подтверждает состоятельность модели угроз и требует независимой подтверждающей серии. Функция V=e² не доказывает устойчивость полной ИМАС.</p>
   </React.Fragment>:<div className="empty">Настройте адаптивный алгоритм, фазы атак и выполните исследование. Результаты исходного E1 сохраняются без изменений.</div>}
  </div>;
 });
