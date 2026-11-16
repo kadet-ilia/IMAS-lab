@@ -127,8 +127,8 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  };
  const effectiveIntensity=(step,intensity)=>
   o.attackStrategy==="legacy"||isActive(step,intensity)?intensity:0;
- const onNetworkState=({step,labels,active})=>{
-  if(channel)channel.networkStep({step,labels,active});
+ const onNetworkState=({step,labels,active,adjacency})=>{
+  if(channel)channel.networkStep({step,labels,active,adjacency});
  };
  const onProposalsDelivered=({step,values,available})=>{
   if(channel)channel.onProposalsDelivered({step,available});
