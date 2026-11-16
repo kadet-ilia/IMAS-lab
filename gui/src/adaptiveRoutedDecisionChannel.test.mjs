@@ -106,6 +106,43 @@ test("recompute route at the intermediate hop if a link changes",()=>{
  assert.equal(ch.referenceFor(3,3),.55);
  assert.equal(ch.getDiagnostic().balance,0);
 });
+test("waiting intermediate packet recovers when a graph partition heals before TTL",()=>{
+ const ch=createRoutedDecisionChannel(config,{
+  decisionBandwidthFraction:1,decisionDelaySteps:1,decisionMaxStalenessSteps:8
+ },2);
+ step(ch,1,{send:true,value:.65});
+ const two=links(4,[[0,1],[2,3]]);
+ step(ch,2,{adjacency:two,groups:[0,0,1,1]});
+ assert.equal(ch.referenceFor(3,3),null);
+ assert.ok(ch.getDiagnostic().routeDeferrals>0);
+ step(ch,3);
+ step(ch,4);
+ step(ch,5);
+ assert.equal(ch.referenceFor(3,3),.65);
+ assert.equal(ch.getDiagnostic().balance,0);
+});
+test("reserving a common-budget share materially reduces E1 transmission capacity",()=>{
+ const base={seed:18913,n_agents:12,n_byzantine:2,n_steps:12,
+  trim_each_side:2,attack_start_step:3,network_enabled:true,
+  network_topology:"complete",partition_enabled:false,
+  message_loss_probability:0,message_delay_min_steps:0,
+  message_delay_max_steps:0,bandwidth_messages_per_step:8};
+ const cfg={comparisonMode:"network_routed",scenario:"static_bias",runs:1,
+  evidenceModel:"behavior_linked",attackStrategy:"coordinated",
+  decisionDelaySteps:1,decisionMaxStalenessSteps:5,decisionLossProbability:0};
+ const noShare=runAdaptiveSingle(base,{...cfg,decisionBandwidthFraction:0},0);
+ const shared=runAdaptiveSingle(base,{...cfg,decisionBandwidthFraction:.75},0);
+ const first=noShare.scenarioDiagnosticsByMethod.adaptive_robust.decisionChannel;
+ const next=shared.scenarioDiagnosticsByMethod.adaptive_robust.decisionChannel;
+ assert.equal(first.reservedSlots,0);
+ assert.equal(first.hopsScheduled,0);
+ assert.ok(next.reservedSlots>0);
+ assert.ok(next.hopsScheduled>0);
+ assert.ok(first.e1UsedSlots>next.e1UsedSlots,
+  "E1 proposal/evidence delivery must actually lose slots to decision routing");
+ assert.ok(next.history.every(h=>h.e1Used<=h.availableForE1));
+ assert.ok(next.history.every(h=>h.e1Used+h.routingHopsThisStep<=h.sharedCapacity));
+});
 test("100% hop loss, disabled origin and abstention have disjoint accounting",()=>{
  const ch=createRoutedDecisionChannel(config,{
   decisionBandwidthFraction:1,decisionLossProbability:1
