@@ -7,6 +7,7 @@ import {ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
+import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
 import {TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {withOriginStorageLock,loadAdaptiveCacheWithinOriginLock,saveAdaptiveCacheWithinOriginLock} from "./trustBrowserClient.js";
@@ -18,6 +19,7 @@ export const adaptiveCacheKey=(core,options)=>JSON.stringify({
  scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
  decisionChannel:E1A_DECISION_CHANNEL_VERSION,
  routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION,
+ localTransport:E1A_LOCAL_TRANSPORT_VERSION,
  config:core,options
 });
 let activeJob=null;
