@@ -100,6 +100,12 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
  }
  const legacy=aggregateProposals(x.map(v=>v===null?NaN:v),w,a,core);
  if(!used.length){
+  if(o.alphaMode==="risk_aware"){
+   if(!riskController||typeof riskController.skip!=="function"||
+    !Number.isInteger(observation.step)||observation.step<1)
+    throw Error("E1-А риск: для пропуска такта требуется контроллер со счётчиком");
+   riskController.skip(observation.step);
+  }
   return {decisions:{trimmed_unweighted:null,proposed_robust:null,adaptive_unweighted:null,
    adaptive_weighted:null,adaptive_robust:null},
    diagnostics:{alpha:null,k:null,nEffective:null,readiness:null,disagreement:null,outlierCount:null,
