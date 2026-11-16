@@ -15,7 +15,12 @@
     "adaptive:campaign:smoke": "node scripts/adaptiveCampaign.mjs --stage=smoke",
     "adaptive:campaign:exploratory": "node scripts/adaptiveCampaign.mjs --stage=exploratory",
     "adaptive:campaign:confirmatory": "node scripts/adaptiveCampaign.mjs --stage=confirmatory",
-    "adaptive:campaign:all": "node scripts/adaptiveCampaign.mjs --stage=all"
+    "adaptive:campaign:all": "node scripts/adaptiveCampaign.mjs --stage=all",
+    "adaptive:risk:design": "node scripts/adaptiveRiskCampaign.mjs --stage=design",
+    "adaptive:risk:smoke": "node scripts/adaptiveRiskCampaign.mjs --stage=smoke",
+    "adaptive:risk:exploratory": "node scripts/adaptiveRiskCampaign.mjs --stage=exploratory",
+    "adaptive:risk:confirmatory": "node scripts/adaptiveRiskCampaign.mjs --stage=confirmatory",
+    "adaptive:risk:all": "node scripts/adaptiveRiskCampaign.mjs --stage=all"
   },
   "dependencies": {
     "react": "^19.1.0",
