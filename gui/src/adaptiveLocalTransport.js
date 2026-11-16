@@ -82,7 +82,7 @@ export function createLocalTransport(config,options={},runIndex=0){
    throw Error("Локальные сообщения: некорректный текущий граф E1");
   active=[...a];labels=[...l];adjacency=g.map(row=>[...row]);
   step=t;prepared=false;
-  const remain=[];
+  const remain=[];let arrivals=0;
   for(const packet of inFlight){
    if(t-packet.emitted>p.localTransportMaxAgeSteps){
     counters.expired++;continue;
@@ -96,7 +96,7 @@ export function createLocalTransport(config,options={},runIndex=0){
     received[packet.to].set(packet.from,{
      value:packet.value,emitted:packet.emitted,arrived:t
     });
-   counters.delivered++;
+   counters.delivered++;arrivals++;
   }
   inFlight.splice(0,inFlight.length,...remain);
   for(const [id,packet] of waiting)if(t-packet.emitted+
@@ -105,7 +105,7 @@ export function createLocalTransport(config,options={},runIndex=0){
   }
   history.push({step:t,
    generatedThisStep:0,transmittedThisStep:0,
-   receivedThisStep:0,neighborReadingsThisStep:0,activeNodes:a.filter(Boolean).length,
+   receivedThisStep:arrivals,neighborReadingsThisStep:0,activeNodes:a.filter(Boolean).length,
    informedNodes:0,meanReceivedNeighbors:0,meanLocalValue:null,
    localValues:null,localHonestSpread:null,delayedQueue:waiting.size+inFlight.length,
    bandwidthDeferred:0,disconnectedDeferred:0,
