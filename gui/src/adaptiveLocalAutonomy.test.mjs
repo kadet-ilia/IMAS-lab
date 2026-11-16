@@ -67,7 +67,7 @@ const graph=(n,edges)=>Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=
  edges.some(([a,b])=>a===i&&b===j||a===j&&b===i)));
 const network=graph(4,[[0,1],[1,2],[2,3]]);
 const core={seed:7711,n_agents:4,n_sybil_agents:0,safe_action_min:-2,safe_action_max:2};
-function runLocal(reputation=[.6,.6,.6,.6],split=false){
+function runLocal(reputation=[.6,.6,.6,.6],split=false,others=[.4,1]){
  const ch=createLocalTransport(core,{...opt,localAutonomyEnabled:true,
   localTransportDelaySteps:1,localTransportLossProbability:0},0);
  const states=[],faulty=[false,false,false,false];
@@ -76,7 +76,7 @@ function runLocal(reputation=[.6,.6,.6,.6],split=false){
   const labels=split?[0,0,1,1]:[0,0,0,0];
   ch.networkStep({step:t,adjacency:edges,labels,
    active:[true,true,true,true]});
-  states.push(ch.onProposals({step:t,values:[0,.2,.4,1],
+  states.push(ch.onProposals({step:t,values:[0,.2,...others],
    reputation,active:[true,true,true,true],faulty}));
   ch.afterEvidenceTransport({step:t,sharedCapacity:20,e1Used:2,decisionUsed:1});
  }
@@ -104,6 +104,13 @@ test("partitioned graph blocks cross-component dependence and all autonomy resul
  assert.equal(x.diagnostic.history[0].receivedThisStep,0);
  assert.ok(x.diagnostic.history.some(h=>h.autonomousCoverage>0));
  assert.ok(x.diagnostic.history.every(h=>h.totalUsed<=h.sharedCapacity));
+ const y=runLocal([.99,.1,.2,.8],true,[-2,2]);
+ assert.deepEqual(x.states.map(v=>v.slice(0,2)),
+  y.states.map(v=>v.slice(0,2)),
+  "Changing all observations in the other component must not affect local decisions");
+ assert.deepEqual(x.diagnostic.history.map(h=>h.autonomousTrust.slice(0,2)),
+  y.diagnostic.history.map(h=>h.autonomousTrust.slice(0,2)),
+  "The first component must not inherit directed trust from disconnected nodes");
 });
 test("autonomy study has separately labelled metrics without changing central E1 results",()=>{
  const cfg={seed:9943,n_agents:10,n_byzantine:2,n_steps:12,

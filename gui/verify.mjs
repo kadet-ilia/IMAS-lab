@@ -501,6 +501,45 @@ if(!localLinkResult.options.localTransportEnabled||
    !(x>=-2&&x<=2))))
  throw Error("E1-A causal local neighbor browser study violates model provenance, temporal delivery or shared capacity");
 e1aAdaptiveSummary.localTransportBrowserVerified=true;
+// Stage 10 browser worker: autonomous local trust must be available in the
+// real UI and exported separately, without changing any central E1 result.
+await page.getByRole("checkbox",{
+ name:"Независимые локальные решения и персональное доверие к соседям (пилот)"
+}).check();
+await page.getByRole("spinbutton",{
+ name:"Минимум доставленных соседских оценок"
+}).fill("1");
+if(await e1aAction.isDisabled())
+ throw Error("Stage-10 local autonomy controls unexpectedly rejected");
+await e1aAction.click();
+await page.getByText("Независимые локальные решения агентов (пилот)").waitFor({timeout:90000});
+const [autonomyFile]=await Promise.all([
+ page.waitForEvent("download",{timeout:20000}),e1aDownload.click()
+]);
+const autonomyResult=JSON.parse(fs.readFileSync(await autonomyFile.path(),"utf8"));
+const autonomyRun=autonomyResult.runs?.[0];
+const autonomyChannel=autonomyRun?.scenarioDiagnosticsByMethod?.
+ adaptive_robust?.localTransport;
+if(!autonomyResult.options.localAutonomyEnabled||
+ !autonomyResult.models.localAutonomy?.includes("directed-beta")||
+ autonomyResult.methodology.localAutonomy?.includes("SHADOW")!==true||
+ !autonomyChannel?.autonomy||autonomyChannel.history?.length!==200||
+ autonomyChannel.history[0].autonomousCoverage!==0||
+ !autonomyChannel.history.some(h=>h.autonomousCoverage>0)||
+ !autonomyChannel.history.every(h=>h.autonomousDecisions.length===
+  autonomyResult.configuration.n_agents+autonomyResult.configuration.n_sybil_agents)||
+ !autonomyRun.metrics.every(m=>m.mean_local_autonomous_coverage>=0&&
+  m.mean_local_autonomous_coverage<=1&&Number.isFinite(m.mean_local_autonomous_rmse)))
+ throw Error("Stage-10 autonomous local decision worker/browser export incomplete");
+for(const method of autonomyRun.metrics){
+ const old=localLinkResult.runs[0].metrics.find(m=>m.method===method.method);
+ if(method.rmse!==old?.rmse||method.probability_correct!==old?.probability_correct)
+  throw Error("Stage-10 local shadow modified a central E1 estimator");
+}
+e1aAdaptiveSummary.localAutonomyBrowserVerified=true;
+await page.getByRole("checkbox",{
+ name:"Независимые локальные решения и персональное доверие к соседям (пилот)"
+}).uncheck();
 await page.getByRole("combobox",{name:"Политика использования общей полосы"}).selectOption("static");
 await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("100000");
 // Restore the original no-network and no-partition configuration: the
