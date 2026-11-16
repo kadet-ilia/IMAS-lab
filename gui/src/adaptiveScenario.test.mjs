@@ -156,7 +156,7 @@ test("decision-feedback mode rejects legacy testimony and an undistributed netwo
  }),/поведенческая модель/i);
  assert.throws(()=>validateAdaptiveStudy({...core,network_enabled:true},{
   comparisonMode:"decision_feedback",evidenceModel:"behavior_linked"
- }),/сетевых ограничениях/i);
+ }),/отключённой сети/i);
 });
 test("feedback witness uses only the method's current output, not the true action",()=>{
  const gen=createAdaptiveScenarioAdapter(core,{
