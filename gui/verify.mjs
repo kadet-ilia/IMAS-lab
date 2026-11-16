@@ -471,6 +471,35 @@ if(borrowRecord.options.decisionBandwidthPolicy!=="opportunistic"||
   h.routingHopsThisStep<=h.sharedCapacity-h.e1Used))
  throw Error("E1-A work-conserving browser export violates shared-slot accounting or option signature");
 e1aAdaptiveSummary.opportunisticSchedulerVerified=true;
+// Causal one-hop local packet diagnostic: prove browser worker exports actually
+// delivered PREVIOUS-TICK neighbor messages while sharing the same E1 budget.
+await page.getByRole("checkbox",{name:"Причинные соседские сообщения из свободной части общей полосы E1"}).check();
+await page.getByRole("spinbutton",{name:"Задержка соседского сообщения, шагов"}).fill("1");
+await page.getByRole("spinbutton",{name:"Потери соседских сообщений"}).fill("0.10");
+await page.getByRole("spinbutton",{name:"Максимальный возраст соседского сообщения, шагов"}).fill("5");
+// Sufficient capacity to exercise local traffic rather than only starvation.
+// The network transport demand scales approximately with N^2.
+await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("2000");
+await e1aRuns.fill("1");await e1aRuns.press("Tab");
+if(await e1aAction.isDisabled())
+ throw Error("E1-A causal local neighbor test has invalid controls");
+await e1aAction.click();
+await page.getByText("Однопереходные передачи за такт").waitFor({timeout:90000});
+const [localLinkFile]=await Promise.all([page.waitForEvent("download",{timeout:20000}),e1aDownload.click()]);
+const localLinkResult=JSON.parse(fs.readFileSync(await localLinkFile.path(),"utf8"));
+const localLink=localLinkResult.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.localTransport;
+if(!localLinkResult.options.localTransportEnabled||
+ localLinkResult.options.localTransportLossProbability!==.1||
+ !localLinkResult.models.localTransport?.includes("causal")||
+ localLink?.history?.length!==200||localLink.transmitted<=0||
+ localLink.generated!==(localLink.delivered+localLink.lost+
+  localLink.blocked+localLink.expired+localLink.superseded+localLink.pending)||
+ !localLink.history.some(h=>h.neighborReadingsThisStep>0)||
+ localLink.history.some(h=>h.totalUsed!==h.E1Used+h.decisionUsed+h.localUsed||
+  h.totalUsed>h.sharedCapacity||h.localValues.some(x=>x!==null&&
+   !(x>=-2&&x<=2))))
+ throw Error("E1-A causal local neighbor browser study violates model provenance, temporal delivery or shared capacity");
+e1aAdaptiveSummary.localTransportBrowserVerified=true;
 await page.getByRole("combobox",{name:"Политика использования общей полосы"}).selectOption("static");
 await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("100000");
 // Restore the original no-network and no-partition configuration: the
