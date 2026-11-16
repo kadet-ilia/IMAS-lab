@@ -23,7 +23,8 @@
     "adaptive:risk:all": "node scripts/adaptiveRiskCampaign.mjs --stage=all",
     "adaptive:network:pilot": "node scripts/adaptiveNetworkPilot.mjs",
     "adaptive:routed:pilot": "node scripts/adaptiveRoutedPilot.mjs",
-    "adaptive:scheduler:pilot": "node scripts/adaptiveBandwidthPilot.mjs"
+    "adaptive:scheduler:pilot": "node scripts/adaptiveBandwidthPilot.mjs",
+    "adaptive:local:pilot": "node scripts/adaptiveLocalConsensusPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
