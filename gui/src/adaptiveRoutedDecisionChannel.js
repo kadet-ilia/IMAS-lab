@@ -104,10 +104,11 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
     counters.expired++;continue;
    }
    if(t<packet.due){arrived.push(packet);continue;}
-   if(!edge(packet.at,packet.next)){
+   if(packet.local?!active[origin]:!edge(packet.at,packet.next)){
     counters.blocked++;continue;
    }
-   packet.at=packet.next;packet.hops++;counters.hopsArrived++;
+   packet.at=packet.next;
+   if(!packet.local){packet.hops++;counters.hopsArrived++;}
    if(packet.at===packet.target){
     const existing=received[packet.target];
     if(!existing||packet.emitted>=existing.emitted)
