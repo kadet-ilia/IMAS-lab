@@ -5,8 +5,9 @@
  */
 import {aggregateProposals} from "./trustEngine.js";
 import {ADAPTIVE_SCENARIO_DEFAULTS,validateAdaptiveScenarioOptions} from "./adaptiveScenario.js";
+import {ADAPTIVE_RISK_DEFAULTS,validateAdaptiveRiskOptions} from "./adaptiveRiskController.js";
 
-export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.2.0";
+export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.3.0";
 export const ADAPTIVE_METHODS=Object.freeze([
  Object.freeze({id:"trimmed_unweighted",label:"Усечённое среднее E1",color:"#d18a31"}),
  Object.freeze({id:"proposed_robust",label:"Комбинированное среднее E1",color:"#123a63"}),
@@ -17,6 +18,7 @@ export const ADAPTIVE_METHODS=Object.freeze([
 export const ADAPTIVE_METHOD_IDS=Object.freeze(ADAPTIVE_METHODS.map(m=>m.id));
 export const ADAPTIVE_DEFAULTS=Object.freeze({
  alphaMode:"adaptive",fixedAlpha:0.5,trimMode:"source_first",
+ ...ADAPTIVE_RISK_DEFAULTS,
  comparisonMode:"estimator_only",
  adaptiveTrim:false,trimEachSide:null,maxAdaptiveTrim:12,minRetained:5,
  outlierThreshold:2.5,scaleFloor:0.15,
@@ -42,7 +44,7 @@ function assertNumber(name,v,min,max,integer=false){
 export function validateAdaptiveOptions(input={}){
  if(input===null||typeof input!=="object"||Array.isArray(input))throw Error("Параметры адаптации должны быть объектом");
  const o={...ADAPTIVE_DEFAULTS,...input};
- if(!["adaptive","off","fixed"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
+ if(!["adaptive","off","fixed","risk_aware"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
  if(!["estimator_only","decision_feedback"].includes(o.comparisonMode))
   throw Error("Неизвестный режим сравнения E1-А");
  if(!["legacy_clip_first","source_first"].includes(o.trimMode))throw Error("Неизвестный порядок усечения");
@@ -60,6 +62,7 @@ export function validateAdaptiveOptions(input={}){
  if(o.minWeight>o.maxWeight||o.maxWeight===0)throw Error("Ограничения весов несовместимы");
  if(o.phases!==null&&!Array.isArray(o.phases))throw Error("Фазы атаки должны быть массивом");
  validateAdaptiveScenarioOptions(o);
+ validateAdaptiveRiskOptions(o);
  return o;
 }
 function fractionalRetained(values,trim){
@@ -76,7 +79,7 @@ function fractionalRetained(values,trim){
  }
  return fractions;
 }
-export function estimateAdaptiveDecision(observation,options={},coreConfig={}){
+export function estimateAdaptiveDecision(observation,options={},coreConfig={},riskController=null){
  const o=validateAdaptiveOptions(options),x=observation?.values,w=observation?.reputation,a=observation?.available;
  if(!Array.isArray(x)||!Array.isArray(w)||!Array.isArray(a)||x.length!==w.length||x.length!==a.length)
   throw Error("Требуются равной длины массивы предложений, репутаций и доступности");
@@ -100,7 +103,7 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={}){
   return {decisions:{trimmed_unweighted:null,proposed_robust:null,adaptive_unweighted:null,
    adaptive_weighted:null,adaptive_robust:null},
    diagnostics:{alpha:null,k:null,nEffective:null,readiness:null,disagreement:null,outlierCount:null,
-    available:0,retained:0,weightConcentration:null}};
+    available:0,retained:0,weightConcentration:null,riskContrast:null,riskPairs:0,riskWeightVote:null}};
  }
  const raw=used.map(p=>p.value),med=median(raw);
  const absDeviation=raw.map(v=>Math.abs(v-med)),scale=Math.max(o.scaleFloor,1.4826*median(absDeviation));
@@ -129,7 +132,18 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={}){
  const readiness=Math.min(1,historySteps/o.warmupSteps);
  const effectiveFraction=neff/Math.max(1,used.length-k*2);
  const support=Math.min(1,effectiveFraction/o.minimumEffectiveFraction);
- const alpha=o.alphaMode==="off"?0:o.alphaMode==="fixed"?o.fixedAlpha:
+ let riskInfo=null;
+ if(o.alphaMode==="risk_aware"){
+  if(!riskController||typeof riskController.observe!=="function")
+   throw Error("E1-А риск: требуется отдельное причинное состояние контроллера");
+  if(!Number.isInteger(observation.step)||observation.step<1)
+   throw Error("E1-А риск: требуется монотонный номер текущего такта");
+  riskInfo=riskController.observe({
+   step:observation.step,plain,weighted,reference:med,scale,support,readiness
+  });
+ }
+ const alpha=o.alphaMode==="risk_aware"?riskInfo.alpha:
+  o.alphaMode==="off"?0:o.alphaMode==="fixed"?o.fixedAlpha:
   clamp(readiness*support*Math.exp(-o.disagreementPenalty*disparity),0,1);
  const decision=clamp((1-alpha)*plain+alpha*weighted,core.safe_action_min,core.safe_action_max);
  return {
@@ -137,6 +151,9 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={}){
    adaptive_unweighted:plain,adaptive_weighted:weighted,adaptive_robust:decision},
   diagnostics:{alpha,k,nEffective:neff,readiness,disagreement:disparity,outlierCount,
    available:used.length,retained:unweightedDen,weightConcentration:weightedDen>1e-15?
-    Math.max(...weightedFractions)/weightedDen:null}
+    Math.max(...weightedFractions)/weightedDen:null,
+   riskContrast:riskInfo?.contrast??null,riskPairs:riskInfo?.pairs??0,
+   riskWeightVote:riskInfo?.weightVote??null,
+   riskLossPlain:riskInfo?.lossPlain??null,riskLossWeighted:riskInfo?.lossWeighted??null}
  };
 }
