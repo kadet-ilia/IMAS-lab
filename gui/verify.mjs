@@ -335,6 +335,31 @@ if(coupled.options.comparisonMode!=="decision_feedback"||
  throw Error("E1-A: feedback archive missing independent states or feedback witness counters");
 e1aAdaptiveSummary.feedbackVerified=true;
 
+// E1-A online risk adaptation in a real browser. The exported series must
+// contain only causal prequential controls, not the simulation oracle.
+await page.getByRole("combobox",{name:"Режим сравнительного исследования"}).selectOption("estimator_only");
+await page.getByRole("combobox",{name:"Стратегия поведения нарушителей"}).selectOption("legacy");
+await page.getByRole("combobox",{name:"Модель доверительных свидетельств"}).selectOption("legacy");
+await page.getByRole("combobox",{name:"Режим коэффициента alpha"}).selectOption("risk_aware");
+await page.getByRole("spinbutton",{name:"Чувствительность к риску"}).fill("5");
+await e1aRuns.fill("1");await e1aRuns.press("Tab");
+await e1aAction.click();
+try{
+ await page.getByRole("heading",{name:"Парные сравнения RMSE"}).waitFor({timeout:60000});
+ await page.getByText("Нормированная разность прогнозных ошибок").waitFor({timeout:20000});
+}catch(error){
+ const messages=await page.locator(".imas-validation-error, .r27-note[role='status']").allTextContents();
+ throw Error("E1-A risk UI did not produce evidence: "+JSON.stringify(messages)+"; "+String(error));
+}
+const [riskFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),e1aDownload.click()]);
+const riskRecord=JSON.parse(fs.readFileSync(await riskFile.path(),"utf8"));
+if(riskRecord.options.alphaMode!=="risk_aware"||
+ !riskRecord.models.risk?.includes("prequential")||
+ riskRecord.trace?.length!==200||
+ !riskRecord.trace.some(x=>x.riskPairs>=4&&Number.isFinite(x.riskContrast))||
+ riskRecord.trace.some(x=>!(x.alpha>=0&&x.alpha<=1)))
+ throw Error("E1-A browser risk trace missing valid causal risk diagnostics");
+e1aAdaptiveSummary.riskBrowserVerified=true;
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
