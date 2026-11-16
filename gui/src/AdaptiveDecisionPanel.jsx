@@ -104,7 +104,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
  const prepareCsv=()=>{
   const keys=["step","attack_intensity","truth","trimmed_unweighted","proposed_robust",
    "adaptive_unweighted","adaptive_weighted","adaptive_robust",
-   "alpha","k","nEffective","readiness","disagreement","outlierCount","available","retained","weightConcentration"];
+   "alpha","k","nEffective","readiness","disagreement","outlierCount","available","retained","weightConcentration","riskContrast","riskPairs","riskWeightVote","riskLossPlain","riskLossWeighted"];
   const rows=[keys.join(";"),...trace.map(row=>keys.map(k=>row[k]??"").join(";"))];
   download("imas-adaptive-trajectory.csv",rows.join("\n"),"text/csv;charset=utf-8");
  };
@@ -135,9 +135,17 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <label>Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
       onChange={e=>set("alphaMode",e.target.value)}>
-      <option value="adaptive">Адаптивный</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
+      <option value="adaptive">Адаптивный (исходная эвристика)</option><option value="risk_aware">Рискоориентированный (историческая проверка)</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
      </select></label>
-    <NumberOption label="Постоянное α" title="Используется только в режиме постоянного коэффициента." value={options.fixedAlpha} min={0} max={1} step={0.05} onChange={v=>set("fixedAlpha",v)} disabled={running}/>
+    <NumberOption label="Постоянное α" title="Используется только в режиме постоянного коэффициента." value={options.fixedAlpha} min={0} max={1} step={0.05} onChange={v=>set("fixedAlpha",v)} disabled={running||options.alphaMode!=="fixed"}/>
+    {options.alphaMode==="risk_aware"?<React.Fragment>
+     <NumberOption label="Память риска β" title="Экспоненциальная память прошлых относительных ошибок двух агрегаторов при прогнозе следующей наблюдаемой медианы." value={options.riskDecay} min={0} max={0.9999} step={0.05} disabled={running} onChange={v=>set("riskDecay",v)}/>
+     <NumberOption label="Чувствительность к риску" title="Величина воздействия разности прошлых безоракульных оценок риска на коэффициент α." value={options.riskSensitivity} min={0} max={40} step={0.5} disabled={running} onChange={v=>set("riskSensitivity",v)}/>
+     <NumberOption label="Минимум пар наблюдений" title="Не менее указанного числа пар соседних тактов перед включением исторически обученного веса." value={options.riskMinimumPairs} min={1} max={5000} step={1} disabled={running} onChange={v=>set("riskMinimumPairs",v)}/>
+     <NumberOption label="Ограничение относительной ошибки" title="Ограничение нормированных невязок для робастной экспоненциальной оценки прогнозного риска." value={options.riskLossCap} min={0.1} max={1000} step={0.5} disabled={running} onChange={v=>set("riskLossCap",v)}/>
+     <NumberOption label="Регуляризация риска" title="Положительная регуляризация знаменателя разности исторических ошибок." value={options.riskFloor} min={0.000001} max={100} step={0.01} disabled={running} onChange={v=>set("riskFloor",v)}/>
+     <NumberOption label="Априорный вес" title="Доля взвешенной оценки до накопления достаточной предиктивной истории." value={options.riskPrior} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("riskPrior",v)}/>
+    </React.Fragment>:null}
     <label>Порядок обработки оценок
      <select aria-label="Порядок усечения" disabled={running} value={options.trimMode} onChange={e=>set("trimMode",e.target.value)}>
       <option value="source_first">Сначала усечение исходных значений</option>
@@ -156,7 +164,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <NumberOption label="Повторения R" title="Число независимых прогонов с одинаковой общей экзогенной реализацией для всех сравниваемых оценивателей." value={options.runs} min={1} max={200} step={1} disabled={running} onChange={v=>set("runs",v)}/>
     <NumberOption label="Коэффициент обратной связи" title="Только для вспомогательной скалярной модели, не является параметром основной ИМАС." value={options.feedbackGain} min={0.01} max={1.99} step={0.05} disabled={running} onChange={v=>set("feedbackGain",v)}/>
    </div>
-   <p className="r27-note">Коэффициент α — проверяемая эвристика: готовность истории свидетельств × ограничение концентрации весов × штраф за расхождение двух агрегаторов. Он не является апостериорной вероятностью честности.</p>
+   <p className="r27-note">В исходном режиме α — эвристика готовности истории, размера эффективной выборки и расхождения решений. В рискоориентированном режиме на такте t сравниваются решения такта t−1 с медианой доступных сообщений такта t; этот показатель прогнозного согласия не использует эталонную истину и не является калиброванным риском ошибки или вероятностью честности. Оба правила требуют независимой проверки.</p>
   </Panel>
   <Panel title="Временной сценарий атаки и фазовое расписание">
    <label>Временной сценарий воздействия
@@ -245,7 +253,12 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Line yAxisId="left" dataKey="alpha" name="α(t)" stroke="#c13f62" dot={false} strokeWidth={2} isAnimationActive={false}/>
      <Line yAxisId="right" dataKey="k" name="k(t)" stroke="#123a63" dot={false} isAnimationActive={false}/>
     </LineChart></ResponsiveContainer>
-    <p className="r27-note">Диагностические переменные N_eff, readiness, disagreement и outlierCount включены в выгружаемую пошаговую трассу.</p>
+    <p className="r27-note">Диагностические переменные N_eff, readiness, disagreement и outlierCount включены в выгружаемую пошаговую трассу. В режиме оценки риска дополнительно сохраняются парная разность накопленных прогнозных потерь, количество доступных пар, исторические риски и выбор доверительных весов.</p>
+    {options.alphaMode==="risk_aware"?<ResponsiveContainer width="100%" height={230}><LineChart data={trace}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[-1,1]}/>
+     <Tooltip formatter={v=>num(v,5)}/><Legend/>
+     <Line dataKey="riskContrast" name="Нормированная разность прогнозных ошибок" stroke="#8c56a5" dot={false} isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>:null}
    </Panel>
    <Panel title="Итоговые показатели по методам" subtitle="RMSE и MAE рассчитаны условно по принятым решениям, P(прав.) — по всем тактам, включая отказы.">
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>P(прав.)</th><th>Покрытие</th><th>P95 |ошибки|</th><th>RMSE состояния</th></tr></thead>
