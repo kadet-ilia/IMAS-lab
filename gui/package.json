@@ -24,7 +24,8 @@
     "adaptive:network:pilot": "node scripts/adaptiveNetworkPilot.mjs",
     "adaptive:routed:pilot": "node scripts/adaptiveRoutedPilot.mjs",
     "adaptive:scheduler:pilot": "node scripts/adaptiveBandwidthPilot.mjs",
-    "adaptive:local:pilot": "node scripts/adaptiveLocalConsensusPilot.mjs"
+    "adaptive:local:pilot": "node scripts/adaptiveLocalConsensusPilot.mjs",
+    "adaptive:local:transport:pilot": "node scripts/adaptiveLocalTransportPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
