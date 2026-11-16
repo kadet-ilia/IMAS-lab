@@ -423,7 +423,10 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   // It does not alter baseline E1 graph, random events or its own ledger.
   if(simulationAdapter?.onNetworkState)
    simulationAdapter.onNetworkState({
-    step:t+1,labels:Object.freeze([...labels]),active:Object.freeze([...running])
+    step:t+1,labels:Object.freeze([...labels]),active:Object.freeze([...running]),
+    adjacency:simulationAdapter?.reserveDecisionBandwidth?
+     Object.freeze(a.map((row,i)=>Object.freeze(row.map((v,j)=>
+      Boolean(v&&(!partition||groups[i]===groups[j]))))):null
    });
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
   const baselineProposed=samples(t,scenario,c,bad,sybil,proposalsRng);
@@ -441,7 +444,20 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
   const transportT0=performance.now();
-  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,c,r,runIndex,record);
+  // Research-only static capacity partition: routed decision packets receive
+  // a reserved slice of the SAME configured transmission budget. Base E1's
+  // proposal and evidence messages are scheduled first within the remainder.
+  const reservedDecisionSlots=simulationAdapter?.reserveDecisionBandwidth
+   ?simulationAdapter.reserveDecisionBandwidth({
+     step:t+1,capacity:c.bandwidth_messages_per_step
+    }):0;
+  if(!Number.isSafeInteger(reservedDecisionSlots)||reservedDecisionSlots<0||
+   reservedDecisionSlots>c.bandwidth_messages_per_step)
+   throw Error("E1-А маршрутизация: зарезервирована недопустимая полоса связи");
+  const e1Capacity=c.bandwidth_messages_per_step-reservedDecisionSlots;
+  const tx=transport(t,proposed,running,comps,queue,lastValues,lastSteps,
+   reservedDecisionSlots?{...c,bandwidth_messages_per_step:e1Capacity}:c,
+   r,runIndex,record);
   if(simulationAdapter?.onProposalsDelivered)
    simulationAdapter.onProposalsDelivered({
     step:t+1,values:Object.freeze([...tx.values]),available:Object.freeze([...tx.available])
@@ -474,6 +490,15 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   }
   const evidenceT0=performance.now();
   const evidence=observations(t,scenario,c,bad,running,labels,r,tx.budget,runIndex,record,simulationAdapter,tx);
+  if(simulationAdapter?.afterEvidenceTransport){
+   const e1Used=tx.stats.delivered+evidence.stats.delivered;
+   if(e1Used>e1Capacity)
+    throw Error("E1-А маршрутизация: потребление E1 превысило выделенный бюджет");
+   simulationAdapter.afterEvidenceTransport({
+    step:t+1,e1Used,reserved:reservedDecisionSlots,
+    sharedCapacity:c.bandwidth_messages_per_step
+   });
+  }
   hist.push(evidence.matrix);if(hist.length>c.trust_window_steps)hist.shift();
   attempted+=tx.stats.attempted+evidence.stats.attempted;delivered+=tx.stats.delivered+evidence.stats.delivered;lost+=tx.stats.lost+evidence.stats.lost;dropped+=tx.stats.bandwidth_dropped+evidence.stats.bandwidth_dropped;expired+=tx.stats.expired;queued=tx.stats.queued;
    communicationState=accountCommunicationStep(communicationState,tx.stats,evidence.stats,queue.length,t+1);
