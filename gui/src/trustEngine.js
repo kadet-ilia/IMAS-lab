@@ -418,6 +418,13 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   for(let i=0;i<n;i++){if(!active[i]&&eligible[i]&&(sybil[i]&&until[i]<0||until[i]>=0&&until[i]<t)){active[i]=true;low[i]=0;}}
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
+  // Optional E1-A network research callback. This is the ACTUAL active-graph
+  // component partition, computed before this tick's proposal/evidence flow.
+  // It does not alter baseline E1 graph, random events or its own ledger.
+  if(simulationAdapter?.onNetworkState)
+   simulationAdapter.onNetworkState({
+    step:t+1,labels:Object.freeze([...labels]),active:Object.freeze([...running])
+   });
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
   const baselineProposed=samples(t,scenario,c,bad,sybil,proposalsRng);
   const proposed=simulationAdapter?.transformProposals
