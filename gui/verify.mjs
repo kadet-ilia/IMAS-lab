@@ -563,7 +563,12 @@ await assertNavButtonsEqual("Расчет доверия");
 
 
 const trustOverview = page.locator(".trust-overview-grid");
-await trustOverview.waitFor();
+// Network-feedback UI verification intentionally changed the global E1
+// configuration. The historical one-run view does not auto-recalculate a
+// changed signature: explicitly refresh before asserting its trace panels.
+if(!(await trustOverview.count()))
+ await page.locator(".topbar .toolbar").getByRole("button",{name:"Запустить"}).click();
+await trustOverview.waitFor({timeout:90000});
 const topologyBox = await trustOverview.locator(".r27-replay").boundingBox();
 const summaryBox = await trustOverview.locator(".panel").boundingBox();
 const replay = trustOverview.locator(".r27-replay-compact");
