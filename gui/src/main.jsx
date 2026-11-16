@@ -22,6 +22,7 @@ import { ResearchStudy, ResearchHelp } from "./Research2027.jsx";
 import {MonteCarloPlanner} from "./MonteCarloPlanner.jsx";
 import { TopologyPlayback,baselineReplay } from "./ExperimentVisuals.jsx";
 import LyapunovPanel from "./LyapunovPanel.jsx";
+import TrustGoalEvidence from "./TrustGoalEvidence.jsx";
 import AdaptiveDecisionPanel from "./AdaptiveDecisionPanel.jsx";
 import FigureExportPicker from "./FigureExportPicker.jsx";
 import {runBrowserExperiment,stopBrowserExperiment} from "./trustBrowserClient.js";
@@ -638,7 +639,7 @@ function Sensitivity({ data, mode, setMode, onRun, running }) {
     <p className="r27-note"><strong>Множественные сравнения:</strong> {data.multipleTesting?.tested??0} проверенных из {data.multipleTesting?.planned??0}; {data.multipleTesting?.correction||"—"}. {data.multipleTesting?.limitation}</p>
     <p className="r27-note"><strong>Ограничения интерпретации:</strong> {data.design?.disclaimer}</p>
    </>:null;
-  return <div className="tab-stack"><div className="tab-action sensitivity-action"><div><h2>Анализ чувствительности</h2><p>Однофакторное изменение f либо двухуровневый многофакторный план по шести параметрам.</p></div><div className="action-controls"><select value={mode} onChange={(event) => setMode(event.target.value)}><option value="one_factor">Однофакторный анализ</option><option value="factorial">Многофакторный план</option><option value="ablation">Абляция on–off / изоляция</option></select><button className="secondary-button" onClick={() => onRun(mode)} disabled={running}><Icon name="play" />Выполнить</button></div></div>{data?.partial ? <div className="partial-banner">Сохранены частичные результаты: {data.completed_tasks} из {data.requested_tasks} заданий.</div> : null}{mode === "ablation" ? (ablationView||<div className="empty">Запустите абляционный эксперимент.</div>) : mode === "one_factor" ? (oneChart.length ? <Panel title="Устойчивость к доле скомпрометированных агентов" subtitle={"Среднее по независимым прогонам; показатель: "+oneMetricMeta[oneMetric].name}
+  return <div className="tab-stack"><TrustGoalEvidence/><div className="tab-action sensitivity-action"><div><h2>Анализ чувствительности</h2><p>Однофакторное изменение f либо двухуровневый многофакторный план по шести параметрам.</p></div><div className="action-controls"><select value={mode} onChange={(event) => setMode(event.target.value)}><option value="one_factor">Однофакторный анализ</option><option value="factorial">Многофакторный план</option><option value="ablation">Абляция on–off / изоляция</option></select><button className="secondary-button" onClick={() => onRun(mode)} disabled={running}><Icon name="play" />Выполнить</button></div></div>{data?.partial ? <div className="partial-banner">Сохранены частичные результаты: {data.completed_tasks} из {data.requested_tasks} заданий.</div> : null}{mode === "ablation" ? (ablationView||<div className="empty">Запустите абляционный эксперимент.</div>) : mode === "one_factor" ? (oneChart.length ? <Panel title="Устойчивость к доле скомпрометированных агентов" subtitle={"Среднее по независимым прогонам; показатель: "+oneMetricMeta[oneMetric].name}
   headerAside={<select className="compact-select" aria-label="Показатель однофакторной чувствительности" value={oneMetric} onChange={e=>setOneMetric(e.target.value)}>
     <option value="rmse">RMSE</option>
     <option value="probability_correct">P(правильное решение)</option>
@@ -956,7 +957,7 @@ function App() {
               studyId="trust"
               authors="Авторы · ктн Ушаков И.А. · Трофимова Н.А."
               title="Математическая модель интеллектуальной мультиагентной системы поддержки принятия решений для защищенных информационных систем специального назначения"
-              description="Моделирование динамики доверия, репутации и устойчивости коллективного решения при кибервоздействиях."
+              description="Цель исследования — повышение устойчивости и точности коллективных оценок, формируемых интеллектуальной мультиагентной системой поддержки принятия решений защищённых ИС СН, в условиях деструктивных воздействий на часть её агентов."
               progress={activeTab==="stability"?<ProgressStrip running={visibleRunning} progress={{
                  message:lyapunovRuntime?.cacheHit?"Результаты загружены из локального кэша":lyapunovRuntime?.running?"Исследование устойчивости: вычисление траекторий":lyapunovRuntime?.hasResult?"Исследование устойчивости завершено":"Готов к исследованию устойчивости",
                  completed:lyapunovRuntime?.completed??0,total:lyapunovRuntime?.total||1,
