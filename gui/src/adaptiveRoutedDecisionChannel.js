@@ -15,14 +15,16 @@
 import {createRng} from "./trustEngine.js";
 import {validateDecisionChannelOptions} from "./adaptiveDecisionChannel.js";
 
-export const E1A_ROUTED_CHANNEL_VERSION="e1a-shortest-path-reserved-bandwidth-1.0.0";
-export const E1A_ROUTED_DEFAULTS=Object.freeze({decisionBandwidthFraction:0.25});
+export const E1A_ROUTED_CHANNEL_VERSION="e1a-shortest-path-shared-scheduler-1.1.0";
+export const E1A_ROUTED_DEFAULTS=Object.freeze({decisionBandwidthFraction:0.25,decisionBandwidthPolicy:"static"});
 const finite=Number.isFinite;
 export function validateRoutedChannelOptions(options={}){
  const o={...E1A_ROUTED_DEFAULTS,...validateDecisionChannelOptions(options)};
  if(!finite(o.decisionBandwidthFraction)||o.decisionBandwidthFraction<0||
   o.decisionBandwidthFraction>1)
   throw Error("E1-А маршрутизация: доля резервирования канала должна принадлежать [0,1]");
+ if(!["static","opportunistic"].includes(o.decisionBandwidthPolicy))
+  throw Error("E1-А маршрутизация: неизвестная политика распределения полосы");
  return o;
 }
 export function nextHopOnActiveGraph(adjacency,labels,active,from,to){
@@ -56,14 +58,14 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
   throw Error("E1-А маршрутизация: требуется целочисленный seed и номер прогона");
  const origin=p.decisionOriginAgent;
  let step=0,originAvailable=false,active=null,labels=null,adjacency=null;
- let lastCapacity=null,lastReserved=null,nextId=0;
+ let lastCapacity=null,lastReserved=null,lastTargetReservation=null,nextId=0;
  const waiting=[],inFlight=[],received=Array(n).fill(null),history=[];
  const counters={
   attempted:0,delivered:0,lost:0,blocked:0,expired:0,
   notDispatched:0,abstentions:0,uninformedWitnesses:0,referencesUsed:0,
   hopsScheduled:0,hopsArrived:0,hopsLost:0,routeDeferrals:0,
   bandwidthDeferrals:0,transmittedSlots:0,e1UsedSlots:0,reservedSlots:0,
-  sharedCapacitySlots:0
+  sharedCapacitySlots:0,decisionBorrowedSlots:0,releasedToE1Slots:0
  };
  const reachable=(i,j)=>active[i]&&active[j]&&labels[i]>=0&&labels[i]===labels[j];
  const edge=(i,j)=>reachable(i,j)&&adjacency[i][j];
@@ -82,6 +84,7 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
   return {...counters,pending:pending(),waiting:waiting.length,inFlight:inFlight.length,
    origin,delay:p.decisionDelaySteps,lossProbability:p.decisionLossProbability,
    staleness:p.decisionMaxStalenessSteps,bandwidthFraction:p.decisionBandwidthFraction,
+   bandwidthPolicy:p.decisionBandwidthPolicy,
    modelVersion:E1A_ROUTED_CHANNEL_VERSION,balance:0,
    history:history.map(h=>({...h}))};
  };
@@ -97,7 +100,7 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
    throw Error("E1-А маршрутизация: необходим согласованный симметричный активный граф");
   active=[...nextActive];labels=[...nextLabels];
   adjacency=nextAdjacency.map(row=>[...row]);
-  step=t;originAvailable=false;lastCapacity=null;lastReserved=null;
+  step=t;originAvailable=false;lastCapacity=null;lastReserved=null;lastTargetReservation=null;
   const arrived=[];
   for(const packet of inFlight){
    if(t-packet.emitted>p.decisionMaxStalenessSteps){
@@ -135,14 +138,31 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
    coverage:reachableCount?informedCount/reachableCount:null,
    pending:pending(),routeDeferredThisStep:0,bandwidthDeferredThisStep:0,
    routingHopsThisStep:0,sharedCapacity:null,e1Used:null,
-   reserved:null,availableForE1:null});
+   reserved:null,availableForE1:null,targetReservation:null,
+   releasedToE1:0,borrowedFromE1:0,sharedUnused:null});
   audit();
  };
  const reserveDecisionBandwidth=({step:t,capacity})=>{
   if(t!==step||!Number.isSafeInteger(capacity)||capacity<1||lastCapacity!==null)
    throw Error("E1-А маршрутизация: невозможно выделить общий бюджет");
   lastCapacity=capacity;
-  lastReserved=Math.floor(capacity*p.decisionBandwidthFraction);
+  const target=Math.floor(capacity*p.decisionBandwidthFraction);
+  lastTargetReservation=target;
+  if(p.decisionBandwidthPolicy==="static"){
+   lastReserved=target;
+  }else{
+   // PRE-current-decision minimum guaranteed to old routable packets.
+   // The same E1 transport algorithm gets the released unused quota.
+   // Current-step decision packets may later borrow idle E1 slots.
+   let demand=0;
+   for(const packet of waiting){
+    if(t-packet.emitted>=p.decisionMaxStalenessSteps)continue;
+    if(nextHopOnActiveGraph(adjacency,labels,active,packet.at,packet.target)!==null)
+     demand++;
+    if(demand>=target)break;
+   }
+   lastReserved=Math.min(target,demand);
+  }
   return lastReserved;
  };
  const onProposalsDelivered=({step:t,available})=>{
@@ -169,7 +189,9 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
   if(t!==step||sharedCapacity!==lastCapacity||reserved!==lastReserved||
    !Number.isSafeInteger(e1Used)||e1Used<0||e1Used>sharedCapacity-reserved)
    throw Error("E1-А маршрутизация: неверный бюджет E1 после передачи свидетельств");
-  let slots=reserved,hops=0,routes=0,limited=0;
+  const slotsAvailable=p.decisionBandwidthPolicy==="opportunistic"
+   ?sharedCapacity-e1Used:reserved;
+  let slots=slotsAvailable,hops=0,routes=0,limited=0;
   const deferred=[];
   // Oldest packets first; deterministic tie-break by destination and creation.
   waiting.sort((a,b)=>a.emitted-b.emitted||a.target-b.target||a.id-b.id);
@@ -191,14 +213,22 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
    }else inFlight.push({...packet,next,due:t+p.decisionDelaySteps,local:false});
   }
   waiting.splice(0,waiting.length,...deferred);
+  const borrowedFromE1=Math.max(0,hops-reserved);
+  const releasedToE1=lastTargetReservation-reserved;
+  if(hops>slotsAvailable||reserved>lastTargetReservation||releasedToE1<0||
+   e1Used+hops>sharedCapacity)
+   throw Error("E1-А маршрутизация: превышение адаптивного общего бюджета");
   counters.routeDeferrals+=routes;counters.bandwidthDeferrals+=limited;
   counters.transmittedSlots+=hops;counters.e1UsedSlots+=e1Used;
   counters.reservedSlots+=reserved;counters.sharedCapacitySlots+=sharedCapacity;
+  counters.decisionBorrowedSlots+=borrowedFromE1;
+  counters.releasedToE1Slots+=releasedToE1;
   Object.assign(history.at(-1),{
    pending:pending(),routeDeferredThisStep:routes,
    bandwidthDeferredThisStep:limited,routingHopsThisStep:hops,
-   sharedCapacity,e1Used,reserved,availableForE1:sharedCapacity-reserved,
-   sharedUsed:e1Used+hops
+   sharedCapacity,e1Used,reserved,targetReservation:lastTargetReservation,
+   releasedToE1,borrowedFromE1,availableForE1:sharedCapacity-reserved,
+   sharedUsed:e1Used+hops,sharedUnused:sharedCapacity-e1Used-hops
   });
   audit();
   return {routingHops:hops,e1Used,reserved,sharedCapacity};
