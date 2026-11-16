@@ -396,7 +396,9 @@ if(networkRecord.options.comparisonMode!=="network_feedback"||
  networkDetails.history.some(x=>x.informed>x.reachable||x.informed<0))
  throw Error("E1-A: network feedback archive missing graph-conditioned provenance or violating separate packet conservation");
 e1aAdaptiveSummary.networkFeedbackVerified=true;
-// Restore the original no-network configuration for unrelated E1 modes.
+// Restore the original no-network and no-partition configuration: the
+// Lyapunov smoke subsequently shortens T below the partition end step.
+await page.getByRole("checkbox",{name:"Моделировать разделение сети"}).uncheck();
 await page.getByRole("checkbox",{name:"Учитывать сетевые ограничения"}).uncheck();
 
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
