@@ -1,0 +1,15 @@
+{
+  "stage": "all",
+  "protocol": "e1a-risk-ablation-1.0.0",
+  "status": "Locked prequential risk vs unchanged legacy adaptive alpha comparison.",
+  "fixedParameters": {
+    "riskDecay": 0.85,
+    "riskSensitivity": 5,
+    "riskMinimumPairs": 4,
+    "riskLossCap": 8,
+    "riskFloor": 0.05,
+    "riskPrior": 0.5
+  },
+  "randomness": "Entirely new, mutually disjoint signed-int32 stage seeds. Two alpha modes share identical exogenous events within each run.",
+  "scientificCaveat": "Internal new-seed validation. Not blinded to previously examined factorial conditions; no proof of true estimator risk or stability."
+}
