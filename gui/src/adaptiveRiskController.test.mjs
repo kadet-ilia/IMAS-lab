@@ -73,7 +73,7 @@ test("controller skips empty observation without scoring a discontinuous predict
  assert.equal(ctl.snapshot().step,3);
 });
 test("risk changes no legacy E1 decisions, no network transport, and no base E1 oracle separation",()=>{
- const base=simulateRun(input,"static_bias",0,0,true);
+ const base=simulateRun({...input,paired_exogenous_events:true},"static_bias",0,0,true);
  const withRisk=runAdaptiveSingle(input,opts,0);
  assert.equal(withRisk.trajectory.length,input.n_steps);
  assert.deepEqual(withRisk.trajectory.map(x=>x.proposed_robust),
