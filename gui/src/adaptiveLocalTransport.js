@@ -153,10 +153,15 @@ export function createLocalTransport(config,options={},runIndex=0){
    waiting.set(id,{id,from:i,to:j,value:next[i],emitted:t});
    counters.generated++;
   }
-  const valid=next.filter(finite),honest=next.filter((v,i)=>active[i]&&!faulty[i]&&finite(v));
+  const valid=next.filter(finite);
   const mean=arr=>arr.length?arr.reduce((s,x)=>s+x,0)/arr.length:null;
-  const localHonestSpread=honest.length?
-   Math.max(...honest)-Math.min(...honest):null;
+  const groups=new Map();
+  for(let i=0;i<n;i++)if(active[i]&&!faulty[i]&&finite(next[i])){
+   if(!groups.has(labels[i]))groups.set(labels[i],[]);
+   groups.get(labels[i]).push(next[i]);
+  }
+  const spreads=[...groups.values()].map(arr=>Math.max(...arr)-Math.min(...arr));
+  const localHonestSpread=spreads.length?Math.max(...spreads):null;
   Object.assign(history.at(-1),{
    generatedThisStep:active.reduce((s,a,i)=>s+(a?
     adjacency[i].filter(Boolean).length:0),0),
