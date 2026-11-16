@@ -1,0 +1,65 @@
+name: E1-A full frozen research campaign (test branch only)
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Fixed program: 72x30, independent 12x100, or both"
+        required: true
+        type: choice
+        default: all
+        options:
+          - exploratory
+          - confirmatory
+          - all
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/research-campaign-request.json'
+permissions:
+  contents: read
+concurrency:
+  group: e1a-scientific-campaign-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  campaign:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install scientific runtime
+        working-directory: gui
+        run: npm ci
+      - name: Audit frozen mathematical design
+        working-directory: gui
+        run: |
+          npm run adaptive:campaign:design
+          node --test src/adaptiveCampaign.test.mjs
+      - name: Execute preregistered scientific simulations
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          else
+            STAGE="$(node -p "JSON.parse(require('fs').readFileSync('gui/research-campaign-request.json','utf8')).stage")"
+          fi
+          case "$STAGE" in
+            exploratory|confirmatory|all) ;;
+            *) echo "Unsupported or absent frozen research stage: $STAGE"; exit 1;;
+          esac
+          echo "Frozen E1-A research stage: $STAGE"
+          node gui/scripts/adaptiveCampaign.mjs --stage="$STAGE"
+      - name: Preserve full scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-frozen-campaign-${{ github.run_id }}
+          path: gui/adaptive-results/campaign/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
