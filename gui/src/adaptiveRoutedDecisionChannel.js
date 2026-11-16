@@ -178,9 +178,11 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
     // No new hop could arrive within its remaining freshness horizon.
     counters.expired++;continue;
    }
+   // Bandwidth is checked BEFORE graph search, avoiding O(pending*N²)
+   // work when the static routing quota is already exhausted.
+   if(slots===0){limited++;deferred.push(packet);continue;}
    const next=nextHopOnActiveGraph(adjacency,labels,active,packet.at,packet.target);
    if(next===null){routes++;deferred.push(packet);continue;}
-   if(slots===0){limited++;deferred.push(packet);continue;}
    slots--;hops++;counters.hopsScheduled++;
    const random=createRng(config.seed,runIndex,0xD3C16,packet.id,
     packet.emitted,packet.target,packet.at,next,t,packet.hops);
