@@ -633,7 +633,10 @@ await page.getByRole("button",{name:"Показать весь интервал"
 
 
 
-await page.getByText("Сетевая модель и Sybil-атака", { exact: true }).click();
+// Other E1-A browser tests may already have expanded the sidebar section.
+const networkSidebar=page.locator("details.network-settings");
+if((await networkSidebar.getAttribute("open"))===null)
+ await networkSidebar.locator("summary").click();
 await page.getByLabel("Число Sybil-идентичностей").waitFor();
 await page.getByText("Статистика и вычисления", { exact: true }).click();
 await page.getByLabel("Bootstrap-выборок").waitFor();
