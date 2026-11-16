@@ -8,9 +8,10 @@ import {validateAttackPhases,defaultAttackPhases,attackIntensityAt} from "./atta
 import {validateAdaptiveOptions,estimateAdaptiveDecision,ADAPTIVE_METHODS,ADAPTIVE_METHOD_IDS,ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 import {createAdaptiveRiskController,ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
+import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.3.0-risk-prequential";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.4.0-network-component-feedback";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -26,10 +27,14 @@ const stats=a=>{
 };
 export function validateAdaptiveStudy(config={},options={}){
  const core=validateConfig(config),adaptive=validateAdaptiveOptions(options);
- if(adaptive.comparisonMode==="decision_feedback"&&adaptive.evidenceModel==="legacy")
+ if(["decision_feedback","network_feedback"].includes(adaptive.comparisonMode)&&adaptive.evidenceModel==="legacy")
   throw Error("Для обратной связи по решениям требуется поведенческая модель свидетельств");
  if(adaptive.comparisonMode==="decision_feedback"&&core.network_enabled)
-  throw Error("Режим обратной связи по решениям E1-А пока поддерживается только при отключённых сетевых ограничениях: широковещательная доступность решения не моделируется по компонентам связности");
+  throw Error("Режим decision_feedback требует отключённой сети; используйте network_feedback для ограниченного по компонентам распространения решений");
+ if(adaptive.comparisonMode==="network_feedback"&&!core.network_enabled)
+  throw Error("Режим network_feedback требует включённого сетевого моделирования E1");
+ if(adaptive.comparisonMode==="network_feedback"&&adaptive.decisionOriginAgent>=core.n_agents+core.n_sybil_agents)
+  throw Error("Источник коллективного решения вне множества агентов");
  const phases=adaptive.scenario==="dynamic"
   ?validateAttackPhases(adaptive.phases??defaultAttackPhases(core.n_steps,core.attack_start_step),core.n_steps)
   :null;
@@ -60,7 +65,8 @@ function feedbackMetrics(rows,method,gain,initial){
 export function runAdaptiveSingle(config={},options={},runIndex=0){
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс прогона");
  const {core,options:o}=validateAdaptiveStudy(config,options);
- if(o.comparisonMode==="decision_feedback")return runAdaptiveSingleDecisionFeedback(core,o,runIndex);
+ if(o.comparisonMode==="decision_feedback"||o.comparisonMode==="network_feedback")
+  return runAdaptiveSingleDecisionFeedback(core,o,runIndex);
  const adaptive=[];
  const risk=o.alphaMode==="risk_aware"?createAdaptiveRiskController(o):null;
  const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
@@ -132,6 +138,7 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
   if(simulation.trajectory.length!==core.n_steps||observed.length!==core.n_steps)
    throw Error("Неполный методоспецифический контур "+method);
   const paths=[],states=[];
+  const channelHistory=generator.getDiagnostic().decisionChannel?.history??[];
   for(let index=0;index<core.n_steps;index++){
    const row=simulation.trajectory[index],ob=observed[index];
    if(row.step!==ob.step)throw Error("Нарушен порядок тактов "+method);
@@ -145,7 +152,11 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     attack_intensity:effective,nominal_attack_intensity:nominal,[method]:ob.value});
    states.push({step:row.step,active_agents:row.active_agents,
     isolated_agents:row.isolated_agents,available_agents:row.available_agents,
-    mean_reputation:ob.meanReputation,largest_component:row.largest_component});
+    mean_reputation:ob.meanReputation,largest_component:row.largest_component,
+    decision_reference_coverage:channelHistory[index]?.coverage??null,
+    decision_reference_informed:channelHistory[index]?.informed??null,
+    decision_reference_reachable:channelHistory[index]?.reachable??null,
+    decision_packets_pending:channelHistory[index]?.pending??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -178,6 +189,7 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    mean_isolated_agents:average(state.map(v=>v.isolated_agents)),
    max_isolated_agents:Math.max(...state.map(v=>v.isolated_agents)),
    mean_reputation:average(state.map(v=>v.mean_reputation)),
+   mean_decision_reference_coverage:average(state.map(v=>v.decision_reference_coverage).filter(finite)),
    ...feedback.metrics};
  });
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
@@ -196,7 +208,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   throw Error("Нарушен состав или порядок прогонов");
  const metrics=["decision_coverage","probability_correct","accuracy_accepted","rmse","mae",
   "p95_abs_error","max_abs_error","attack_rmse","state_rmse","final_abs_error","positive_delta_v_fraction",
-  "mean_isolated_agents","max_isolated_agents","mean_reputation"];
+  "mean_isolated_agents","max_isolated_agents","mean_reputation","mean_decision_reference_coverage"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -228,11 +240,14 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
  return {
   archiveFormat:"imas-adaptive-collective-decisions",archiveVersion:1,
   models:{base:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
-   scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION},
+   scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
+   decisionChannel:E1A_DECISION_CHANNEL_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
    evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
    comparisonMode:o.comparisonMode,
-   feedbackReference:o.comparisonMode==="decision_feedback"
+   feedbackReference:o.comparisonMode==="network_feedback"
+    ?"method-specific centrally computed decision emitted by a designated origin, delivered on subsequent ticks only to active reachable agents within E1 connected components; separate broadcast channel and ledger"
+    :o.comparisonMode==="decision_feedback"
     ?"method-specific collective decision broadcast in an unconstrained network; independent reputation and isolation for each method"
     :"common reputation and isolation for all estimators",
    attack:"strategy independent of temporal intensity profile; attacker labels used by simulator only",
@@ -243,7 +258,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests; two-sided paired sign-flip p values Holm-adjusted across four planned RMSE contrasts",
    inference:"Sign-flip requires pairwise sign-exchangeability under the null; paired seeds alone do not establish validity. This study is exploratory; independent confirmatory series required.",
    stability:"auxiliary scalar feedback only, not a proof of full IMAS stability",
-   limitation:"Decision-feedback comparison is a synthetic closed-loop surrogate, not a full graph/network model of the IMAS; E1 original first-attack diagnostics may refer to nominal rather than effective attack onset"},
+   limitation:"All feedback modes are synthetic closed-loop surrogates. Network feedback uses actual E1 active-component reachability but does not simulate per-edge routing, distributed decision generation, or bandwidth competition between decision messages and proposal/evidence traffic; its channel has a separate ledger. E1 first-attack diagnostics may refer to nominal rather than effective attack onset"},
   configuration:core,options:o,methods:ADAPTIVE_METHODS,summary,paired,
   completedRuns:ordered.length,requestedRuns:o.runs,partial:ordered.length!==o.runs,
   trace:diagnostics,runs:ordered
