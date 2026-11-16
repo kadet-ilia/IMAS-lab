@@ -448,9 +448,10 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     active:running[i],byzantine:bad[i],sybil:sybil[i]});
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
-  // Independent upper-bound local-computation diagnostic: one-hop neighbor
-  // messages per synchronous round with NO consumption of E1 link budget.
-  // It cannot modify E1 proposals, reputation, isolation, or decision.
+  // Optional local-estimation diagnostic: the original ideal synchronous
+  // rounds remain unbudgeted, while the opt-in causal neighbor channel stages
+  // NEW packets here for delivery on later ticks using the idle shared slots
+  // after E1/evidence/routed traffic. Neither observer changes core E1 state.
   if(simulationAdapter?.onLocalConsensusProposals)
    simulationAdapter.onLocalConsensusProposals({
     step:t+1,values:Object.freeze([...proposed]),
