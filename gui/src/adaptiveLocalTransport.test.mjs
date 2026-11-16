@@ -114,7 +114,7 @@ test("local channel replay is exactly deterministic under independent link losse
 });
 test("opt-in is rejected without E1 network and pre-existing local diagnostic",()=>{
  const core={seed:431,n_agents:9,n_byzantine:2,n_steps:9,
-  trim_each_side:1,network_enabled:true};
+  trim_each_side:1,attack_start_step:3,network_enabled:true};
  const opts={comparisonMode:"network_routed",scenario:"static_bias",
   runs:1,evidenceModel:"behavior_linked",localTransportEnabled:true};
  assert.throws(()=>validateAdaptiveStudy(core,opts),/диагностики локального/);
