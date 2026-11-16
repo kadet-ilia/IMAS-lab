@@ -430,6 +430,8 @@ e1aAdaptiveSummary.routedFeedbackVerified=true;
 // capacity, but dynamically borrow unused slots. Verify actual archived
 // per-tick state, not only the presence of a selector.
 await page.getByRole("combobox",{name:"Политика использования общей полосы"}).selectOption("opportunistic");
+await page.getByRole("checkbox",{name:"Диагностика локального согласования агентов по физическим рёбрам"}).check();
+await page.getByRole("spinbutton",{name:"Раунды локального обмена"}).fill("2");
 await e1aRuns.fill("1");await e1aRuns.press("Tab");
 if(await e1aAction.isDisabled())throw Error("E1-A opportunistic scheduling controls unexpectedly invalid");
 await e1aAction.click();
@@ -439,6 +441,18 @@ const [borrowFile]=await Promise.all([page.waitForEvent("download",{timeout:2000
 const borrowRecord=JSON.parse(fs.readFileSync(await borrowFile.path(),"utf8"));
 const borrowDetails=borrowRecord.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.decisionChannel;
 const borrowHistory=borrowDetails?.history;
+const localRecord=borrowRecord.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.localConsensus;
+if(!borrowRecord.options.localConsensusPilot||
+ borrowRecord.options.localConsensusRounds!==2||
+ !borrowRecord.models.localConsensus?.includes("local-synchronous")||
+ localRecord?.history?.length!==200||
+ !localRecord.history.every(h=>h.states?.length===borrowRecord.configuration.n_agents+
+  borrowRecord.configuration.n_sybil_agents&&h.componentCount>0&&h.totalMessages>=0)||
+ !borrowRecord.runs[0].methodStates.adaptive_robust.every(row=>
+  Number.isFinite(row.local_consensus_component_count)))
+ throw Error("E1-A local-neighbor research UI/export lacks complete independent diagnostic traces");
+await page.getByText("Максимальный разброс честных оценок в компоненте").waitFor({timeout:30000});
+e1aAdaptiveSummary.localConsensusBrowserVerified=true;
 if(borrowRecord.options.decisionBandwidthPolicy!=="opportunistic"||
  borrowRecord.methodology.routedBandwidthPolicy!=="opportunistic"||
  borrowDetails?.bandwidthPolicy!=="opportunistic"||
