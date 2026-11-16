@@ -311,7 +311,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
    routedBandwidthPolicy:o.comparisonMode==="network_routed"?o.decisionBandwidthPolicy:null,
    localConsensus:o.localConsensusPilot
-    ?"Optional ideal synchronous unbudgeted local diagnostic; no feedback to central E1 decision or Byzantine agreement guarantee"
+    ?"Optional diagnostic: ideal synchronous unbudgeted local update; no feedback to central E1 decision or Byzantine agreement guarantee"
     :"disabled",
    localTransport:o.localTransportEnabled
     ?"Optional causal one-hop local state transport: each node reads only received neighbor packets from earlier steps; delay, loss, edge state and TTL are enforced. Transmission uses ONLY currently idle global E1+routed slots after E1/routed scheduling, never changes central E1 decisions; packet and total-slot conservation are verified. This is NOT distributed consensus or a fair-priority scheduler."
