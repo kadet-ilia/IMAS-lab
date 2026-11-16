@@ -54,6 +54,9 @@ jobs:
       - name: Two-way shared-bandwidth scheduler pilot (16 cells)
         working-directory: gui
         run: npm run adaptive:scheduler:pilot
+      - name: Demand-capped local bandwidth fairness pilot (24 cells, 3 seeds each)
+        working-directory: gui
+        run: npm run adaptive:fair:pilot
       - name: Component-local ideal synchronous consensus diagnostic pilot (12 cells)
         working-directory: gui
         run: npm run adaptive:local:pilot
