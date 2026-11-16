@@ -35,8 +35,24 @@ if(args.some(x=>!/^--(stage|output)=/.test(x)))
 const design=validateCampaignDesign(campaignDesign());
 const json=x=>JSON.stringify(x,null,2)+"\n";
 const sha=x=>createHash("sha256").update(x).digest("hex");
-const digest=sha(json(design));
 const guiRoot=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
+// Freeze the actual E1-A computation sources, not only declarative model
+// version strings. Any numerical algorithm change creates a different archive.
+const sourceFiles=[
+ "src/trustEngine.js","src/trustMethods.js","src/attackProfiles.js",
+ "src/adaptiveDecisionEngine.js","src/adaptiveScenario.js",
+ "src/adaptiveExperiment.js","src/adaptiveCampaignProtocol.js",
+ "src/adaptiveCampaignAnalysis.js","src/statistics2027.js",
+ "scripts/adaptiveCampaign.mjs"
+];
+const sourceHash=createHash("sha256");
+for(const name of sourceFiles){
+ sourceHash.update(name+"\\0");
+ sourceHash.update(readFileSync(path.join(guiRoot,name)));
+ sourceHash.update("\\0");
+}
+const sourceSha256=sourceHash.digest("hex"),designSha256=sha(json(design));
+const digest=sha(designSha256+":"+sourceSha256);
 const defaultOutput=path.join(guiRoot,"adaptive-results","campaign",digest.slice(0,16));
 const output=path.resolve(argument("output",defaultOutput));
 function atomicWrite(target,value){
@@ -55,16 +71,18 @@ function toCsv(rows,keys){
 }
 mkdirSync(output,{recursive:true});
 const manifestPath=path.join(output,"campaign-design.json");
-const manifest={design,sha256:digest,
+const manifest={design,campaignFingerprint:digest,designSha256,sourceSha256,sourceFiles,
  sourceRevision:process.env.GITHUB_SHA||null,
- notice:"Frozen program and versioned algorithms. SourceRevision is provenance only; source change also requires protocol-version update."
+ notice:"Protocol and code dependency fingerprint. A changed model source creates a new checkpoint namespace."
 };
 if(existsSync(manifestPath)){
  const previous=JSON.parse(readFileSync(manifestPath,"utf8"));
- if(previous.sha256!==digest||sha(json(previous.design))!==digest)
+ if(previous.campaignFingerprint!==digest||previous.designSha256!==designSha256||
+   previous.sourceSha256!==sourceSha256||sha(json(previous.design))!==designSha256)
   throw Error("Stored campaign design differs from this source. Stop rather than overwrite.");
 }else atomicWrite(manifestPath,json(manifest));
-console.log("E1-A CAMPAIGN designSHA256="+digest+" stage="+stage+" path="+output);
+console.log("E1-A CAMPAIGN fingerprint="+digest+" designSHA256="+designSha256+
+ " sourceSHA256="+sourceSha256+" stage="+stage+" path="+output);
 if(stage==="design")process.exit(0);
 
 function verifyCheckpoint(saved,cell){
