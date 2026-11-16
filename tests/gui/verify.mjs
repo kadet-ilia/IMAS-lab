@@ -518,6 +518,14 @@ await page.getByRole("checkbox",{
 await page.getByRole("spinbutton",{
  name:"Минимум доставленных соседских оценок"
 }).fill("1");
+const guardToggle=page.getByRole("checkbox",{
+ name:"Локальная защитная фильтрация недостоверных соседских оценок (пилот)"
+});
+await guardToggle.check();
+await page.getByRole("spinbutton",{
+ name:"Минимум новых свидетельств для защитного действия"
+}).fill("2");
+await guardToggle.uncheck();
 if(await e1aAction.isDisabled())
  throw Error("Stage-10 local autonomy controls unexpectedly rejected");
 await e1aAction.click();

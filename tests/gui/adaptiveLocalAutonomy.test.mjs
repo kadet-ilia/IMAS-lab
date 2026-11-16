@@ -16,7 +16,11 @@ test("local autonomy options are bounded and reject inconsistent prerequisites",
  assert.match(E1A_LOCAL_AUTONOMY_VERSION,/beta/);
  for(const x of [{localAutonomyEnabled:1},
   {localAutonomyEvidenceTolerance:0},{localAutonomyDecay:1.1},
-  {localAutonomyMinNeighbors:-1}])
+  {localAutonomyMinNeighbors:-1},
+  {localAutonomyGuardEnabled:1},
+  {localAutonomyGuardThreshold:1},
+  {localAutonomyGuardHysteresis:0.85},
+  {localAutonomyGuardMinEvidence:0}])
   assert.throws(()=>validateLocalAutonomyOptions(x),/недопустимые параметры/);
  const c={seed:613,n_agents:10,n_byzantine:1,n_steps:12,
   trim_each_side:2,attack_start_step:3,network_enabled:true,
@@ -150,4 +154,67 @@ test("autonomy study has separately labelled metrics without changing central E1
  assert.ok(study.summary.every(r=>r.mean_local_autonomous_honest_rmse.n===2));
  assert.equal(study.models.localAutonomy,E1A_LOCAL_AUTONOMY_VERSION);
  assert.match(study.methodology.localAutonomy,/SHADOW/);
+});
+
+test("causal directed local guard activates only after independent fresh evidence and supports readmission",()=>{
+ const pilot=createLocalAutonomy(2,-2,2,{
+  ...opt,localAutonomyGuardEnabled:true,
+  localAutonomyGuardThreshold:0.4,
+  localAutonomyGuardHysteresis:0.05,
+  localAutonomyGuardMinEvidence:2,
+  localAutonomyDecay:1,localAutonomyEvidenceTolerance:0.2
+ });
+ const tick=(step,neighborValue,emitted,arrived,own1=2)=>
+  pilot.tick({step,own:[0,own1],active:[true,true],
+   messages:emitted===null?[[],[]]:[[sample(1,neighborValue,emitted,arrived)],[]]});
+ const s1=tick(1,0,null,null);
+ assert.deepEqual(s1.decisions,[null,null]);
+ const s2=tick(2,2,1,2);
+ assert.equal(s2.guarded,0);
+ assert.ok(Number.isFinite(s2.decisions[0]));
+ const s3=tick(3,2,2,3);
+ assert.equal(s3.guarded,1);
+ assert.equal(s3.excluded,1);
+ assert.equal(s3.decisions[0],null,"One quarantined neighbor cannot satisfy minNeighbors");
+ assert.equal(s3.trustByNode[0][0].quarantined,true);
+ // New consistent messages are evaluated EVEN while excluded; recovery remains possible.
+ const s4=tick(4,0,3,4,0);
+ assert.equal(s4.released,0);
+ assert.equal(s4.excluded,1);
+ const s5=tick(5,0,4,5,0);
+ assert.equal(s5.released,1);
+ assert.equal(s5.excluded,0);
+ assert.ok(Number.isFinite(s5.decisions[0]));
+ assert.equal(pilot.getDiagnostic().guarded,1);
+ assert.equal(pilot.getDiagnostic().released,1);
+ assert.equal(pilot.getDiagnostic().excluded,2);
+});
+test("optional local guard never changes central E1 decisions or requires simulator labels",()=>{
+ const cfg={seed:99001,n_agents:10,n_byzantine:2,n_steps:11,
+  trim_each_side:2,attack_start_step:3,network_enabled:true,
+  network_topology:"ring",bandwidth_messages_per_step:45};
+ const base={runs:1,comparisonMode:"network_routed",scenario:"static_bias",
+  evidenceModel:"behavior_linked",attackStrategy:"coordinated",
+  localConsensusPilot:true,localTransportEnabled:true,
+  localAutonomyEnabled:true,localConsensusTrim:0};
+ assert.throws(()=>validateAdaptiveStudy(cfg,{...base,
+  localAutonomyEnabled:false,localAutonomyGuardEnabled:true}),
+  /защитная фильтрация требует автономных/);
+ const a=runAdaptiveSingle(cfg,{...base,localAutonomyGuardEnabled:true,
+  localAutonomyGuardThreshold:.45,localAutonomyGuardMinEvidence:1},0);
+ const b=runAdaptiveSingle(cfg,base,0);
+ assert.deepEqual(a.trajectory,b.trajectory);
+ assert.deepEqual(a.metrics.map(m=>[m.method,m.rmse,m.probability_correct]),
+  b.metrics.map(m=>[m.method,m.rmse,m.probability_correct]));
+ for(const d of Object.values(a.scenarioDiagnosticsByMethod)){
+  const local=d.localTransport;
+  assert.ok(local.autonomy?.steps===cfg.n_steps);
+  assert.ok(local.history.every(h=>h.totalUsed<=h.sharedCapacity));
+  assert.ok(local.history.every(h=>h.autonomousExcluded>=0&&
+   h.autonomousHonestExcluded>=0&&
+   h.autonomousHonestExcluded<=h.autonomousExcluded));
+ }
+ const again=runAdaptiveSingle(cfg,{...base,localAutonomyGuardEnabled:true,
+  localAutonomyGuardThreshold:.45,localAutonomyGuardMinEvidence:1},0);
+ assert.deepEqual(a.methodStates,again.methodStates);
 });

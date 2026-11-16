@@ -15,7 +15,7 @@ import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.1.0-honest-local-diagnostic-stratification";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.2.0-shadow-local-guard-pilot";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -47,6 +47,8 @@ export function validateAdaptiveStudy(config={},options={}){
   throw Error("Локальные сообщения требуют включённой сетевой модели E1");
  if(adaptive.localAutonomyEnabled&&!adaptive.localTransportEnabled)
   throw Error("Автономные локальные решения требуют причинного локального транспорта");
+ if(adaptive.localAutonomyGuardEnabled&&!adaptive.localAutonomyEnabled)
+  throw Error("Локальная защитная фильтрация требует автономных локальных решений");
  if(adaptive.decisionBandwidthPolicy==="local_floor"&&
   (adaptive.comparisonMode!=="network_routed"||!adaptive.localTransportEnabled))
   throw Error("Гарантированная локальная квота требует network_routed и локального транспорта");
@@ -201,7 +203,11 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     local_autonomous_coverage:linkHistory[index]?.autonomousCoverage??null,
     local_autonomous_trust_updates:linkHistory[index]?.autonomousTrustUpdates??null,
     local_autonomous_refusals:linkHistory[index]?.autonomousRefusals??null,
-    local_autonomous_mean_trust:linkHistory[index]?.autonomousMeanTrust??null});
+    local_autonomous_mean_trust:linkHistory[index]?.autonomousMeanTrust??null,
+    local_autonomous_guarded:linkHistory[index]?.autonomousGuarded??null,
+    local_autonomous_released:linkHistory[index]?.autonomousReleased??null,
+    local_autonomous_excluded:linkHistory[index]?.autonomousExcluded??null,
+    local_autonomous_honest_excluded:linkHistory[index]?.autonomousHonestExcluded??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -265,6 +271,12 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     Math.sqrt(average(honestAccepted.map(x=>(x-core.desired_action)**2))):null,
    mean_local_autonomous_trust_updates:o.localAutonomyEnabled?
     localRows.reduce((sum,h)=>sum+(h.autonomousTrustUpdates??0),0):null,
+   mean_local_autonomous_guard_exclusions:o.localAutonomyEnabled?
+    localRows.reduce((sum,h)=>sum+(h.autonomousExcluded??0),0):null,
+   mean_local_autonomous_guard_honest_exclusions:o.localAutonomyEnabled?
+    localRows.reduce((sum,h)=>sum+(h.autonomousHonestExcluded??0),0):null,
+   mean_local_autonomous_guard_activations:o.localAutonomyEnabled?
+    localRows.reduce((sum,h)=>sum+(h.autonomousGuarded??0),0):null,
    ...feedback.metrics};
  });
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
@@ -291,7 +303,9 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   "mean_local_link_transmissions","mean_local_link_honest_spread","mean_local_link_shared_utilization",
   "mean_local_autonomous_coverage","mean_local_autonomous_rmse",
   "mean_local_autonomous_honest_coverage","mean_local_autonomous_honest_rmse",
-  "mean_local_autonomous_trust_updates"];
+  "mean_local_autonomous_trust_updates","mean_local_autonomous_guard_exclusions",
+  "mean_local_autonomous_guard_honest_exclusions",
+  "mean_local_autonomous_guard_activations"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -349,7 +363,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
     ?"Optional causal one-hop local neighbor transport with delayed/lossy delivery and shared budget; legacy and local_floor bandwidth modes preserved"
     :"disabled",
    localAutonomy:o.localAutonomyEnabled
-    ?"Optional independent per-observer directed soft-Beta trust from delivered neighbor estimates compared with OWN emission-time observations, no E1 global reputation, labels, oracle or central decision; local abstentions distinguished from raw bootstrap messages. SHADOW research mode: E1 isolation, topology and central feedback still active; not a distributed closed loop or Byzantine consensus. Local RMSE over ALL active agents and honest-only local RMSE/coverage are SEPARATE diagnostic estimands; honest mask is synthetic ground truth used POST-HOC ONLY, never the local update."
+    ?"Optional independent directed soft-Beta trust from delivered neighbor estimates compared with OWN emission-time observations. SHADOW research only. Local vs central RMSE have different estimands. Honest masks and false guard exclusions are simulator POST-HOC diagnostics; no E1 global reputation, labels, oracle or central decision enter local trust. Opt-in guard excludes a directed neighbor only after enough fresh evidence, with hysteretic readmission. The network graph, isolation and original E1 remain centrally controlled. NOT Byzantine consensus or distributed closed-loop control."
     :"disabled",
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",

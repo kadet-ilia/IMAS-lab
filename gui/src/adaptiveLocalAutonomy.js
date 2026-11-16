@@ -2,16 +2,20 @@
  * Opt-in E1-A autonomous local decision estimator.
  * Each node owns its directed Beta trust records. Inputs are its own observations
  * and causal, delivered direct-neighbor packets; global E1 reputation and oracle
- * truth are not inputs. This is NOT Byzantine consensus or closed-loop control.
+ * truth are not inputs. This is NOT Byzantine consensus or full-system closed-loop control.
  */
 import {localWeightedTrim} from "./adaptiveLocalConsensus.js";
 
-export const E1A_LOCAL_AUTONOMY_VERSION="e1a-local-directed-beta-shadow-1.0.0";
+export const E1A_LOCAL_AUTONOMY_VERSION="e1a-local-directed-beta-shadow-1.1.0";
 export const E1A_LOCAL_AUTONOMY_DEFAULTS=Object.freeze({
  localAutonomyEnabled:false,
  localAutonomyEvidenceTolerance:0.45,
  localAutonomyDecay:0.95,
- localAutonomyMinNeighbors:1
+ localAutonomyMinNeighbors:1,
+ localAutonomyGuardEnabled:false,
+ localAutonomyGuardThreshold:0.30,
+ localAutonomyGuardHysteresis:0.15,
+ localAutonomyGuardMinEvidence:3
 });
 const finite=Number.isFinite;
 const clamp=(x,low,high)=>Math.max(low,Math.min(high,x));
@@ -24,7 +28,14 @@ export function validateLocalAutonomyOptions(options={}){
   p.localAutonomyEvidenceTolerance>100||
   !finite(p.localAutonomyDecay)||p.localAutonomyDecay<0||p.localAutonomyDecay>1||
   !Number.isInteger(p.localAutonomyMinNeighbors)||p.localAutonomyMinNeighbors<0||
-  p.localAutonomyMinNeighbors>159)
+  p.localAutonomyMinNeighbors>159||
+  typeof p.localAutonomyGuardEnabled!=="boolean"||
+  !finite(p.localAutonomyGuardThreshold)||p.localAutonomyGuardThreshold<=0||
+  p.localAutonomyGuardThreshold>=1||
+  !finite(p.localAutonomyGuardHysteresis)||p.localAutonomyGuardHysteresis<0||
+  p.localAutonomyGuardThreshold+p.localAutonomyGuardHysteresis>=1||
+  !Number.isInteger(p.localAutonomyGuardMinEvidence)||
+  p.localAutonomyGuardMinEvidence<1||p.localAutonomyGuardMinEvidence>500)
   throw Error("Автономные локальные решения: недопустимые параметры");
  return p;
 }
@@ -41,6 +52,7 @@ export function createLocalAutonomy(n,low,high,options={}){
  const ownHistory=Array.from({length:n},()=>new Map());
  const trust=Array.from({length:n},()=>new Map());
  let lastStep=0,totalUpdates=0,totalRefusals=0,totalUnmatched=0;
+ let totalGuarded=0,totalReleased=0,totalExcluded=0;
  const decay=(entry,t)=>{
   const age=t-entry.lastUpdate;
   if(age>0){
@@ -66,11 +78,13 @@ export function createLocalAutonomy(n,low,high,options={}){
   }
   const decisions=Array(n).fill(null),trustByNode=Array(n).fill(null);
   let updates=0,refusals=0,unmatched=0,readings=0,trustSum=0;
+  let guarded=0,released=0,excluded=0;
   for(let i=0;i<n;i++){
    if(!Array.isArray(messages[i])||(!active[i]&&messages[i].length))
     throw Error("Автономные локальные решения: сообщения неактивного узла");
    if(!active[i])continue;
    const values=[projected[i]],weights=[1],seen=new Set(),relations=[];
+   let acceptedNeighbors=0;
    for(const sample of messages[i]){
     if(!sample||!Number.isInteger(sample.source)||sample.source<0||
      sample.source>=n||sample.source===i||seen.has(sample.source)||
@@ -83,7 +97,8 @@ export function createLocalAutonomy(n,low,high,options={}){
     seen.add(sample.source);
     let entry=trust[i].get(sample.source);
     if(!entry){
-     entry={alpha:1,beta:1,lastUpdate:step,lastProcessed:0};
+     entry={alpha:1,beta:1,lastUpdate:step,lastProcessed:0,
+      evidenceCount:0,quarantined:false};
      trust[i].set(sample.source,entry);
     }
     decay(entry,step);
@@ -93,19 +108,33 @@ export function createLocalAutonomy(n,low,high,options={}){
       const ratio=(sample.value-baseline)/p.localAutonomyEvidenceTolerance;
       const consistency=1/(1+ratio*ratio);
       entry.alpha+=consistency;entry.beta+=1-consistency;
-      updates++;totalUpdates++;
+      entry.evidenceCount++;updates++;totalUpdates++;
+      if(p.localAutonomyGuardEnabled&&
+       entry.evidenceCount>=p.localAutonomyGuardMinEvidence){
+       const credibility=entry.alpha/(entry.alpha+entry.beta);
+       if(!entry.quarantined&&credibility<p.localAutonomyGuardThreshold){
+        entry.quarantined=true;guarded++;totalGuarded++;
+       }else if(entry.quarantined&&
+        credibility>p.localAutonomyGuardThreshold+p.localAutonomyGuardHysteresis){
+        entry.quarantined=false;released++;totalReleased++;
+       }
+      }
      }else{unmatched++;totalUnmatched++;}
      entry.lastProcessed=sample.emitted;
     }
     const score=entry.alpha/(entry.alpha+entry.beta);
-    values.push(sample.value);
-    weights.push(Math.max(p.localConsensusMinWeight,score));
-    readings++;trustSum+=score;
+    if(!entry.quarantined){
+     values.push(sample.value);
+     weights.push(Math.max(p.localConsensusMinWeight,score));
+     acceptedNeighbors++;readings++;
+    }else{excluded++;totalExcluded++;}
+    trustSum+=score;
     relations.push({source:sample.source,trust:score,emitted:sample.emitted,
-     arrived:sample.arrived});
+     arrived:sample.arrived,quarantined:entry.quarantined,
+     evidenceCount:entry.evidenceCount});
    }
    trustByNode[i]=relations;
-   if(messages[i].length<p.localAutonomyMinNeighbors){
+   if(acceptedNeighbors<p.localAutonomyMinNeighbors){
     refusals++;totalRefusals++;continue;
    }
    decisions[i]=clamp(
@@ -114,12 +143,18 @@ export function createLocalAutonomy(n,low,high,options={}){
     low,high);
   }
   const activeCount=active.filter(Boolean).length;
+  const allObserved=readings+excluded;
   return {step,decisions,trustByNode,updates,refusals,unmatched,readings,
-   meanTrust:readings?trustSum/readings:null,activeCount,
+   guarded,released,excluded,
+   meanTrust:allObserved?trustSum/allObserved:null,activeCount,
    coverage:activeCount?decisions.filter(finite).length/activeCount:null};
  };
  const getDiagnostic=()=>({modelVersion:E1A_LOCAL_AUTONOMY_VERSION,
   steps:lastStep,updates:totalUpdates,refusals:totalRefusals,
-  unmatched:totalUnmatched,role:"independent_directed_trust_from_delivered_messages"});
+  unmatched:totalUnmatched,guarded:totalGuarded,released:totalReleased,
+  excluded:totalExcluded,
+  directedGuardedPairs:trust.reduce((sum,relations)=>sum+
+   [...relations.values()].filter(x=>x.quarantined).length,0),
+  role:"independent_directed_trust_from_delivered_messages"});
  return Object.freeze({tick,getDiagnostic});
 }

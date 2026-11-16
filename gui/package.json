@@ -28,7 +28,8 @@
     "adaptive:fair:pilot": "node scripts/adaptiveFairBandwidthPilot.mjs",
     "adaptive:local:pilot": "node scripts/adaptiveLocalConsensusPilot.mjs",
     "adaptive:local:transport:pilot": "node scripts/adaptiveLocalTransportPilot.mjs",
-    "adaptive:local:autonomy:pilot": "node scripts/adaptiveLocalAutonomyPilot.mjs"
+    "adaptive:local:autonomy:pilot": "node scripts/adaptiveLocalAutonomyPilot.mjs",
+    "adaptive:local:guard:pilot": "node scripts/adaptiveLocalAutonomyGuardPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

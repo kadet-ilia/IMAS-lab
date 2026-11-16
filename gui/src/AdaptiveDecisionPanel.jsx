@@ -192,7 +192,9 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       </label>
       {options.localTransportEnabled?<React.Fragment>
        <label><input type="checkbox" checked={options.localAutonomyEnabled} disabled={running}
-        onChange={e=>set("localAutonomyEnabled",e.target.checked)}/>
+        onChange={e=>setOptions(o=>({...o,
+         localAutonomyEnabled:e.target.checked,
+         localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false}))}/>
         Независимые локальные решения и персональное доверие к соседям (пилот)
        </label>
        {options.localAutonomyEnabled?<React.Fragment>
@@ -208,6 +210,25 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
          title="При меньшем числе своевременных доставленных оценок агент отказывается от коллективного решения, но для запуска обмена может передать собственное исходное предложение."
          value={options.localAutonomyMinNeighbors} min={0} max={159} step={1}
          disabled={running} onChange={v=>set("localAutonomyMinNeighbors",v)}/>
+        <label><input type="checkbox" checked={options.localAutonomyGuardEnabled} disabled={running}
+         onChange={e=>set("localAutonomyGuardEnabled",e.target.checked)}/>
+         Локальная защитная фильтрация недостоверных соседских оценок (пилот)
+        </label>
+        {options.localAutonomyGuardEnabled?<React.Fragment>
+         <NumberOption label="Порог локального исключения соседа"
+          title="Ниже этого уровня персонального доверия сосед временно исключается из локальной агрегации после достаточного числа новых свидетельств."
+          value={options.localAutonomyGuardThreshold} min={0.01} max={0.95} step={0.05}
+          disabled={running} onChange={v=>set("localAutonomyGuardThreshold",v)}/>
+         <NumberOption label="Гистерезис повторного допуска"
+          title="Разница между порогами исключения и повторного допуска; сумма с порогом исключения должна быть меньше 1."
+          value={options.localAutonomyGuardHysteresis} min={0} max={0.5} step={0.05}
+          disabled={running} onChange={v=>set("localAutonomyGuardHysteresis",v)}/>
+         <NumberOption label="Минимум новых свидетельств для защитного действия"
+          title="Гарантирует, что отдельное случайное расхождение не приводит к немедленному исключению."
+          value={options.localAutonomyGuardMinEvidence} min={1} max={500} step={1}
+          disabled={running} onChange={v=>set("localAutonomyGuardMinEvidence",v)}/>
+         <p className="r27-note">Локальное исключение действует только в оценивателе данного агента. При изменении доверия повторный допуск возможен по новым пакетам. Физические соединения и глобальная изоляция E1 не изменяются; возможны ложные исключения честных соседей.</p>
+        </React.Fragment>:null}
         <p className="r27-note">Доверие Tᵢⱼ рассчитывается отдельно каждым агентом по его собственным историческим наблюдениям и фактически доставленным сообщениям непосредственных соседей. Глобальная репутация E1 не используется локальным решателем. Отказ отличается от первичного сообщения. Полученные решения пока не воздействуют на центральный контур свидетельств и изоляции.</p>
        </React.Fragment>:null}
        {options.comparisonMode==="network_routed"&&options.decisionBandwidthPolicy==="local_floor"?<NumberOption
@@ -352,6 +373,12 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       note="Синтетическая разметка честности используется исключительно для оценки"/>
      <Kpi label="Обновления направленного доверия" value={num(adaptive?.mean_local_autonomous_trust_updates?.mean,1)}
       note="По уникальным впервые доставленным соседским сообщениям"/>
+     {options.localAutonomyGuardEnabled?<React.Fragment>
+      <Kpi label="Исключённые соседские оценки" value={num(adaptive?.mean_local_autonomous_guard_exclusions?.mean,1)}
+       note="Общее число отклонённых локальных наблюдений"/>
+      <Kpi label="Исключения честных соседей" value={num(adaptive?.mean_local_autonomous_guard_honest_exclusions?.mean,1)}
+       note="Постфактум оценка по скрытым меткам синтетической модели"/>
+     </React.Fragment>:null}
     </div>
     <ResponsiveContainer width="100%" height={240}><LineChart data={autonomousTrace}>
      <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>

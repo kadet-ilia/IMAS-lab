@@ -17,7 +17,7 @@ import {localWeightedTrim,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFA
 import {createLocalAutonomy,validateLocalAutonomyOptions,
  E1A_LOCAL_AUTONOMY_DEFAULTS,E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 
-export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.3.0";
+export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.4.0";
 export const E1A_LOCAL_TRANSPORT_DEFAULTS=Object.freeze({
  localTransportEnabled:false,
  localTransportDelaySteps:1,
@@ -121,6 +121,8 @@ export function createLocalTransport(config,options={},runIndex=0){
    sharedCapacity:null,sharedUtilization:null,localReserved:0,
    autonomousCoverage:null,autonomousRefusals:null,
    autonomousTrustUpdates:null,autonomousMeanTrust:null,
+   autonomousGuarded:null,autonomousReleased:null,
+   autonomousExcluded:null,autonomousHonestExcluded:null,
    autonomousDecisions:null,autonomousTrust:null});
   audit();
  };
@@ -213,6 +215,12 @@ export function createLocalTransport(config,options={},runIndex=0){
     autonomousRefusals:autonomousRecord.refusals,
     autonomousTrustUpdates:autonomousRecord.updates,
     autonomousMeanTrust:autonomousRecord.meanTrust,
+    autonomousGuarded:autonomousRecord.guarded,
+    autonomousReleased:autonomousRecord.released,
+    autonomousExcluded:autonomousRecord.excluded,
+    // Labels are simulator-only. The local algorithm never receives these.
+    autonomousHonestExcluded:autonomousRecord.trustByNode.reduce((sum,relations)=>
+     sum+(relations??[]).filter(r=>r.quarantined&&!faulty[r.source]).length,0),
     autonomousDecisions:next.slice(),
     // SIMULATOR-ONLY labels, solely for post-hoc scientific stratification.
     // Not passed into createLocalAutonomy.tick or into trust updates.
