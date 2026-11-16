@@ -424,9 +424,9 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   if(simulationAdapter?.onNetworkState)
    simulationAdapter.onNetworkState({
     step:t+1,labels:Object.freeze([...labels]),active:Object.freeze([...running]),
-    adjacency:simulationAdapter?.reserveDecisionBandwidth?
-     Object.freeze(a.map((row,i)=>Object.freeze(row.map((v,j)=>
-      Boolean(v&&(!partition||groups[i]===groups[j]))))):null
+    adjacency:simulationAdapter?.reserveDecisionBandwidth
+     ?a.map((row,i)=>row.map((v,j)=>Boolean(v&&(!partition||groups[i]===groups[j]))))
+     :null
    });
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
   const baselineProposed=samples(t,scenario,c,bad,sybil,proposalsRng);
