@@ -94,6 +94,8 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   adaptiveReferenceCoverage:methodState.adaptive_robust[i].decision_reference_coverage,
   adaptiveRoutingHops:methodState.adaptive_robust[i].decision_hops_routed,
   adaptiveSharedUtilization:methodState.adaptive_robust[i].decision_shared_utilization,
+  adaptiveBorrowed:methodState.adaptive_robust[i].decision_borrowed_slots,
+  adaptiveReleasedToE1:methodState.adaptive_robust[i].decision_released_to_e1_slots,
   trimmedReferenceCoverage:methodState.trimmed_unweighted[i].decision_reference_coverage,
   combinedReferenceCoverage:methodState.proposed_robust[i].decision_reference_coverage
  })):[];
@@ -143,9 +145,19 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <p className="r27-note">Для обоих сетевых режимов включите «Учитывать сетевые ограничения» в боковой панели. В network_feedback решение публикуется условно в компоненте без маршрута; в network_routed выполняется пошаговая маршрутизация по фактическим рёбрам и строгое резервирование общего лимита сообщений E1. Вычисление решения остаётся централизованным; распределённый консенсус не реализован.</p>
      <NumberOption label="Источник решения (индекс от 0)" title="Выбранный агент выступает источником публикации центрально рассчитанного решения. Если он недоступен или изолирован, передача не производится." value={options.decisionOriginAgent} min={0} max={159} step={1} disabled={running} onChange={v=>set("decisionOriginAgent",v)}/>
      <NumberOption label="Задержка доставки решения, шагов" title="Задержка не меньше одного шага; свидетельство никогда не использует недоставленное будущее решение." value={options.decisionDelaySteps} min={1} max={50} step={1} disabled={running} onChange={v=>set("decisionDelaySteps",v)}/>
-     <NumberOption label="Вероятность потери решения" title="Независимый от транспортного бюджета E1 канал публикации решений. Потери ключуются по seed, такту, источнику и получателю." value={options.decisionLossProbability} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionLossProbability",v)}/>
+     <NumberOption label="Вероятность потери решения" title="В режиме network_feedback потери учитываются по адресным публикациям в отдельном канале; в network_routed — независимо для каждого перехода по ребру из общей квоты." value={options.decisionLossProbability} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionLossProbability",v)}/>
      <NumberOption label="Срок актуальности решения, шагов" title="Не может быть меньше задержки; устаревшее или сетево недоступное решение не влияет на свидетельства." value={options.decisionMaxStalenessSteps} min={1} max={500} step={1} disabled={running} onChange={v=>set("decisionMaxStalenessSteps",v)}/>
-     {options.comparisonMode==="network_routed"?<NumberOption label="Доля пропускной способности для решений" title="Неработосохраняющее статическое резервирование floor(C·f) передач/шаг из общего бюджета C. Остальная часть C доступна исходным предложениям и свидетельствам E1; одна пересылка через ребро расходует одну единицу." value={options.decisionBandwidthFraction} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionBandwidthFraction",v)}/>:null}
+     {options.comparisonMode==="network_routed"?<React.Fragment>
+      <NumberOption label="Доля пропускной способности для решений" title="Целевая гарантированная квота floor(C·f) пересылок/шаг. В статическом варианте фиксирована, в заимствующем — динамически уменьшается до числа уже ожидающих маршрутизируемых пакетов." value={options.decisionBandwidthFraction} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionBandwidthFraction",v)}/>
+      <label>Политика использования общей полосы
+       <select aria-label="Политика использования общей полосы" disabled={running} value={options.decisionBandwidthPolicy}
+        onChange={e=>set("decisionBandwidthPolicy",e.target.value)}>
+        <option value="static">Статическое резервирование (исходная модель)</option>
+        <option value="opportunistic">Двустороннее заимствование свободных слотов</option>
+       </select>
+      </label>
+      <p className="r27-note">Заимствующий режим перед запуском транспорта E1 резервирует не больше числа уже ожидающих пакетов, имеющих маршрут, затем отдаёт E1 освободившиеся слоты. После передачи предложений и свидетельств остаток общей ёмкости используется маршрутизатором. Новое решение, сформированное на текущем шаге, не резервирует ресурс задним числом. Прежняя политика static сохранена без изменения.</p>
+     </React.Fragment>:null}
     </React.Fragment>:null}
     <label>Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
@@ -323,11 +335,21 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        <Tooltip formatter={v=>num(v,4)}/><Legend/>
        <Line dataKey="adaptiveSharedUtilization" yAxisId="util" name="Общая загрузка каналов E1 + решения" stroke="#0b7c9a" dot={false} isAnimationActive={false}/>
        <Line dataKey="adaptiveRoutingHops" yAxisId="hop" name="Маршрутизированные переходы/такт" stroke="#8f50a2" dot={false} isAnimationActive={false}/>
+       {options.decisionBandwidthPolicy==="opportunistic"?<>
+        <Line dataKey="adaptiveBorrowed" yAxisId="hop" name="Заимствовано решениями у E1" stroke="#bf5c3d" dot={false} isAnimationActive={false}/>
+        <Line dataKey="adaptiveReleasedToE1" yAxisId="hop" name="Высвобождено для E1" stroke="#37854c" dot={false} isAnimationActive={false}/>
+       </>:null}
       </LineChart></ResponsiveContainer>
-      <p className="r27-note">Статическое резервирование общего бюджета C: E1 получает C−floor(C·f), маршрутизация — floor(C·f). Неиспользованные квоты не перераспределяются, поэтому это не оптимальный или работосохраняющий планировщик. Маршрут по кратчайшему пути вычисляется заново в узле при каждом переходе; обрыв действующего ребра во время передачи означает потерю пакета без ретрансляции.</p>
+      <p className="r27-note">При static E1 получает C−floor(C·f), решения получают floor(C·f) без перераспределения. При opportunistic предварительный резерв снижается до числа ожидающих маршрутизируемых пакетов, после обслуживания E1 решения занимают свободные слоты. Во всех случаях U_E+U_D≤C; маршруты пересчитываются на каждом промежуточном узле, обрыв ребра приводит к потере без ретрансляции. Это последовательный планировщик по текущему графу, не оптимальная распределённая передача.</p>
+      {options.decisionBandwidthPolicy==="opportunistic"?<div className="table-wrap"><table><thead><tr><th>Метод</th><th>Среднее заимствование решениями, сообщ./шаг</th><th>Среднее высвобождение для E1, сообщ./шаг</th></tr></thead><tbody>
+       {summary.map(x=><tr key={x.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
+        <td>{num(x.mean_borrowed_decision_slots?.mean,3)}</td>
+        <td>{num(x.mean_released_to_e1_slots?.mean,3)}</td>
+       </tr>)}
+      </tbody></table></div>:null}
      </>:null}
     </>:null}
-    <p className="r27-note">Показана модельная связь «решение → свидетельства → доверие и изоляция». network_feedback ограничивает доставку решения компонентами, а network_routed добавляет кратчайшие маршруты и статически разделяемый общий лимит передач. Оба варианта не выполняют распределённое вычисление решения; доказательство устойчивости ИМАС отсутствует. Устойчивость всей ИМАС не доказана.</p>
+    <p className="r27-note">Показана модельная связь «решение → свидетельства → доверие и изоляция». network_feedback ограничивает доставку решения компонентами, а network_routed добавляет кратчайшие маршруты и либо статическое, либо динамически перераспределяемое резервирование общего лимита передач. Оба варианта не выполняют распределённое вычисление решения; доказательство устойчивости ИМАС отсутствует. Устойчивость всей ИМАС не доказана.</p>
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Среднее число изолированных агентов</th><th>Средняя репутация</th></tr></thead><tbody>
      {summary.map(x=><tr key={x.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
       <td>{num(x.mean_isolated_agents?.mean,3)}</td><td>{num(x.mean_reputation?.mean,3)}</td>
