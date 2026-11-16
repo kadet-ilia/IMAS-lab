@@ -418,15 +418,20 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
   for(let i=0;i<n;i++){if(!active[i]&&eligible[i]&&(sybil[i]&&until[i]<0||until[i]>=0&&until[i]<t)){active[i]=true;low[i]=0;}}
   const running=active.map((x,i)=>x&&eligible[i]),partition=Boolean(c.network_enabled&&c.partition_enabled&&t+1>=c.partition_start_step&&t+1<=c.partition_end_step);
   const {comps,labels}=components(a,running,groups,partition);
+  // The effective adjacency is computed only for explicit E1-A network
+  // research observers. Edges incident to inactive nodes and cut partitions
+  // are excluded. The baseline E1 topology remains unchanged.
+  const effectiveAdjacency=simulationAdapter?.reserveDecisionBandwidth||
+   simulationAdapter?.onLocalConsensusProposals
+   ?a.map((row,i)=>row.map((v,j)=>Boolean(v&&running[i]&&running[j]&&
+      (!partition||groups[i]===groups[j])))):null;
   // Optional E1-A network research callback. This is the ACTUAL active-graph
   // component partition, computed before this tick's proposal/evidence flow.
   // It does not alter baseline E1 graph, random events or its own ledger.
   if(simulationAdapter?.onNetworkState)
    simulationAdapter.onNetworkState({
     step:t+1,labels:Object.freeze([...labels]),active:Object.freeze([...running]),
-    adjacency:simulationAdapter?.reserveDecisionBandwidth
-     ?a.map((row,i)=>row.map((v,j)=>Boolean(v&&(!partition||groups[i]===groups[j]))))
-     :null
+    adjacency:effectiveAdjacency
    });
   const proposalsRng=c.paired_exogenous_events?exogenousEventRng(c.seed,runIndex,"proposal",t):r;
   const baselineProposed=samples(t,scenario,c,bad,sybil,proposalsRng);
@@ -443,6 +448,17 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     active:running[i],byzantine:bad[i],sybil:sybil[i]});
   for(const comp of comps)for(const j of comp)scores[j]=median(comp.map(i=>direct[i][j]));
   const eigen=eigenTrust(direct,running,c.reputation_damping),rep=scores.map((s,i)=>.7*s+.3*eigen[i]);trustWallMs+=performance.now()-trustT0;
+  // Independent upper-bound local-computation diagnostic: one-hop neighbor
+  // messages per synchronous round with NO consumption of E1 link budget.
+  // It cannot modify E1 proposals, reputation, isolation, or decision.
+  if(simulationAdapter?.onLocalConsensusProposals)
+   simulationAdapter.onLocalConsensusProposals({
+    step:t+1,values:Object.freeze([...proposed]),
+    reputation:Object.freeze([...rep]),active:Object.freeze([...running]),
+    labels:Object.freeze([...labels]),
+    adjacency:effectiveAdjacency?.map(row=>Object.freeze([...row])),
+    byzantine:Object.freeze([...bad])
+   });
   const transportT0=performance.now();
   // Research-only static capacity partition: routed decision packets receive
   // a reserved slice of the SAME configured transmission budget. Base E1's
