@@ -5,6 +5,7 @@
 import {validateAdaptiveStudy,summarizeAdaptiveRuns,ADAPTIVE_STUDY_VERSION} from "./adaptiveExperiment.js";
 import {ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
+import {ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
 import {TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {withOriginStorageLock,loadAdaptiveCacheWithinOriginLock,saveAdaptiveCacheWithinOriginLock} from "./trustBrowserClient.js";
 
@@ -12,7 +13,7 @@ export const ADAPTIVE_CACHE_SCHEMA=1;
 export const adaptiveCacheKey=(core,options)=>JSON.stringify({
  namespace:"imas-lab-E1A",schema:ADAPTIVE_CACHE_SCHEMA,
  trust:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
- scenario:ADAPTIVE_SCENARIO_VERSION,
+ scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
  config:core,options
 });
 let activeJob=null;
