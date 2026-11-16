@@ -1,0 +1,64 @@
+name: E1-A online-risk alpha research (test branch only)
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Frozen paired new-risk vs original-alpha experiment"
+        required: true
+        type: choice
+        default: all
+        options:
+          - exploratory
+          - confirmatory
+          - all
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/risk-campaign-request.json'
+permissions:
+  contents: read
+concurrency:
+  group: e1a-risk-campaign-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  risk:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install scientific dependencies
+        working-directory: gui
+        run: npm ci
+      - name: Freeze risk ablation protocol and check risk-specific regressions
+        working-directory: gui
+        run: |
+          npm run adaptive:risk:design
+          node --test src/adaptiveRiskController.test.mjs src/adaptiveRiskCampaign.test.mjs
+      - name: Execute frozen paired risk campaign
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          else
+            STAGE="$(node -p "JSON.parse(require('fs').readFileSync('gui/risk-campaign-request.json','utf8')).stage")"
+          fi
+          case "$STAGE" in
+            exploratory|confirmatory|all) ;;
+            *) echo "Invalid or absent research stage $STAGE"; exit 1 ;;
+          esac
+          node gui/scripts/adaptiveRiskCampaign.mjs --stage="$STAGE"
+      - name: Preserve full risk-ablation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-risk-campaign-${{ github.run_id }}
+          path: gui/adaptive-results/risk/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
