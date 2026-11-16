@@ -60,7 +60,7 @@ for(const [idx,c] of cells.entries()){
     if(l.totalUsed>c.capacity||l.totalUsed!==l.E1Used+l.decisionUsed+l.localUsed||
      l.localReserved!==d.localReserved||
      l.E1Used>c.capacity-d.reserved||
-     d.routingHopsThisStep>d.decisionReserved||
+     (c.policy!=="opportunistic"&&d.routingHopsThisStep>d.decisionReserved)||
      (c.policy==="local_floor"&&l.localUsed<l.localReserved))
      throw Error("Shared budget/floor violated "+method+" step "+(t+1));
    }
