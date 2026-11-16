@@ -11,8 +11,9 @@
 import {createRng} from "./trustEngine.js";
 import {createDecisionChannel,validateDecisionChannelOptions,E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {createRoutedDecisionChannel,validateRoutedChannelOptions,E1A_ROUTED_CHANNEL_VERSION,E1A_ROUTED_DEFAULTS} from "./adaptiveRoutedDecisionChannel.js";
+import {simulateLocalConsensusTick,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFAULTS,E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.4.0-routed-feedback";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.5.0-component-local-diagnostic";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -33,7 +34,9 @@ export const ADAPTIVE_SCENARIO_DEFAULTS=Object.freeze({
  evidenceTolerance:0.45,evidenceNoiseSigma:0.025,
  witnessCorruption:0.8,evidenceCorrelation:0.45,evidenceLag:2,
  ...({decisionOriginAgent:0,decisionDelaySteps:1,decisionLossProbability:0,decisionMaxStalenessSteps:5}),
- ...E1A_ROUTED_DEFAULTS
+ ...E1A_ROUTED_DEFAULTS,
+ localConsensusPilot:false,
+ ...E1A_LOCAL_CONSENSUS_DEFAULTS
 });
 const clamp=(x,lo=0,hi=1)=>Math.min(hi,Math.max(lo,x));
 function med(a){
@@ -65,6 +68,9 @@ export function validateAdaptiveScenarioOptions(options={}){
  if(o.attackDuty>o.attackPeriod)throw Error("Длительность импульса превышает период атаки");
  validateDecisionChannelOptions(o);
  validateRoutedChannelOptions(o);
+ validateLocalConsensusOptions(o);
+ if(typeof o.localConsensusPilot!=="boolean")
+  throw Error("Локальный консенсус: localConsensusPilot должен быть логическим");
  if(o.attackStrategy==="reputation_boost"&&o.evidenceModel==="legacy")
   throw Error("Накопление репутации требует модели свидетельств по поведению агентов");
  return o;
@@ -72,7 +78,7 @@ export function validateAdaptiveScenarioOptions(options={}){
 /** Returns null if E1-A requests the untouched legacy scenario. */
 export function createAdaptiveScenarioAdapter(config,options,runIndex){
  const o=validateAdaptiveScenarioOptions(options);
- if(o.attackStrategy==="legacy"&&o.evidenceModel==="legacy")return null;
+ if(o.attackStrategy==="legacy"&&o.evidenceModel==="legacy"&&!o.localConsensusPilot)return null;
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
  const routed=o.comparisonMode==="network_routed";
@@ -80,6 +86,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   o.comparisonMode==="network_feedback"?createDecisionChannel(config,o,runIndex):null;
  const observedHistory=new Map();
  const qualityCache=new Map();
+ const localConsensusHistory=[];
  let lastDeliveredStep=0;
  let feedbackDecision=null;
  const debug={behaviorEvidenceGenerated:0,uninformativeEvidence:0,maliciousWitnessed:0,
@@ -124,6 +131,21 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   feedbackDecision={step,value};
   if(channel)channel.transmit({step,value});
   qualityCache.clear();
+ };
+ const onLocalConsensusProposals=({step,values,reputation,active,labels,adjacency,byzantine})=>{
+  const record=simulateLocalConsensusTick({
+   step,values,reputation,active,labels,adjacency,faulty:byzantine
+  },{...o,safe_action_min:config.safe_action_min,
+   safe_action_max:config.safe_action_max});
+  const honestSpreads=record.components.map(c=>c.honestSpread).filter(finite);
+  localConsensusHistory.push({
+   step,states:record.states,components:record.components,
+   totalMessages:record.totalMessages,
+   maxHonestSpread:honestSpreads.length?Math.max(...honestSpreads):null,
+   componentCount:record.components.length,
+   activeCount:record.activeCount,
+   algorithmVersion:E1A_LOCAL_CONSENSUS_VERSION
+  });
  };
  const effectiveIntensity=(step,intensity)=>
   o.attackStrategy==="legacy"||isActive(step,intensity)?intensity:0;
@@ -209,6 +231,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  };
  return Object.freeze({
   transformProposals,onProposalsDelivered,onNetworkState,onFeedbackDecision,effectiveIntensity,
+  ...(o.localConsensusPilot?{onLocalConsensusProposals}:{}),
   ...(routed?{
    reserveDecisionBandwidth:context=>channel.reserveDecisionBandwidth(context),
    afterEvidenceTransport:context=>channel.afterEvidenceTransport(context)
@@ -217,7 +240,13 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   getDiagnostic:()=>({...debug,modelVersion:ADAPTIVE_SCENARIO_VERSION,
    strategy:o.attackStrategy,evidenceModel:o.evidenceModel,
    decisionChannel:channel?.getDiagnostic()??null,
-   decisionChannelModel:channel?(routed?E1A_ROUTED_CHANNEL_VERSION:E1A_DECISION_CHANNEL_VERSION):null}),
+   decisionChannelModel:channel?(routed?E1A_ROUTED_CHANNEL_VERSION:E1A_DECISION_CHANNEL_VERSION):null,
+   localConsensus:o.localConsensusPilot?{
+    modelVersion:E1A_LOCAL_CONSENSUS_VERSION,
+    role:"independent_diagnostic_only_no_E1_feedback",
+    transport:"ideal_unbudgeted_synchronous_neighbor_rounds",
+    history:localConsensusHistory.map(entry=>({...entry}))
+   }:null}),
   version:ADAPTIVE_SCENARIO_VERSION
  });
 }
