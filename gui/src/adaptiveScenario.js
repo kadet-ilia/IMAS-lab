@@ -12,8 +12,9 @@ import {createRng} from "./trustEngine.js";
 import {createDecisionChannel,validateDecisionChannelOptions,E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {createRoutedDecisionChannel,validateRoutedChannelOptions,E1A_ROUTED_CHANNEL_VERSION,E1A_ROUTED_DEFAULTS} from "./adaptiveRoutedDecisionChannel.js";
 import {simulateLocalConsensusTick,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFAULTS,E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
+import {createLocalTransport,validateLocalTransportOptions,E1A_LOCAL_TRANSPORT_DEFAULTS,E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.5.0-component-local-diagnostic";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.6.0-causal-local-neighbor-messages";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -36,7 +37,8 @@ export const ADAPTIVE_SCENARIO_DEFAULTS=Object.freeze({
  ...({decisionOriginAgent:0,decisionDelaySteps:1,decisionLossProbability:0,decisionMaxStalenessSteps:5}),
  ...E1A_ROUTED_DEFAULTS,
  localConsensusPilot:false,
- ...E1A_LOCAL_CONSENSUS_DEFAULTS
+ ...E1A_LOCAL_CONSENSUS_DEFAULTS,
+ ...E1A_LOCAL_TRANSPORT_DEFAULTS
 });
 const clamp=(x,lo=0,hi=1)=>Math.min(hi,Math.max(lo,x));
 function med(a){
@@ -69,6 +71,7 @@ export function validateAdaptiveScenarioOptions(options={}){
  validateDecisionChannelOptions(o);
  validateRoutedChannelOptions(o);
  validateLocalConsensusOptions(o);
+ validateLocalTransportOptions(o);
  if(typeof o.localConsensusPilot!=="boolean")
   throw Error("Локальный консенсус: localConsensusPilot должен быть логическим");
  if(o.attackStrategy==="reputation_boost"&&o.evidenceModel==="legacy")
@@ -87,6 +90,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  const observedHistory=new Map();
  const qualityCache=new Map();
  const localConsensusHistory=[];
+ const localTransport=o.localTransportEnabled?createLocalTransport(config,o,runIndex):null;
  let lastDeliveredStep=0;
  let feedbackDecision=null;
  const debug={behaviorEvidenceGenerated:0,uninformativeEvidence:0,maliciousWitnessed:0,
@@ -133,6 +137,9 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   qualityCache.clear();
  };
  const onLocalConsensusProposals=({step,values,reputation,active,labels,adjacency,byzantine})=>{
+  if(localTransport)localTransport.onProposals({
+   step,values,reputation,active,faulty:byzantine
+  });
   const record=simulateLocalConsensusTick({
    step,values,reputation,active,labels,adjacency,faulty:byzantine
   },{...o,safe_action_min:config.safe_action_min,
@@ -151,6 +158,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   o.attackStrategy==="legacy"||isActive(step,intensity)?intensity:0;
  const onNetworkState=({step,labels,active,adjacency})=>{
   if(channel)channel.networkStep({step,labels,active,adjacency});
+  if(localTransport)localTransport.networkStep({step,labels,active,adjacency});
  };
  const onProposalsDelivered=({step,values,available})=>{
   if(channel)channel.onProposalsDelivered({step,available});
@@ -233,14 +241,25 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   transformProposals,onProposalsDelivered,onNetworkState,onFeedbackDecision,effectiveIntensity,
   ...(o.localConsensusPilot?{onLocalConsensusProposals}:{}),
   ...(routed?{
-   reserveDecisionBandwidth:context=>channel.reserveDecisionBandwidth(context),
-   afterEvidenceTransport:context=>channel.afterEvidenceTransport(context)
+   reserveDecisionBandwidth:context=>channel.reserveDecisionBandwidth(context)
+  }:{}),
+  ...((routed||localTransport)?{
+   afterEvidenceTransport:context=>{
+    const routedResult=routed?channel.afterEvidenceTransport(context):null;
+    const localResult=localTransport?.afterEvidenceTransport({
+     step:context.step,sharedCapacity:context.sharedCapacity,
+     e1Used:context.e1Used,decisionUsed:routedResult?.routingHops??0
+    })??null;
+    return {...routedResult,...localResult};
+   }
   }:{}),
   evidenceValue:o.evidenceModel==="legacy"?null:evidenceValue,
   getDiagnostic:()=>({...debug,modelVersion:ADAPTIVE_SCENARIO_VERSION,
    strategy:o.attackStrategy,evidenceModel:o.evidenceModel,
    decisionChannel:channel?.getDiagnostic()??null,
    decisionChannelModel:channel?(routed?E1A_ROUTED_CHANNEL_VERSION:E1A_DECISION_CHANNEL_VERSION):null,
+   localTransport:localTransport?.getDiagnostic()??null,
+   localTransportModel:localTransport?E1A_LOCAL_TRANSPORT_VERSION:null,
    localConsensus:o.localConsensusPilot?{
     modelVersion:E1A_LOCAL_CONSENSUS_VERSION,
     role:"independent_diagnostic_only_no_E1_feedback",
