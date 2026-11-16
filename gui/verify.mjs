@@ -396,6 +396,37 @@ if(networkRecord.options.comparisonMode!=="network_feedback"||
  networkDetails.history.some(x=>x.informed>x.reachable||x.informed<0))
  throw Error("E1-A: network feedback archive missing graph-conditioned provenance or violating separate packet conservation");
 e1aAdaptiveSummary.networkFeedbackVerified=true;
+// E1-A routed feedback: verify real per-hop scheduling shares the sidebar's
+// actual E1 transmission budget and survives CSV/JSON and chart rendering.
+await page.getByRole("combobox",{name:"Режим сравнительного исследования"}).selectOption("network_routed");
+await page.getByRole("spinbutton",{name:"Доля пропускной способности для решений"}).fill("0.35");
+await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("60");
+await e1aRuns.fill("1");await e1aRuns.press("Tab");
+if(await e1aAction.isDisabled())throw Error("E1-A routed feedback controls unexpectedly invalid");
+await e1aAction.click();
+try{
+ await page.getByRole("heading",{name:"Независимая динамика доверия и изоляции"}).waitFor({timeout:90000});
+ await page.getByText("Маршрутизированные переходы/такт").waitFor({timeout:30000});
+}catch(error){
+ const messages=await page.locator(".imas-validation-error, .r27-note[role='status']").allTextContents();
+ throw Error("E1-A routed-feedback browser run failed: "+JSON.stringify(messages)+"; "+String(error));
+}
+const [routedFile]=await Promise.all([page.waitForEvent("download",{timeout:20000}),e1aDownload.click()]);
+const routedRecord=JSON.parse(fs.readFileSync(await routedFile.path(),"utf8"));
+const routedDetails=routedRecord.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.decisionChannel;
+if(routedRecord.options.comparisonMode!=="network_routed"||
+ routedRecord.options.decisionBandwidthFraction!==0.35||
+ routedRecord.configuration.bandwidth_messages_per_step!==60||
+ !routedRecord.models.routedDecisionChannel?.includes("shortest-path")||
+ routedDetails?.history?.length!==200||routedDetails.attempted<=0||
+ routedDetails.hopsScheduled<=0||
+ routedDetails.attempted!==(routedDetails.delivered+routedDetails.lost+
+  routedDetails.blocked+routedDetails.expired+routedDetails.pending)||
+ !routedDetails.history.every(h=>h.e1Used+h.routingHopsThisStep<=h.sharedCapacity&&
+  h.routingHopsThisStep<=h.reserved&&h.e1Used<=h.availableForE1))
+ throw Error("E1-A routed output violates actual E1 joint-message-budget or decision-packet conservation");
+e1aAdaptiveSummary.routedFeedbackVerified=true;
+await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("100000");
 // Restore the original no-network and no-partition configuration: the
 // Lyapunov smoke subsequently shortens T below the partition end step.
 await page.getByRole("checkbox",{name:"Моделировать разделение сети"}).uncheck();
