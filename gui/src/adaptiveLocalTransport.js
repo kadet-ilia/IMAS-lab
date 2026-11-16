@@ -14,14 +14,17 @@
  */
 import {createRng} from "./trustEngine.js";
 import {localWeightedTrim,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFAULTS} from "./adaptiveLocalConsensus.js";
+import {createLocalAutonomy,validateLocalAutonomyOptions,
+ E1A_LOCAL_AUTONOMY_DEFAULTS,E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 
-export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.1.0";
+export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.2.0";
 export const E1A_LOCAL_TRANSPORT_DEFAULTS=Object.freeze({
  localTransportEnabled:false,
  localTransportDelaySteps:1,
  localTransportLossProbability:0,
  localTransportMaxAgeSteps:4,
- localTransportBandwidthFraction:0.15
+ localTransportBandwidthFraction:0.15,
+ ...E1A_LOCAL_AUTONOMY_DEFAULTS
 });
 const finite=Number.isFinite;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
@@ -44,6 +47,7 @@ export function validateLocalTransportOptions(options={}){
  if(o.localTransportMaxAgeSteps<o.localTransportDelaySteps)
   throw Error("Локальные сообщения: срок актуальности меньше задержки");
  validateLocalConsensusOptions(o);
+ validateLocalAutonomyOptions(o);
  return o;
 }
 export function createLocalTransport(config,options={},runIndex=0){
@@ -56,6 +60,7 @@ export function createLocalTransport(config,options={},runIndex=0){
  let step=0,active=null,labels=null,adjacency=null,prepared=false;
  const received=Array.from({length:n},()=>new Map());
  const waiting=new Map(),inFlight=[],history=[];
+ const autonomy=p.localAutonomyEnabled?createLocalAutonomy(n,low,high,p):null;
  const counters={generated:0,transmitted:0,delivered:0,lost:0,
   blocked:0,expired:0,superseded:0,bandwidthDeferred:0,
   disconnectedDeferred:0,neighborReadingsUsed:0,maliciousHolds:0,
@@ -113,7 +118,10 @@ export function createLocalTransport(config,options={},runIndex=0){
    localValues:null,localHonestSpread:null,delayedQueue:waiting.size+inFlight.length,
    bandwidthDeferred:0,disconnectedDeferred:0,
    E1Used:null,decisionUsed:null,localUsed:null,totalUsed:null,
-   sharedCapacity:null,sharedUtilization:null,localReserved:0});
+   sharedCapacity:null,sharedUtilization:null,localReserved:0,
+   autonomousCoverage:null,autonomousRefusals:null,
+   autonomousTrustUpdates:null,autonomousMeanTrust:null,
+   autonomousDecisions:null,autonomousTrust:null});
   audit();
  };
  const onProposals=({step:t,values,reputation,active:a,faulty})=>{
@@ -126,34 +134,63 @@ export function createLocalTransport(config,options={},runIndex=0){
    values.some((v,i)=>active[i]&&!finite(v)))
    throw Error("Локальные сообщения: некорректный поток текущих предложений");
   const next=Array(n).fill(null);
-  let readings=0,informed=0,activeCount=0;
-  for(let i=0;i<n;i++)if(active[i]){
-   activeCount++;
-   const own=clamp(values[i],low,high),v=[own],w=[
-    Math.max(p.localConsensusMinWeight,reputation[i])
-   ];
-   for(let j=0;j<n;j++){
-    if(!edge(i,j))continue;
-    const sample=received[i].get(j);
-    if(!sample||sample.emitted>=t||
-     t-sample.emitted>p.localTransportMaxAgeSteps)continue;
-    v.push(sample.value);w.push(Math.max(p.localConsensusMinWeight,reputation[j]));
-    readings++;
+  let readings=0,informed=0,activeCount=0,autonomousRecord=null;
+  if(autonomy){
+   // Stage 10: no global reputation in local estimator or trust updates.
+   // Packets are already delivered, edge-filtered and TTL-bounded.
+   const messages=Array.from({length:n},(_,i)=>{
+    const peers=[];
+    if(!active[i])return peers;
+    for(let j=0;j<n;j++){
+     if(!edge(i,j))continue;
+     const sample=received[i].get(j);
+     if(!sample||sample.emitted>=t||
+      t-sample.emitted>p.localTransportMaxAgeSteps)continue;
+     peers.push({source:j,value:sample.value,emitted:sample.emitted,
+      arrived:sample.arrived});
+    }
+    return peers;
+   });
+   autonomousRecord=autonomy.tick({step:t,own:values,active,messages});
+   readings=autonomousRecord.readings;
+   informed=messages.filter(x=>x.length>0).length;
+   activeCount=autonomousRecord.activeCount;
+   for(let i=0;i<n;i++)if(active[i])next[i]=autonomousRecord.decisions[i];
+  }else{
+   for(let i=0;i<n;i++)if(active[i]){
+    activeCount++;
+    const own=clamp(values[i],low,high),v=[own],w=[
+     Math.max(p.localConsensusMinWeight,reputation[i])
+    ];
+    for(let j=0;j<n;j++){
+     if(!edge(i,j))continue;
+     const sample=received[i].get(j);
+     if(!sample||sample.emitted>=t||
+      t-sample.emitted>p.localTransportMaxAgeSteps)continue;
+     v.push(sample.value);w.push(Math.max(p.localConsensusMinWeight,reputation[j]));
+     readings++;
+    }
+    if(v.length>1)informed++;
+    next[i]=faulty[i]?own:clamp(
+     (1-p.localConsensusRelaxation)*own+
+     p.localConsensusRelaxation*localWeightedTrim(v,w,p.localConsensusTrim),low,high
+    );
+    if(faulty[i])counters.maliciousHolds++;
    }
-   if(v.length>1)informed++;
-   // Faulty simulation behavior: attacker's outgoing value remains its OWN
-   // generated proposal. Honest update never gets the faulty labels.
-   next[i]=faulty[i]?own:clamp(
-    (1-p.localConsensusRelaxation)*own+
-    p.localConsensusRelaxation*localWeightedTrim(v,w,p.localConsensusTrim),low,high
-   );
-   if(faulty[i])counters.maliciousHolds++;
+  }
+  const outgoing=Array(n).fill(null);
+  for(let i=0;i<n;i++)if(active[i]){
+   const own=clamp(values[i],low,high);
+   // An abstaining node may advertise its raw proposal as bootstrap evidence;
+   // this is a separate type of value, NOT an accepted collective decision.
+   outgoing[i]=faulty[i]?own:(finite(next[i])?next[i]:own);
+   if(autonomy&&faulty[i]){next[i]=own;counters.maliciousHolds++;}
   }
   counters.neighborReadingsUsed+=readings;
   for(let i=0;i<n;i++)if(active[i])for(let j=0;j<n;j++)if(edge(i,j)){
    const id=key(i,j);
    if(waiting.has(id)){counters.superseded++;waiting.delete(id);}
-   waiting.set(id,{id,from:i,to:j,value:next[i],emitted:t});
+   waiting.set(id,{id,from:i,to:j,value:outgoing[i],emitted:t});
    counters.generated++;
   }
   const valid=next.filter(finite);
@@ -171,7 +208,13 @@ export function createLocalTransport(config,options={},runIndex=0){
    neighborReadingsThisStep:readings,informedNodes:informed,
    meanReceivedNeighbors:activeCount?readings/activeCount:null,
    meanLocalValue:mean(valid),localHonestSpread,
-   localValues:next,delayedQueue:waiting.size+inFlight.length
+   localValues:next,delayedQueue:waiting.size+inFlight.length,
+   ...(autonomousRecord?{autonomousCoverage:autonomousRecord.coverage,
+    autonomousRefusals:autonomousRecord.refusals,
+    autonomousTrustUpdates:autonomousRecord.updates,
+    autonomousMeanTrust:autonomousRecord.meanTrust,
+    autonomousDecisions:next.slice(),
+    autonomousTrust:autonomousRecord.trustByNode}:{} )
   });
   prepared=true;audit();
   return Object.freeze([...next]);
@@ -233,7 +276,10 @@ export function createLocalTransport(config,options={},runIndex=0){
   audit();
   return {...counters,waiting:waiting.size,inFlight:inFlight.length,
    pending:waiting.size+inFlight.length,
-   modelVersion:E1A_LOCAL_TRANSPORT_VERSION,role:"causal_local_diagnostic_only",
+   modelVersion:E1A_LOCAL_TRANSPORT_VERSION,
+   role:autonomy?"autonomous_local_decision_shadow":"causal_local_diagnostic_only",
+   autonomy:autonomy?.getDiagnostic()??null,
+   autonomyModel:autonomy?E1A_LOCAL_AUTONOMY_VERSION:null,
    policy:p.decisionBandwidthPolicy==="local_floor"
     ?"DEMAND_CAPPED_LOCAL_GUARANTEE":"LOW_PRIORITY_LEFTOVER_ONLY",
    history:history.map(h=>({...h,localValues:h.localValues?[...h.localValues]:null}))};

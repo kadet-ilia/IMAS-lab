@@ -14,7 +14,7 @@ import {createRoutedDecisionChannel,validateRoutedChannelOptions,E1A_ROUTED_CHAN
 import {simulateLocalConsensusTick,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFAULTS,E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
 import {createLocalTransport,validateLocalTransportOptions,E1A_LOCAL_TRANSPORT_DEFAULTS,E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.7.0-local-bandwidth-floor";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.8.0-independent-local-beta";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},

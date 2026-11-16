@@ -12,9 +12,10 @@ import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
 import {E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
 import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
+import {E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.9.0-local-guarantee-scheduler";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.0.0-directed-local-autonomy-pilot";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -44,6 +45,8 @@ export function validateAdaptiveStudy(config={},options={}){
   throw Error("Локальные сообщения требуют включённой диагностики локального согласования");
  if(adaptive.localTransportEnabled&&!core.network_enabled)
   throw Error("Локальные сообщения требуют включённой сетевой модели E1");
+ if(adaptive.localAutonomyEnabled&&!adaptive.localTransportEnabled)
+  throw Error("Автономные локальные решения требуют причинного локального транспорта");
  if(adaptive.decisionBandwidthPolicy==="local_floor"&&
   (adaptive.comparisonMode!=="network_routed"||!adaptive.localTransportEnabled))
   throw Error("Гарантированная локальная квота требует network_routed и локального транспорта");
@@ -194,7 +197,11 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     local_link_honest_spread:linkHistory[index]?.localHonestSpread??null,
     local_link_shared_utilization:linkHistory[index]?.sharedUtilization??null,
     local_link_total_used:linkHistory[index]?.totalUsed??null,
-    local_link_shared_capacity:linkHistory[index]?.sharedCapacity??null});
+    local_link_shared_capacity:linkHistory[index]?.sharedCapacity??null,
+    local_autonomous_coverage:linkHistory[index]?.autonomousCoverage??null,
+    local_autonomous_trust_updates:linkHistory[index]?.autonomousTrustUpdates??null,
+    local_autonomous_refusals:linkHistory[index]?.autonomousRefusals??null,
+    local_autonomous_mean_trust:linkHistory[index]?.autonomousMeanTrust??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -216,6 +223,10 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
   const abs=errors.map(Math.abs),feedback=feedbackMetrics(
    trajectory,method,o.feedbackGain,o.feedbackInitialError);
   const state=methodStates[method];
+  const localRows=o.localAutonomyEnabled?
+   (methodDiagnostics[method]?.localTransport?.history??[]):[];
+  const localAccepted=localRows.flatMap(h=>(h.autonomousDecisions??[]).filter(finite));
+  const localDenominator=localRows.reduce((total,h)=>total+h.activeNodes,0);
   return {method,run:runIndex,decision_coverage:accepted.length/core.n_steps,
    probability_correct:errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/core.n_steps,
    accuracy_accepted:accepted.length?
@@ -240,6 +251,12 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    mean_local_link_transmissions:average(state.map(v=>v.local_link_transmissions).filter(finite)),
    mean_local_link_honest_spread:average(state.map(v=>v.local_link_honest_spread).filter(finite)),
    mean_local_link_shared_utilization:average(state.map(v=>v.local_link_shared_utilization).filter(finite)),
+   mean_local_autonomous_coverage:o.localAutonomyEnabled?
+    localAccepted.length/Math.max(1,localDenominator):null,
+   mean_local_autonomous_rmse:localAccepted.length?
+    Math.sqrt(average(localAccepted.map(x=>(x-core.desired_action)**2))):null,
+   mean_local_autonomous_trust_updates:o.localAutonomyEnabled?
+    localRows.reduce((sum,h)=>sum+(h.autonomousTrustUpdates??0),0):null,
    ...feedback.metrics};
  });
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
@@ -263,7 +280,9 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   "mean_borrowed_decision_slots","mean_released_to_e1_slots",
   "mean_local_consensus_spread","mean_local_consensus_components","mean_local_consensus_messages",
   "mean_local_link_neighbor_readings","mean_local_link_informed_nodes",
-  "mean_local_link_transmissions","mean_local_link_honest_spread","mean_local_link_shared_utilization"];
+  "mean_local_link_transmissions","mean_local_link_honest_spread","mean_local_link_shared_utilization",
+  "mean_local_autonomous_coverage","mean_local_autonomous_rmse",
+  "mean_local_autonomous_trust_updates"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -299,7 +318,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    decisionChannel:E1A_DECISION_CHANNEL_VERSION,
    routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION,
    localConsensus:E1A_LOCAL_CONSENSUS_VERSION,
-   localTransport:E1A_LOCAL_TRANSPORT_VERSION},
+   localTransport:E1A_LOCAL_TRANSPORT_VERSION,
+   localAutonomy:E1A_LOCAL_AUTONOMY_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
    evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
    comparisonMode:o.comparisonMode,
@@ -317,7 +337,10 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
     ?"Optional diagnostic: ideal synchronous unbudgeted local update; no feedback to central E1 decision or Byzantine agreement guarantee"
     :"disabled",
    localTransport:o.localTransportEnabled
-    ?"Optional causal one-hop local state transport: each node reads only received neighbor packets from earlier steps; delay, loss, edge state and TTL are enforced. Transmission uses ONLY currently idle global E1+routed slots after E1/routed scheduling, never changes central E1 decisions; packet and total-slot conservation are verified. This is NOT distributed consensus or a fair-priority scheduler."
+    ?"Optional causal one-hop local neighbor transport with delayed/lossy delivery and shared budget; legacy and local_floor bandwidth modes preserved"
+    :"disabled",
+   localAutonomy:o.localAutonomyEnabled
+    ?"Optional independent per-observer directed soft-Beta trust from delivered neighbor estimates compared with OWN emission-time observations, no E1 global reputation, labels, oracle or central decision; local abstentions distinguished from raw bootstrap messages. SHADOW research mode: E1 isolation, topology and central feedback still active; not a distributed closed loop or Byzantine consensus."
     :"disabled",
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
