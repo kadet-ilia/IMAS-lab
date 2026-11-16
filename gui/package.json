@@ -21,7 +21,8 @@
     "adaptive:risk:exploratory": "node scripts/adaptiveRiskCampaign.mjs --stage=exploratory",
     "adaptive:risk:confirmatory": "node scripts/adaptiveRiskCampaign.mjs --stage=confirmatory",
     "adaptive:risk:all": "node scripts/adaptiveRiskCampaign.mjs --stage=all",
-    "adaptive:network:pilot": "node scripts/adaptiveNetworkPilot.mjs"
+    "adaptive:network:pilot": "node scripts/adaptiveNetworkPilot.mjs",
+    "adaptive:routed:pilot": "node scripts/adaptiveRoutedPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
