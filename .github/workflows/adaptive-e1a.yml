@@ -63,6 +63,9 @@ jobs:
       - name: Causal local-neighbor delayed delivery and idle E1 slot pilot (16 cells)
         working-directory: gui
         run: npm run adaptive:local:transport:pilot
+      - name: Independent directed-trust local-decision shadow pilot (16 cells)
+        working-directory: gui
+        run: npm run adaptive:local:autonomy:pilot
       - name: Export exploratory pilot data
         if: always()
         uses: actions/upload-artifact@v4

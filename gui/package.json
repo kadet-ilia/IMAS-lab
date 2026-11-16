@@ -26,7 +26,8 @@
     "adaptive:scheduler:pilot": "node scripts/adaptiveBandwidthPilot.mjs",
     "adaptive:fair:pilot": "node scripts/adaptiveFairBandwidthPilot.mjs",
     "adaptive:local:pilot": "node scripts/adaptiveLocalConsensusPilot.mjs",
-    "adaptive:local:transport:pilot": "node scripts/adaptiveLocalTransportPilot.mjs"
+    "adaptive:local:transport:pilot": "node scripts/adaptiveLocalTransportPilot.mjs",
+    "adaptive:local:autonomy:pilot": "node scripts/adaptiveLocalAutonomyPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

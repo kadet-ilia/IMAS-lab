@@ -84,6 +84,11 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   [running,progress.completed,progress.total,progress.percent,cacheHit,Boolean(result),stage]);
  const trace=result?.trace||[],summary=result?.summary||[],paired=result?.paired||[];
  const methodState=result?.runs?.[0]?.methodStates||null;
+ const autonomousTrace=result?.runs?.[0]?.scenarioDiagnosticsByMethod?.
+  adaptive_robust?.localTransport?.history?.map(h=>({
+   step:h.step,coverage:h.autonomousCoverage,trust:h.autonomousMeanTrust,
+   freshUpdates:h.autonomousTrustUpdates,refusals:h.autonomousRefusals
+  }))??[];
  const coupledTrace=methodState?trace.map((row,i)=>({
   step:row.step,trimmedIsolation:methodState.trimmed_unweighted[i].isolated_agents,
   combinedIsolation:methodState.proposed_robust[i].isolated_agents,
@@ -181,10 +186,30 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        min={0} max={1} step={0.05} disabled={running} onChange={v=>set("localConsensusRelaxation",v)}/>
       <p className="r27-note">Исходная диагностическая модель выполняет мгновенные идеальные раунды соседского обмена без сетевых затрат. Она сохранена как контрольное приближение.</p>
       <label><input type="checkbox" checked={options.localTransportEnabled} disabled={running}
-       onChange={e=>set("localTransportEnabled",e.target.checked)}/>
+       onChange={e=>setOptions(o=>({...o,localTransportEnabled:e.target.checked,
+        localAutonomyEnabled:e.target.checked?o.localAutonomyEnabled:false}))}/>
        Причинные соседские сообщения (остаточная полоса или гарантированная квота)
       </label>
       {options.localTransportEnabled?<React.Fragment>
+       <label><input type="checkbox" checked={options.localAutonomyEnabled} disabled={running}
+        onChange={e=>set("localAutonomyEnabled",e.target.checked)}/>
+        Независимые локальные решения и персональное доверие к соседям (пилот)
+       </label>
+       {options.localAutonomyEnabled?<React.Fragment>
+        <NumberOption label="Порог сопоставимости соседских оценок"
+         title="Параметр масштаба расхождения доставленного сообщения с собственным наблюдением агента на шаге отправки сообщения. Без эталона истины."
+         value={options.localAutonomyEvidenceTolerance} min={0.001} max={100} step={0.05}
+         disabled={running} onChange={v=>set("localAutonomyEvidenceTolerance",v)}/>
+        <NumberOption label="Коэффициент памяти локального доверия"
+         title="Экспоненциальное ослабление собственной направленной истории доверия к нейтральному априорному значению 0,5."
+         value={options.localAutonomyDecay} min={0} max={1} step={0.05}
+         disabled={running} onChange={v=>set("localAutonomyDecay",v)}/>
+        <NumberOption label="Минимум доставленных соседских оценок"
+         title="При меньшем числе своевременных доставленных оценок агент отказывается от коллективного решения, но для запуска обмена может передать собственное исходное предложение."
+         value={options.localAutonomyMinNeighbors} min={0} max={159} step={1}
+         disabled={running} onChange={v=>set("localAutonomyMinNeighbors",v)}/>
+        <p className="r27-note">Доверие Tᵢⱼ рассчитывается отдельно каждым агентом по его собственным историческим наблюдениям и фактически доставленным сообщениям непосредственных соседей. Глобальная репутация E1 не используется локальным решателем. Отказ отличается от первичного сообщения. Полученные решения пока не воздействуют на центральный контур свидетельств и изоляции.</p>
+       </React.Fragment>:null}
        {options.comparisonMode==="network_routed"&&options.decisionBandwidthPolicy==="local_floor"?<NumberOption
         label="Доля общей полосы для локальных сообщений"
         title="Максимум floor(C·f_local) гарантированных передач за такт при наличии текущего достижимого соседского спроса. Сумма с квотой решений не должна превышать 1."
@@ -315,6 +340,27 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        strokeWidth={m.id==="adaptive_robust"?3:2} dot={false} isAnimationActive={false}/>)}
     </LineChart></ResponsiveContainer>
    </Panel>
+   {options.localAutonomyEnabled&&autonomousTrace.length?<Panel
+    title="Независимые локальные решения агентов (пилот)"
+    subtitle="Первый прогон: причинный обмен соседскими сообщениями и персональные оценки доверия; центральный E1 не заменён.">
+    <div className="kpi-grid">
+     <Kpi label="Доля сформированных локальных решений" value={percent(adaptive?.mean_local_autonomous_coverage?.mean)}
+      note="Относительно активных агентов на всех тактах"/>
+     <Kpi label="RMSE локальных решений" value={num(adaptive?.mean_local_autonomous_rmse?.mean,5)}
+      note="Диагностическая ошибка; истина использована только после вычисления"/>
+     <Kpi label="Обновления направленного доверия" value={num(adaptive?.mean_local_autonomous_trust_updates?.mean,1)}
+      note="По уникальным впервые доставленным соседским сообщениям"/>
+    </div>
+    <ResponsiveContainer width="100%" height={240}><LineChart data={autonomousTrace}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>
+     <YAxis domain={[0,1]}/><Tooltip formatter={v=>num(v,4)}/><Legend/>
+     <Line dataKey="coverage" name="Доля локальных решений" stroke="#079b91"
+      dot={false} isAnimationActive={false}/>
+     <Line dataKey="trust" name="Средняя локальная оценка доверия" stroke="#123a63"
+      dot={false} isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>
+    <p className="r27-note">Графики и выводы отражают только синтетический диагностический режим. Независимая локальная адаптация не эквивалентна устойчивому распределённому консенсусу.</p>
+   </Panel>:null}
    <Panel title="Динамика параметров адаптации" subtitle="Эвристическая степень использования доверительных весов α(t) и симметричное усечение k(t).">
     <ResponsiveContainer width="100%" height={280}><LineChart data={trace}>
      <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis yAxisId="left" domain={[0,1]}/><YAxis yAxisId="right" orientation="right"/>
