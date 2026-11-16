@@ -136,6 +136,10 @@ test("autonomy study has separately labelled metrics without changing central E1
   assert.ok(metric.mean_local_autonomous_coverage>0);
   assert.ok(metric.mean_local_autonomous_coverage<=1);
   assert.ok(metric.mean_local_autonomous_rmse>=0);
+  assert.ok(metric.mean_local_autonomous_honest_rmse>=0);
+  assert.ok(metric.mean_local_autonomous_honest_coverage>=0&&
+   metric.mean_local_autonomous_honest_coverage<=1);
+  assert.ok(link.history.every(h=>h.autonomousHonestMask?.length===10));
  }
  const without=runAdaptiveSingle(cfg,{...o,localAutonomyEnabled:false},0);
  assert.deepEqual(a.trajectory,without.trajectory);
@@ -143,6 +147,7 @@ test("autonomy study has separately labelled metrics without changing central E1
   without.metrics.map(r=>[r.method,r.rmse,r.probability_correct]));
  const study=runAdaptiveStudy(cfg,o);
  assert.ok(study.summary.every(r=>r.mean_local_autonomous_rmse.n===2));
+ assert.ok(study.summary.every(r=>r.mean_local_autonomous_honest_rmse.n===2));
  assert.equal(study.models.localAutonomy,E1A_LOCAL_AUTONOMY_VERSION);
  assert.match(study.methodology.localAutonomy,/SHADOW/);
 });

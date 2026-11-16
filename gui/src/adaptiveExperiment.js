@@ -15,7 +15,7 @@ import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.0.0-directed-local-autonomy-pilot";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.1.0-honest-local-diagnostic-stratification";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -227,6 +227,10 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    (methodDiagnostics[method]?.localTransport?.history??[]):[];
   const localAccepted=localRows.flatMap(h=>(h.autonomousDecisions??[]).filter(finite));
   const localDenominator=localRows.reduce((total,h)=>total+h.activeNodes,0);
+  const honestAccepted=localRows.flatMap(h=>(h.autonomousDecisions??[])
+   .filter((v,i)=>h.autonomousHonestMask?.[i]&&finite(v)));
+  const honestDenominator=localRows.reduce((total,h)=>total+
+   (h.autonomousHonestMask??[]).filter(Boolean).length,0);
   return {method,run:runIndex,decision_coverage:accepted.length/core.n_steps,
    probability_correct:errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/core.n_steps,
    accuracy_accepted:accepted.length?
@@ -255,6 +259,10 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     localAccepted.length/Math.max(1,localDenominator):null,
    mean_local_autonomous_rmse:localAccepted.length?
     Math.sqrt(average(localAccepted.map(x=>(x-core.desired_action)**2))):null,
+   mean_local_autonomous_honest_coverage:o.localAutonomyEnabled&&honestDenominator?
+    honestAccepted.length/honestDenominator:null,
+   mean_local_autonomous_honest_rmse:honestAccepted.length?
+    Math.sqrt(average(honestAccepted.map(x=>(x-core.desired_action)**2))):null,
    mean_local_autonomous_trust_updates:o.localAutonomyEnabled?
     localRows.reduce((sum,h)=>sum+(h.autonomousTrustUpdates??0),0):null,
    ...feedback.metrics};
@@ -282,6 +290,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   "mean_local_link_neighbor_readings","mean_local_link_informed_nodes",
   "mean_local_link_transmissions","mean_local_link_honest_spread","mean_local_link_shared_utilization",
   "mean_local_autonomous_coverage","mean_local_autonomous_rmse",
+  "mean_local_autonomous_honest_coverage","mean_local_autonomous_honest_rmse",
   "mean_local_autonomous_trust_updates"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
@@ -340,7 +349,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
     ?"Optional causal one-hop local neighbor transport with delayed/lossy delivery and shared budget; legacy and local_floor bandwidth modes preserved"
     :"disabled",
    localAutonomy:o.localAutonomyEnabled
-    ?"Optional independent per-observer directed soft-Beta trust from delivered neighbor estimates compared with OWN emission-time observations, no E1 global reputation, labels, oracle or central decision; local abstentions distinguished from raw bootstrap messages. SHADOW research mode: E1 isolation, topology and central feedback still active; not a distributed closed loop or Byzantine consensus."
+    ?"Optional independent per-observer directed soft-Beta trust from delivered neighbor estimates compared with OWN emission-time observations, no E1 global reputation, labels, oracle or central decision; local abstentions distinguished from raw bootstrap messages. SHADOW research mode: E1 isolation, topology and central feedback still active; not a distributed closed loop or Byzantine consensus. Local RMSE over ALL active agents and honest-only local RMSE/coverage are SEPARATE diagnostic estimands; honest mask is synthetic ground truth used POST-HOC ONLY, never the local update."
     :"disabled",
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",

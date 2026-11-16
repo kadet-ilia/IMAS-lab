@@ -55,12 +55,16 @@ for(const [i,cell] of cells.entries()){
   individual.push({run:run.run,centralRmse:m.rmse,
    autonomousRmse:m.mean_local_autonomous_rmse,
    autonomousCoverage:m.mean_local_autonomous_coverage,
+   honestRmse:m.mean_local_autonomous_honest_rmse,
+   honestCoverage:m.mean_local_autonomous_honest_coverage,
    trustUpdates:m.mean_local_autonomous_trust_updates});
  }
  const row={cell:i+1,...cell,seed,N,T,R,
   centralRmse:mean(individual.map(x=>x.centralRmse)),
   autonomousRmse:cell.autonomy?mean(individual.map(x=>x.autonomousRmse)):null,
   autonomousCoverage:cell.autonomy?mean(individual.map(x=>x.autonomousCoverage)):null,
+  honestRmse:cell.autonomy?mean(individual.map(x=>x.honestRmse)):null,
+  honestCoverage:cell.autonomy?mean(individual.map(x=>x.honestCoverage)):null,
   trustUpdates:cell.autonomy?mean(individual.map(x=>x.trustUpdates)):null};
  rows.push(row);details.push({row,core,options,individual});
  console.log("E1-A AUTONOMY PILOT CELL "+JSON.stringify(row));
@@ -76,6 +80,7 @@ for(let i=0;i<rows.length;i+=2){
  comparisons.push({topology:on.topology,partition:on.partition,capacity:on.capacity,
   centralRmseDifference:on.centralRmse-off.centralRmse,
   autonomousRmse:on.autonomousRmse,autonomousCoverage:on.autonomousCoverage,
+  honestRmse:on.honestRmse,honestCoverage:on.honestCoverage,
   directedTrustUpdates:on.trustUpdates});
 }
 const keys=Object.keys(rows[0]);
@@ -91,6 +96,8 @@ console.log("E1-A AUTONOMY PILOT SUMMARY "+JSON.stringify({
  cells:rows.length,methodExecutions:rows.length*R*5,
  meanAutonomousCoverage:mean(comparisons.map(x=>x.autonomousCoverage)),
  meanAutonomousRmse:mean(comparisons.map(x=>x.autonomousRmse)),
+ meanHonestRmse:mean(comparisons.map(x=>x.honestRmse)),
+ meanHonestCoverage:mean(comparisons.map(x=>x.honestCoverage)),
  meanTrustUpdates:mean(comparisons.map(x=>x.directedTrustUpdates)),
  centralRmseUnaffected:comparisons.every(x=>x.centralRmseDifference===0),
  status:"synthetic exploratory shadow only"}));

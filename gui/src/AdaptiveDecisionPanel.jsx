@@ -346,8 +346,10 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <div className="kpi-grid">
      <Kpi label="Доля сформированных локальных решений" value={percent(adaptive?.mean_local_autonomous_coverage?.mean)}
       note="Относительно активных агентов на всех тактах"/>
-     <Kpi label="RMSE локальных решений" value={num(adaptive?.mean_local_autonomous_rmse?.mean,5)}
-      note="Диагностическая ошибка; истина использована только после вычисления"/>
+     <Kpi label="RMSE всех локальных решений" value={num(adaptive?.mean_local_autonomous_rmse?.mean,5)}
+      note="Включая имитационные решения нарушителей; только постфактум"/>
+     <Kpi label="RMSE локальных решений честных агентов" value={num(adaptive?.mean_local_autonomous_honest_rmse?.mean,5)}
+      note="Синтетическая разметка честности используется исключительно для оценки"/>
      <Kpi label="Обновления направленного доверия" value={num(adaptive?.mean_local_autonomous_trust_updates?.mean,1)}
       note="По уникальным впервые доставленным соседским сообщениям"/>
     </div>

@@ -17,7 +17,7 @@ import {localWeightedTrim,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFA
 import {createLocalAutonomy,validateLocalAutonomyOptions,
  E1A_LOCAL_AUTONOMY_DEFAULTS,E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 
-export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.2.0";
+export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.3.0";
 export const E1A_LOCAL_TRANSPORT_DEFAULTS=Object.freeze({
  localTransportEnabled:false,
  localTransportDelaySteps:1,
@@ -214,6 +214,9 @@ export function createLocalTransport(config,options={},runIndex=0){
     autonomousTrustUpdates:autonomousRecord.updates,
     autonomousMeanTrust:autonomousRecord.meanTrust,
     autonomousDecisions:next.slice(),
+    // SIMULATOR-ONLY labels, solely for post-hoc scientific stratification.
+    // Not passed into createLocalAutonomy.tick or into trust updates.
+    autonomousHonestMask:active.map((alive,i)=>alive&&!faulty[i]),
     autonomousTrust:autonomousRecord.trustByNode}:{} )
   });
   prepared=true;audit();
