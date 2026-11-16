@@ -1,0 +1,6 @@
+{
+  "stage": "all",
+  "protocol": "e1a-campaign-1.0.0",
+  "intent": "Execute the frozen 72x30 exploratory and 12x100 independent-seed confirmation research protocol on the test branch only.",
+  "note": "No code or parameter tuning between discovery and held-out evaluation; computational evidence is synthetic and not proof of whole-system IMAS stability."
+}
