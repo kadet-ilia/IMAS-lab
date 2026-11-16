@@ -74,6 +74,41 @@ test("strict budget is conserved when E1 saturates and idle slots vanish",()=>{
   assert.equal(h.sharedUnused,h.sharedCapacity-h.sharedUsed);
  }
 });
+test("extreme common capacity C=1, f=0/f=1 stays integral and conserves all messages",()=>{
+ for(const fraction of [0,1]){
+  const ch=createRoutedDecisionChannel(cfg,{
+   decisionBandwidthFraction:fraction,
+   decisionBandwidthPolicy:"opportunistic",
+   decisionMaxStalenessSteps:5
+  },0);
+  for(let t=1;t<=5;t++){
+   ch.networkStep({step:t,labels:full,active:alive,adjacency:complete});
+   const reserved=ch.reserveDecisionBandwidth({step:t,capacity:1});
+   ch.onProposalsDelivered({step:t,available:alive});
+   ch.transmit({step:t,value:.4});
+   ch.afterEvidenceTransport({step:t,sharedCapacity:1,e1Used:0,reserved});
+  }
+  const d=ch.getDiagnostic();
+  assert.equal(d.history.length,5);
+  assert.ok(d.history.every(h=>h.sharedCapacity===1&&
+   h.e1Used+h.routingHopsThisStep<=1&&
+   h.sharedUnused>=0&&Number.isInteger(h.sharedUnused)));
+  assert.equal(d.attempted,d.delivered+d.lost+d.blocked+d.expired+d.pending);
+ }
+});
+test("historical default static scheduling exactly equals explicit static opt-in",()=>{
+ const core={seed:415199,n_agents:9,n_byzantine:2,n_steps:10,
+  trim_each_side:1,attack_start_step:3,network_enabled:true,
+  network_topology:"ring",bandwidth_messages_per_step:24};
+ const opt={comparisonMode:"network_routed",scenario:"static_bias",runs:1,
+  evidenceModel:"behavior_linked",attackStrategy:"coordinated",
+  decisionBandwidthFraction:.3};
+ const implicit=runAdaptiveSingle(core,opt,0);
+ const explicit=runAdaptiveSingle(core,{...opt,decisionBandwidthPolicy:"static"},0);
+ assert.deepEqual(implicit.trajectory,explicit.trajectory);
+ assert.deepEqual(implicit.metrics,explicit.metrics);
+ assert.deepEqual(implicit.scenarioDiagnosticsByMethod,explicit.scenarioDiagnosticsByMethod);
+});
 test("full five-method E1 execution uses actual reclaimed resource and remains deterministic",()=>{
  const core={seed:630132,n_agents:12,n_byzantine:2,n_steps:14,trim_each_side:2,
   attack_start_step:3,network_enabled:true,network_topology:"ring",
