@@ -9,8 +9,9 @@
  * exactly the original proposal and evidence generation paths.
  */
 import {createRng} from "./trustEngine.js";
+import {createDecisionChannel,validateDecisionChannelOptions,E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.2.0";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.3.0-network-feedback";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -29,7 +30,8 @@ export const ADAPTIVE_SCENARIO_DEFAULTS=Object.freeze({
  attackPeriod:10,attackDuty:4,reputationWarmup:12,
  stealthBias:0.65,coordinatedBias:2.0,attackNoiseSigma:0.025,
  evidenceTolerance:0.45,evidenceNoiseSigma:0.025,
- witnessCorruption:0.8,evidenceCorrelation:0.45,evidenceLag:2
+ witnessCorruption:0.8,evidenceCorrelation:0.45,evidenceLag:2,
+ ...({decisionOriginAgent:0,decisionDelaySteps:1,decisionLossProbability:0,decisionMaxStalenessSteps:5})
 });
 const clamp=(x,lo=0,hi=1)=>Math.min(hi,Math.max(lo,x));
 function med(a){
@@ -59,6 +61,7 @@ export function validateAdaptiveScenarioOptions(options={}){
  };
  for(const [key,[lo,hi,int]] of Object.entries(limits))validateNumber(key,o[key],lo,hi,int);
  if(o.attackDuty>o.attackPeriod)throw Error("Длительность импульса превышает период атаки");
+ validateDecisionChannelOptions(o);
  if(o.attackStrategy==="reputation_boost"&&o.evidenceModel==="legacy")
   throw Error("Накопление репутации требует модели свидетельств по поведению агентов");
  return o;
@@ -69,6 +72,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  if(o.attackStrategy==="legacy"&&o.evidenceModel==="legacy")return null;
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
+ const channel=o.comparisonMode==="network_feedback"?createDecisionChannel(config,o,runIndex):null;
  const observedHistory=new Map();
  const qualityCache=new Map();
  let lastDeliveredStep=0;
@@ -113,11 +117,16 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   if(o.comparisonMode==="decision_feedback"&&lastDeliveredStep!==step)
    throw Error("Обратная связь должна следовать после доставки предложений текущего такта");
   feedbackDecision={step,value};
+  if(channel)channel.transmit({step,value});
   qualityCache.clear();
  };
  const effectiveIntensity=(step,intensity)=>
   o.attackStrategy==="legacy"||isActive(step,intensity)?intensity:0;
+ const onNetworkState=({step,labels,active})=>{
+  if(channel)channel.networkStep({step,labels,active});
+ };
  const onProposalsDelivered=({step,values,available})=>{
+  if(channel)channel.onProposalsDelivered({step,available});
   if(o.evidenceModel==="legacy")return;
   const copy={values:[...values],available:[...available]};
   if(lastDeliveredStep!==step-1)
@@ -140,7 +149,8 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   // Quality depends only on (step,target) and, in decision_feedback mode,
   // the method-specific current decision. Cache it once per target, while
   // retaining separate per-witness random and malicious components.
-  let qualityState=qualityCache.get(target);
+  const qualityKey=channel?observer+"|"+target:target;
+  let qualityState=qualityCache.get(qualityKey);
   if(!qualityState){
    if(!sample||!sample.available[target]||!finite(sample.values[target]))
     qualityState={reason:"missing",quality:null};
@@ -156,20 +166,25 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
        qualityState={reason:"abstention",quality:null};
       else reference=feedbackDecision.value;
      }
+     if(o.comparisonMode==="network_feedback"){
+      const received=channel.referenceFor(observer,target);
+      if(received===null)qualityState={reason:"undelivered_decision",quality:null};
+      else reference=received;
+     }
      if(!qualityState){
       const residual=Math.abs(sample.values[target]-reference);
       qualityState={reason:"ok",quality:1/(1+(residual/o.evidenceTolerance)**2)};
      }
     }
    }
-   qualityCache.set(target,qualityState);
+   qualityCache.set(qualityKey,qualityState);
   }
   if(qualityState.reason!=="ok"){
    debug.uninformativeEvidence++;
    if(qualityState.reason==="abstention")debug.feedbackAbstentions++;
    return 0.5;
   }
-  if(o.comparisonMode==="decision_feedback")debug.feedbackDecisionUsed++;
+  if(o.comparisonMode==="decision_feedback"||o.comparisonMode==="network_feedback")debug.feedbackDecisionUsed++;
   const quality=qualityState.quality;
   const random=rngFor(step,observer,target,4);
   let score=quality;
@@ -188,10 +203,12 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   return clamp(score);
  };
  return Object.freeze({
-  transformProposals,onProposalsDelivered,onFeedbackDecision,effectiveIntensity,
+  transformProposals,onProposalsDelivered,onNetworkState,onFeedbackDecision,effectiveIntensity,
   evidenceValue:o.evidenceModel==="legacy"?null:evidenceValue,
   getDiagnostic:()=>({...debug,modelVersion:ADAPTIVE_SCENARIO_VERSION,
-   strategy:o.attackStrategy,evidenceModel:o.evidenceModel}),
+   strategy:o.attackStrategy,evidenceModel:o.evidenceModel,
+   decisionChannel:channel?.getDiagnostic()??null,
+   decisionChannelModel:channel?E1A_DECISION_CHANNEL_VERSION:null}),
   version:ADAPTIVE_SCENARIO_VERSION
  });
 }
