@@ -99,6 +99,10 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   adaptiveLocalSpread:methodState.adaptive_robust[i].local_consensus_spread,
   adaptiveLocalComponents:methodState.adaptive_robust[i].local_consensus_component_count,
   adaptiveLocalMessages:methodState.adaptive_robust[i].local_consensus_messages,
+  adaptiveLocalNeighborReadings:methodState.adaptive_robust[i].local_link_neighbor_readings,
+  adaptiveLocalLinkTransmissions:methodState.adaptive_robust[i].local_link_transmissions,
+  adaptiveLocalLinkSharedUtilization:methodState.adaptive_robust[i].local_link_shared_utilization,
+  adaptiveLocalLinkHonestSpread:methodState.adaptive_robust[i].local_link_honest_spread,
   trimmedReferenceCoverage:methodState.trimmed_unweighted[i].decision_reference_coverage,
   combinedReferenceCoverage:methodState.proposed_robust[i].decision_reference_coverage
  })):[];
@@ -174,7 +178,21 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        min={0} max={40} step={1} disabled={running} onChange={v=>set("localConsensusTrim",v)}/>
       <NumberOption label="Коэффициент локального обновления" value={options.localConsensusRelaxation}
        min={0} max={1} step={0.05} disabled={running} onChange={v=>set("localConsensusRelaxation",v)}/>
-      <p className="r27-note">Вспомогательная проверка: локальные узлы итеративно обновляют собственные оценки только по сообщениям соседей прошлого раунда. Все соседние сообщения считаются мгновенно доставленными внутри раунда без потерь и расходов квоты E1. Механизм не изменяет центральное решение, свидетельства, изоляцию и маршрутизацию E1-А и не доказывает византийский консенсус.</p>
+      <p className="r27-note">Исходная диагностическая модель выполняет мгновенные идеальные раунды соседского обмена без сетевых затрат. Она сохранена как контрольное приближение.</p>
+      <label><input type="checkbox" checked={options.localTransportEnabled} disabled={running}
+       onChange={e=>set("localTransportEnabled",e.target.checked)}/>
+       Причинные соседские сообщения из свободной части общей полосы E1
+      </label>
+      {options.localTransportEnabled?<React.Fragment>
+       <NumberOption label="Задержка соседского сообщения, шагов" value={options.localTransportDelaySteps}
+        min={1} max={50} step={1} disabled={running} onChange={v=>set("localTransportDelaySteps",v)}/>
+       <NumberOption label="Потери соседских сообщений" value={options.localTransportLossProbability}
+        min={0} max={1} step={0.05} disabled={running} onChange={v=>set("localTransportLossProbability",v)}/>
+       <NumberOption label="Максимальный возраст соседского сообщения, шагов" value={options.localTransportMaxAgeSteps}
+        min={1} max={500} step={1} disabled={running} onChange={v=>set("localTransportMaxAgeSteps",v)}/>
+       <p className="r27-note">Каждый активный агент рассчитывает локальную оценку только по своему текущему предложению и ранее доставленным однопереходным сообщениям непосредственных соседей. Передача происходит в конце такта через остающиеся после E1 и маршрутизируемых решений свободные слоты; учитываются потери, задержки, TTL, разрывы рёбер и баланс сообщений. Сетевые пакеты не заменяют центральное решение и не управляют доверительным контуром. Это диагностический режим с низким приоритетом, а не протокол византийского согласования.</p>
+      </React.Fragment>:null}
+      <p className="r27-note">Оба диагностических расчёта не изменяют центральное решение E1-А, свидетельства, изоляцию и маршрутизацию и не доказывают византийский консенсус.</p>
      </React.Fragment>:null}
     </React.Fragment>:null}
     <label>Режим коэффициента α
@@ -383,7 +401,28 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        <td>{num(x.mean_local_consensus_messages?.mean,2)}</td>
       </tr>)}
      </tbody></table></div>
-     <p className="r27-note">Разброс и число условных передач характеризуют отдельный диагностический расчёт с идеальными синхронными обменами, не включёнными в общий бюджет E1. Истинные метки агентов используются только для постфактум-выделения честных оценок; правило обновления их не получает.</p>
+     <p className="r27-note">Разброс и число условных передач в таблице выше относятся к идеальным синхронным обменам, не включённым в общий бюджет E1. Синтетические метки нарушителей используются только генератором и постфактум-расчётом разброса, но не обновлением оценки честного агента.</p>
+     {options.localTransportEnabled?<React.Fragment>
+      <ResponsiveContainer width="100%" height={220}><LineChart data={coupledTrace}>
+       <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>
+       <YAxis yAxisId="count" allowDecimals={false}/>
+       <YAxis yAxisId="util" orientation="right" domain={[0,1]}/>
+       <Tooltip formatter={v=>num(v,4)}/><Legend/>
+       <Line dataKey="adaptiveLocalNeighborReadings" name="Прочитано ранее доставленных соседских значений" yAxisId="count" stroke="#4d78b7" dot={false} isAnimationActive={false}/>
+       <Line dataKey="adaptiveLocalLinkTransmissions" name="Однопереходные передачи за такт" yAxisId="count" stroke="#af6f2c" dot={false} isAnimationActive={false}/>
+       <Line dataKey="adaptiveLocalLinkSharedUtilization" name="Общая загрузка E1, решений и соседских сообщений" yAxisId="util" stroke="#15765c" dot={false} isAnimationActive={false}/>
+      </LineChart></ResponsiveContainer>
+      <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Соседские значения/шаг</th><th>Реальные передачи/шаг</th><th>Средняя общая загрузка</th><th>Разброс честных локальных оценок</th></tr></thead><tbody>
+       {summary.map(x=><tr key={x.method}>
+        <td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
+        <td>{num(x.mean_local_link_neighbor_readings?.mean,3)}</td>
+        <td>{num(x.mean_local_link_transmissions?.mean,3)}</td>
+        <td>{percent(x.mean_local_link_shared_utilization?.mean)}</td>
+        <td>{num(x.mean_local_link_honest_spread?.mean,5)}</td>
+       </tr>)}
+      </tbody></table></div>
+      <p className="r27-note">Проверяются равенство N_gen=N_delivered+N_lost+N_blocked+N_expired+N_superseded+N_pending и неравенство U_E1+U_decision+U_local≤C на каждом такте. Соседский обмен использует исключительно свободные слоты; при насыщении сети он может не состояться вообще.</p>
+     </React.Fragment>:null}
     </React.Fragment>:null}
     <p className="r27-note">Показана модельная связь «решение → свидетельства → доверие и изоляция». network_feedback ограничивает доставку решения компонентами, а network_routed добавляет кратчайшие маршруты и либо статическое, либо динамически перераспределяемое резервирование общего лимита передач. Оба варианта не выполняют распределённое вычисление решения; доказательство устойчивости ИМАС отсутствует. Устойчивость всей ИМАС не доказана.</p>
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Среднее число изолированных агентов</th><th>Средняя репутация</th></tr></thead><tbody>
