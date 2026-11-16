@@ -360,6 +360,45 @@ if(riskRecord.options.alphaMode!=="risk_aware"||
  riskRecord.trace.some(x=>!(x.alpha>=0&&x.alpha<=1)))
  throw Error("E1-A browser risk trace missing valid causal risk diagnostics");
 e1aAdaptiveSummary.riskBrowserVerified=true;
+// E1-A network feedback: actual sidebar topology -> component reachability
+// -> delayed worker feedback -> per-method decision-channel ledger -> JSON.
+await page.locator("details.network-settings > summary").click();
+await page.getByRole("checkbox",{name:"Учитывать сетевые ограничения"}).check();
+await page.getByRole("combobox",{name:"Топология"}).selectOption("ring");
+await page.getByRole("checkbox",{name:"Моделировать разделение сети"}).check();
+await page.getByRole("combobox",{name:"Режим сравнительного исследования"}).selectOption("network_feedback");
+await page.getByRole("combobox",{name:"Модель доверительных свидетельств"}).selectOption("behavior_linked");
+await page.getByRole("spinbutton",{name:"Задержка доставки решения, шагов"}).fill("2");
+await page.getByRole("spinbutton",{name:"Вероятность потери решения"}).fill("0.15");
+await e1aRuns.fill("1");await e1aRuns.press("Tab");
+if(await e1aAction.isDisabled())throw Error("E1-A network feedback controls unexpectedly invalid");
+await e1aAction.click();
+try{
+ await page.getByRole("heading",{name:"Независимая динамика доверия и изоляции"}).waitFor({timeout:90000});
+ await page.getByText("Доступность решения: адаптивное").waitFor({timeout:30000});
+}catch(error){
+ const messages=await page.locator(".imas-validation-error, .r27-note[role='status']").allTextContents();
+ const state=await page.locator(".tab-action").allTextContents();
+ throw Error("E1-A network feedback browser run failed: "+JSON.stringify({messages,state}).slice(0,1300)+"; "+String(error));
+}
+const [networkFile]=await Promise.all([page.waitForEvent("download",{timeout:15000}),e1aDownload.click()]);
+const networkRecord=JSON.parse(fs.readFileSync(await networkFile.path(),"utf8"));
+const networkDetails=networkRecord.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.decisionChannel;
+if(networkRecord.options.comparisonMode!=="network_feedback"||
+ !networkRecord.configuration.network_enabled||
+ networkRecord.configuration.network_topology!=="ring"||
+ !networkRecord.configuration.partition_enabled||
+ !networkRecord.models.decisionChannel?.includes("component-broadcast")||
+ networkDetails?.history?.length!==200||networkDetails.attempted<=0||
+ networkDetails.attempted!==(networkDetails.delivered+networkDetails.lost+
+   networkDetails.blocked+networkDetails.expired+networkDetails.pending)||
+ networkRecord.runs?.[0]?.methodStates?.adaptive_robust?.length!==200||
+ networkDetails.history.some(x=>x.informed>x.reachable||x.informed<0))
+ throw Error("E1-A: network feedback archive missing graph-conditioned provenance or violating separate packet conservation");
+e1aAdaptiveSummary.networkFeedbackVerified=true;
+// Restore the original no-network configuration for unrelated E1 modes.
+await page.getByRole("checkbox",{name:"Учитывать сетевые ограничения"}).uncheck();
+
 // Lyapunov: real Web Worker run and export, not merely static JSX verification.
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Устойчивость и точность"}).click();
 const stepInput=page.getByRole("spinbutton",{name:"Число шагов (T)"});
