@@ -10,7 +10,12 @@
     "build": "vite build",
     "test": "node --test src/*.test.mjs",
     "verify": "node verify.mjs",
-    "adaptive:pilot": "node scripts/adaptivePilot.mjs"
+    "adaptive:pilot": "node scripts/adaptivePilot.mjs",
+    "adaptive:campaign:design": "node scripts/adaptiveCampaign.mjs --stage=design",
+    "adaptive:campaign:smoke": "node scripts/adaptiveCampaign.mjs --stage=smoke",
+    "adaptive:campaign:exploratory": "node scripts/adaptiveCampaign.mjs --stage=exploratory",
+    "adaptive:campaign:confirmatory": "node scripts/adaptiveCampaign.mjs --stage=confirmatory",
+    "adaptive:campaign:all": "node scripts/adaptiveCampaign.mjs --stage=all"
   },
   "dependencies": {
     "react": "^19.1.0",
