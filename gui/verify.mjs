@@ -426,6 +426,38 @@ if(routedRecord.options.comparisonMode!=="network_routed"||
   h.routingHopsThisStep<=h.reserved&&h.e1Used<=h.availableForE1))
  throw Error("E1-A routed output violates actual E1 joint-message-budget or decision-packet conservation");
 e1aAdaptiveSummary.routedFeedbackVerified=true;
+// Opt-in work-conserving approximation: use the same graph and message
+// capacity, but dynamically borrow unused slots. Verify actual archived
+// per-tick state, not only the presence of a selector.
+await page.getByRole("combobox",{name:"Политика использования общей полосы"}).selectOption("opportunistic");
+await e1aRuns.fill("1");await e1aRuns.press("Tab");
+if(await e1aAction.isDisabled())throw Error("E1-A opportunistic scheduling controls unexpectedly invalid");
+await e1aAction.click();
+await e1aDownload.waitFor({state:"visible",timeout:90000});
+await page.getByText("Заимствовано решениями у E1").waitFor({timeout:30000});
+const [borrowFile]=await Promise.all([page.waitForEvent("download",{timeout:20000}),e1aDownload.click()]);
+const borrowRecord=JSON.parse(fs.readFileSync(await borrowFile.path(),"utf8"));
+const borrowDetails=borrowRecord.runs?.[0]?.scenarioDiagnosticsByMethod?.adaptive_robust?.decisionChannel;
+const borrowHistory=borrowDetails?.history;
+if(borrowRecord.options.decisionBandwidthPolicy!=="opportunistic"||
+ borrowRecord.methodology.routedBandwidthPolicy!=="opportunistic"||
+ borrowDetails?.bandwidthPolicy!=="opportunistic"||
+ !Array.isArray(borrowHistory)||borrowHistory.length!==200||
+ borrowDetails.attempted!==(borrowDetails.delivered+borrowDetails.lost+
+  borrowDetails.blocked+borrowDetails.expired+borrowDetails.pending)||
+ !borrowHistory.every(h=>Number.isInteger(h.sharedCapacity)&&
+  Number.isInteger(h.reserved)&&Number.isInteger(h.targetReservation)&&
+  Number.isInteger(h.releasedToE1)&&Number.isInteger(h.borrowedFromE1)&&
+  Number.isInteger(h.sharedUnused)&&h.reserved<=h.targetReservation&&
+  h.releasedToE1===h.targetReservation-h.reserved&&
+  h.borrowedFromE1===Math.max(0,h.routingHopsThisStep-h.reserved)&&
+  h.sharedUnused===h.sharedCapacity-h.sharedUsed&&
+  h.e1Used<=h.availableForE1&&
+  h.sharedUsed<=h.sharedCapacity&&
+  h.routingHopsThisStep<=h.sharedCapacity-h.e1Used))
+ throw Error("E1-A work-conserving browser export violates shared-slot accounting or option signature");
+e1aAdaptiveSummary.opportunisticSchedulerVerified=true;
+await page.getByRole("combobox",{name:"Политика использования общей полосы"}).selectOption("static");
 await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("100000");
 // Restore the original no-network and no-partition configuration: the
 // Lyapunov smoke subsequently shortens T below the partition end step.
