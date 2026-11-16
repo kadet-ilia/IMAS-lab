@@ -12,7 +12,7 @@ import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.5.0-shared-capacity-shortest-path-routing";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.6.0-opt-in-work-conserving-routing";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -163,7 +163,10 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     decision_e1_used:channelHistory[index]?.e1Used??null,
     decision_reserved_slots:channelHistory[index]?.reserved??null,
     decision_shared_utilization:channelHistory[index]?.sharedCapacity?
-     channelHistory[index].sharedUsed/channelHistory[index].sharedCapacity:null});
+     channelHistory[index].sharedUsed/channelHistory[index].sharedCapacity:null,
+    decision_borrowed_slots:channelHistory[index]?.borrowedFromE1??null,
+    decision_released_to_e1_slots:channelHistory[index]?.releasedToE1??null,
+    decision_target_reservation:channelHistory[index]?.targetReservation??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -199,6 +202,8 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    mean_decision_reference_coverage:average(state.map(v=>v.decision_reference_coverage).filter(finite)),
    mean_decision_hops_routed:average(state.map(v=>v.decision_hops_routed).filter(finite)),
    mean_shared_utilization:average(state.map(v=>v.decision_shared_utilization).filter(finite)),
+   mean_borrowed_decision_slots:average(state.map(v=>v.decision_borrowed_slots).filter(finite)),
+   mean_released_to_e1_slots:average(state.map(v=>v.decision_released_to_e1_slots).filter(finite)),
    ...feedback.metrics};
  });
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
@@ -218,7 +223,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
  const metrics=["decision_coverage","probability_correct","accuracy_accepted","rmse","mae",
   "p95_abs_error","max_abs_error","attack_rmse","state_rmse","final_abs_error","positive_delta_v_fraction",
   "mean_isolated_agents","max_isolated_agents","mean_reputation","mean_decision_reference_coverage",
-  "mean_decision_hops_routed","mean_shared_utilization"];
+  "mean_decision_hops_routed","mean_shared_utilization",
+  "mean_borrowed_decision_slots","mean_released_to_e1_slots"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -265,13 +271,14 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
     :"common reputation and isolation for all estimators",
    attack:"strategy independent of temporal intensity profile; attacker labels used by simulator only",
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
+   routedBandwidthPolicy:o.comparisonMode==="network_routed"?o.decisionBandwidthPolicy:null,
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
    confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests; two-sided paired sign-flip p values Holm-adjusted across four planned RMSE contrasts",
    inference:"Sign-flip requires pairwise sign-exchangeability under the null; paired seeds alone do not establish validity. This study is exploratory; independent confirmatory series required.",
    stability:"auxiliary scalar feedback only, not a proof of full IMAS stability",
-   limitation:"All feedback modes are synthetic closed-loop surrogates. network_feedback is a component-broadcast abstraction with a separate decision budget. network_routed uses per-hop forwarding and a static, non-work-conserving reserved split of E1 total per-step message capacity, but NO per-edge parallel transmissions, queue priority optimization, retransmission, link capacity or distributed decision generation. E1 first-attack diagnostics may refer to nominal rather than effective attack onset"},
+   limitation:"All feedback modes are synthetic closed-loop surrogates. network_feedback is a component-broadcast abstraction with a separate decision budget. network_routed offers frozen static reservation or opt-in opportunistic bidirectional idle-slot borrowing. Even the latter is a sequential work-conserving approximation under currently routable demand, NOT an optimized joint packet scheduler: no per-edge parallel transmissions, queue-priority optimization, retransmission, physical link capacity or distributed decision generation. E1 first-attack diagnostics may refer to nominal rather than effective attack onset"},
   configuration:core,options:o,methods:ADAPTIVE_METHODS,summary,paired,
   completedRuns:ordered.length,requestedRuns:o.runs,partial:ordered.length!==o.runs,
   trace:diagnostics,runs:ordered
