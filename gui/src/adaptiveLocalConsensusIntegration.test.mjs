@@ -28,8 +28,11 @@ test("turning on idealized component-local pilot cannot change E1-A decisions/tr
   localConsensusRounds:4,localConsensusTrim:1},0);
  assert.deepEqual(b.trajectory,a.trajectory);
  assert.deepEqual(b.feedback,a.feedback);
- const withoutTimes=rows=>rows.map(row=>Object.fromEntries(
-  Object.entries(row).filter(([key])=>!key.endsWith("_wall_ms"))));
+ const withoutTimes=byMethod=>Object.fromEntries(
+  Object.entries(byMethod).map(([method,rows])=>[method,
+   rows.map(row=>Object.fromEntries(
+    Object.entries(row).filter(([key])=>!key.endsWith("_wall_ms"))))
+  ]));
  assert.deepEqual(withoutTimes(b.original_metrics),withoutTimes(a.original_metrics));
  assert.equal(b.methodStates.adaptive_robust.length,config.n_steps);
  for(const method of Object.keys(b.methodStates)){
