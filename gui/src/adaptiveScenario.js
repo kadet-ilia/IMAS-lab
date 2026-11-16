@@ -10,8 +10,9 @@
  */
 import {createRng} from "./trustEngine.js";
 import {createDecisionChannel,validateDecisionChannelOptions,E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
+import {createRoutedDecisionChannel,validateRoutedChannelOptions,E1A_ROUTED_CHANNEL_VERSION,E1A_ROUTED_DEFAULTS} from "./adaptiveRoutedDecisionChannel.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.3.0-network-feedback";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.4.0-routed-feedback";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -31,7 +32,8 @@ export const ADAPTIVE_SCENARIO_DEFAULTS=Object.freeze({
  stealthBias:0.65,coordinatedBias:2.0,attackNoiseSigma:0.025,
  evidenceTolerance:0.45,evidenceNoiseSigma:0.025,
  witnessCorruption:0.8,evidenceCorrelation:0.45,evidenceLag:2,
- ...({decisionOriginAgent:0,decisionDelaySteps:1,decisionLossProbability:0,decisionMaxStalenessSteps:5})
+ ...({decisionOriginAgent:0,decisionDelaySteps:1,decisionLossProbability:0,decisionMaxStalenessSteps:5}),
+ ...E1A_ROUTED_DEFAULTS
 });
 const clamp=(x,lo=0,hi=1)=>Math.min(hi,Math.max(lo,x));
 function med(a){
@@ -62,6 +64,7 @@ export function validateAdaptiveScenarioOptions(options={}){
  for(const [key,[lo,hi,int]] of Object.entries(limits))validateNumber(key,o[key],lo,hi,int);
  if(o.attackDuty>o.attackPeriod)throw Error("Длительность импульса превышает период атаки");
  validateDecisionChannelOptions(o);
+ validateRoutedChannelOptions(o);
  if(o.attackStrategy==="reputation_boost"&&o.evidenceModel==="legacy")
   throw Error("Накопление репутации требует модели свидетельств по поведению агентов");
  return o;
@@ -72,7 +75,9 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  if(o.attackStrategy==="legacy"&&o.evidenceModel==="legacy")return null;
  if(!Number.isInteger(runIndex)||runIndex<0)throw Error("Некорректный индекс реализации E1-А");
  if(!Number.isInteger(config?.seed))throw Error("Отсутствует целочисленный seed");
- const channel=o.comparisonMode==="network_feedback"?createDecisionChannel(config,o,runIndex):null;
+ const routed=o.comparisonMode==="network_routed";
+ const channel=routed?createRoutedDecisionChannel(config,o,runIndex):
+  o.comparisonMode==="network_feedback"?createDecisionChannel(config,o,runIndex):null;
  const observedHistory=new Map();
  const qualityCache=new Map();
  let lastDeliveredStep=0;
@@ -114,7 +119,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  const onFeedbackDecision=({step,value})=>{
   if(!Number.isInteger(step)||step<1||!(value===null||finite(value)))
    throw Error("Недопустимое коллективное решение для обратной связи");
-  if(o.comparisonMode==="decision_feedback"&&lastDeliveredStep!==step)
+  if(["decision_feedback","network_routed"].includes(o.comparisonMode)&&lastDeliveredStep!==step)
    throw Error("Обратная связь должна следовать после доставки предложений текущего такта");
   feedbackDecision={step,value};
   if(channel)channel.transmit({step,value});
@@ -166,7 +171,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
        qualityState={reason:"abstention",quality:null};
       else reference=feedbackDecision.value;
      }
-     if(o.comparisonMode==="network_feedback"){
+     if(o.comparisonMode==="network_feedback"||o.comparisonMode==="network_routed"){
       const received=channel.referenceFor(observer,target);
       if(received===null)qualityState={reason:"undelivered_decision",quality:null};
       else reference=received;
@@ -184,7 +189,7 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
    if(qualityState.reason==="abstention")debug.feedbackAbstentions++;
    return 0.5;
   }
-  if(o.comparisonMode==="decision_feedback"||o.comparisonMode==="network_feedback")debug.feedbackDecisionUsed++;
+  if(["decision_feedback","network_feedback","network_routed"].includes(o.comparisonMode))debug.feedbackDecisionUsed++;
   const quality=qualityState.quality;
   const random=rngFor(step,observer,target,4);
   let score=quality;
@@ -204,11 +209,15 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
  };
  return Object.freeze({
   transformProposals,onProposalsDelivered,onNetworkState,onFeedbackDecision,effectiveIntensity,
+  ...(routed?{
+   reserveDecisionBandwidth:context=>channel.reserveDecisionBandwidth(context),
+   afterEvidenceTransport:context=>channel.afterEvidenceTransport(context)
+  }:{}),
   evidenceValue:o.evidenceModel==="legacy"?null:evidenceValue,
   getDiagnostic:()=>({...debug,modelVersion:ADAPTIVE_SCENARIO_VERSION,
    strategy:o.attackStrategy,evidenceModel:o.evidenceModel,
    decisionChannel:channel?.getDiagnostic()??null,
-   decisionChannelModel:channel?E1A_DECISION_CHANNEL_VERSION:null}),
+   decisionChannelModel:channel?(routed?E1A_ROUTED_CHANNEL_VERSION:E1A_DECISION_CHANNEL_VERSION):null}),
   version:ADAPTIVE_SCENARIO_VERSION
  });
 }
