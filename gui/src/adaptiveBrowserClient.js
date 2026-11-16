@@ -6,6 +6,7 @@ import {validateAdaptiveStudy,summarizeAdaptiveRuns,ADAPTIVE_STUDY_VERSION} from
 import {ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
+import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
 import {ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
 import {TRUST_MODEL_VERSION} from "./trustEngine.js";
 import {withOriginStorageLock,loadAdaptiveCacheWithinOriginLock,saveAdaptiveCacheWithinOriginLock} from "./trustBrowserClient.js";
@@ -16,6 +17,7 @@ export const adaptiveCacheKey=(core,options)=>JSON.stringify({
  trust:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
  scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
  decisionChannel:E1A_DECISION_CHANNEL_VERSION,
+ routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION,
  config:core,options
 });
 let activeJob=null;
