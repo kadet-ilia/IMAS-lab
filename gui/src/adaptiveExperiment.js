@@ -10,9 +10,10 @@ import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiv
 import {createAdaptiveRiskController,ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
 import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
+import {E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.6.0-opt-in-work-conserving-routing";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.7.0-optional-component-local-diagnostic";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -36,6 +37,8 @@ export function validateAdaptiveStudy(config={},options={}){
   throw Error("Режим network_feedback требует включённого сетевого моделирования E1");
  if(["network_feedback","network_routed"].includes(adaptive.comparisonMode)&&adaptive.decisionOriginAgent>=core.n_agents+core.n_sybil_agents)
   throw Error("Источник коллективного решения вне множества агентов");
+ if(adaptive.localConsensusPilot&&!["network_feedback","network_routed"].includes(adaptive.comparisonMode))
+  throw Error("Локальный консенсус как диагностический режим требует сетевой обратной связи");
  const phases=adaptive.scenario==="dynamic"
   ?validateAttackPhases(adaptive.phases??defaultAttackPhases(core.n_steps,core.attack_start_step),core.n_steps)
   :null;
@@ -140,6 +143,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    throw Error("Неполный методоспецифический контур "+method);
   const paths=[],states=[];
   const channelHistory=generator.getDiagnostic().decisionChannel?.history??[];
+  const localHistory=generator.getDiagnostic().localConsensus?.history??[];
+  if(o.localConsensusPilot&&localHistory.length!==core.n_steps)
+   throw Error("Неполная трасса локального согласования E1-А");
   for(let index=0;index<core.n_steps;index++){
    const row=simulation.trajectory[index],ob=observed[index];
    if(row.step!==ob.step)throw Error("Нарушен порядок тактов "+method);
@@ -166,7 +172,11 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
      channelHistory[index].sharedUsed/channelHistory[index].sharedCapacity:null,
     decision_borrowed_slots:channelHistory[index]?.borrowedFromE1??null,
     decision_released_to_e1_slots:channelHistory[index]?.releasedToE1??null,
-    decision_target_reservation:channelHistory[index]?.targetReservation??null});
+    decision_target_reservation:channelHistory[index]?.targetReservation??null,
+    local_consensus_spread:localHistory[index]?.maxHonestSpread??null,
+    local_consensus_component_count:localHistory[index]?.componentCount??null,
+    local_consensus_messages:localHistory[index]?.totalMessages??null,
+    local_consensus_active_agents:localHistory[index]?.activeCount??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -204,6 +214,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    mean_shared_utilization:average(state.map(v=>v.decision_shared_utilization).filter(finite)),
    mean_borrowed_decision_slots:average(state.map(v=>v.decision_borrowed_slots).filter(finite)),
    mean_released_to_e1_slots:average(state.map(v=>v.decision_released_to_e1_slots).filter(finite)),
+   mean_local_consensus_spread:average(state.map(v=>v.local_consensus_spread).filter(finite)),
+   mean_local_consensus_components:average(state.map(v=>v.local_consensus_component_count).filter(finite)),
+   mean_local_consensus_messages:average(state.map(v=>v.local_consensus_messages).filter(finite)),
    ...feedback.metrics};
  });
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
@@ -224,7 +237,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   "p95_abs_error","max_abs_error","attack_rmse","state_rmse","final_abs_error","positive_delta_v_fraction",
   "mean_isolated_agents","max_isolated_agents","mean_reputation","mean_decision_reference_coverage",
   "mean_decision_hops_routed","mean_shared_utilization",
-  "mean_borrowed_decision_slots","mean_released_to_e1_slots"];
+  "mean_borrowed_decision_slots","mean_released_to_e1_slots",
+  "mean_local_consensus_spread","mean_local_consensus_components","mean_local_consensus_messages"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -258,7 +272,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   models:{base:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
    scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
    decisionChannel:E1A_DECISION_CHANNEL_VERSION,
-   routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION},
+   routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION,
+   localConsensus:E1A_LOCAL_CONSENSUS_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
    evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
    comparisonMode:o.comparisonMode,
@@ -272,6 +287,9 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    attack:"strategy independent of temporal intensity profile; attacker labels used by simulator only",
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
    routedBandwidthPolicy:o.comparisonMode==="network_routed"?o.decisionBandwidthPolicy:null,
+   localConsensus:o.localConsensusPilot
+    ?"Optional diagnostic: active nodes exchange previous-round states only across E1 physical edges in ideal synchronous unbudgeted rounds; Byzantine relay holds generated proposal; no feedback to E1, no distributed Byzantine agreement guarantee"
+    :"disabled",
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
