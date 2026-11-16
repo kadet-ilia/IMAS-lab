@@ -96,6 +96,9 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   adaptiveSharedUtilization:methodState.adaptive_robust[i].decision_shared_utilization,
   adaptiveBorrowed:methodState.adaptive_robust[i].decision_borrowed_slots,
   adaptiveReleasedToE1:methodState.adaptive_robust[i].decision_released_to_e1_slots,
+  adaptiveLocalSpread:methodState.adaptive_robust[i].local_consensus_spread,
+  adaptiveLocalComponents:methodState.adaptive_robust[i].local_consensus_component_count,
+  adaptiveLocalMessages:methodState.adaptive_robust[i].local_consensus_messages,
   trimmedReferenceCoverage:methodState.trimmed_unweighted[i].decision_reference_coverage,
   combinedReferenceCoverage:methodState.proposed_robust[i].decision_reference_coverage
  })):[];
@@ -157,6 +160,21 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        </select>
       </label>
       <p className="r27-note">Заимствующий режим перед запуском транспорта E1 резервирует не больше числа уже ожидающих пакетов, имеющих маршрут, затем отдаёт E1 освободившиеся слоты. После передачи предложений и свидетельств остаток общей ёмкости используется маршрутизатором. Новое решение, сформированное на текущем шаге, не резервирует ресурс задним числом. Прежняя политика static сохранена без изменения.</p>
+     </React.Fragment>:null}
+    </React.Fragment>:null}
+    {["network_feedback","network_routed"].includes(options.comparisonMode)?<React.Fragment>
+     <label><input type="checkbox" checked={options.localConsensusPilot} disabled={running}
+      onChange={e=>set("localConsensusPilot",e.target.checked)}/>
+      Диагностика локального согласования агентов по физическим рёбрам
+     </label>
+     {options.localConsensusPilot?<React.Fragment>
+      <NumberOption label="Раунды локального обмена" value={options.localConsensusRounds}
+       min={0} max={20} step={1} disabled={running} onChange={v=>set("localConsensusRounds",v)}/>
+      <NumberOption label="Усечение соседних оценок" value={options.localConsensusTrim}
+       min={0} max={40} step={1} disabled={running} onChange={v=>set("localConsensusTrim",v)}/>
+      <NumberOption label="Коэффициент локального обновления" value={options.localConsensusRelaxation}
+       min={0} max={1} step={0.05} disabled={running} onChange={v=>set("localConsensusRelaxation",v)}/>
+      <p className="r27-note">Вспомогательная проверка: локальные узлы итеративно обновляют собственные оценки только по сообщениям соседей прошлого раунда. Все соседние сообщения считаются мгновенно доставленными внутри раунда без потерь и расходов квоты E1. Механизм не изменяет центральное решение, свидетельства, изоляцию и маршрутизацию E1-А и не доказывает византийский консенсус.</p>
      </React.Fragment>:null}
     </React.Fragment>:null}
     <label>Режим коэффициента α
@@ -349,6 +367,24 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       </tbody></table></div>:null}
      </>:null}
     </>:null}
+    {options.localConsensusPilot?<React.Fragment>
+     <ResponsiveContainer width="100%" height={230}><LineChart data={coupledTrace}>
+      <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/>
+      <YAxis yAxisId="spread"/><YAxis yAxisId="components" orientation="right" allowDecimals={false}/>
+      <Tooltip formatter={v=>num(v,4)}/><Legend/>
+      <Line dataKey="adaptiveLocalSpread" name="Максимальный разброс честных оценок в компоненте" yAxisId="spread" stroke="#9a45a5" dot={false} isAnimationActive={false}/>
+      <Line dataKey="adaptiveLocalComponents" name="Число активных компонент" yAxisId="components" stroke="#236f8b" dot={false} isAnimationActive={false}/>
+     </LineChart></ResponsiveContainer>
+     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Средний разброс честных локальных оценок</th><th>Число компонент</th><th>Условных соседских сообщений за шаг</th></tr></thead><tbody>
+      {summary.map(x=><tr key={x.method}>
+       <td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
+       <td>{num(x.mean_local_consensus_spread?.mean,5)}</td>
+       <td>{num(x.mean_local_consensus_components?.mean,2)}</td>
+       <td>{num(x.mean_local_consensus_messages?.mean,2)}</td>
+      </tr>)}
+     </tbody></table></div>
+     <p className="r27-note">Разброс и число условных передач характеризуют отдельный диагностический расчёт с идеальными синхронными обменами, не включёнными в общий бюджет E1. Истинные метки агентов используются только для постфактум-выделения честных оценок; правило обновления их не получает.</p>
+    </React.Fragment>:null}
     <p className="r27-note">Показана модельная связь «решение → свидетельства → доверие и изоляция». network_feedback ограничивает доставку решения компонентами, а network_routed добавляет кратчайшие маршруты и либо статическое, либо динамически перераспределяемое резервирование общего лимита передач. Оба варианта не выполняют распределённое вычисление решения; доказательство устойчивости ИМАС отсутствует. Устойчивость всей ИМАС не доказана.</p>
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>Среднее число изолированных агентов</th><th>Средняя репутация</th></tr></thead><tbody>
      {summary.map(x=><tr key={x.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===x.method)?.label||x.method}</td>
