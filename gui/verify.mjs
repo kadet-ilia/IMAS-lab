@@ -478,8 +478,9 @@ await page.getByRole("spinbutton",{name:"Задержка соседского �
 await page.getByRole("spinbutton",{name:"Потери соседских сообщений"}).fill("0.10");
 await page.getByRole("spinbutton",{name:"Максимальный возраст соседского сообщения, шагов"}).fill("5");
 // Sufficient capacity to exercise local traffic rather than only starvation.
-// The network transport demand scales approximately with N^2.
-await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("2000");
+// Default N=50 generates up to 2500 evidence records per tick, so select
+// C=5000 to guarantee residual link slots even with the original E1 traffic.
+await page.getByRole("spinbutton",{name:"Пропускная способность, сообщ./шаг"}).fill("5000");
 await e1aRuns.fill("1");await e1aRuns.press("Tab");
 if(await e1aAction.isDisabled())
  throw Error("E1-A causal local neighbor test has invalid controls");
