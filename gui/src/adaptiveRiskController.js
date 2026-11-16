@@ -68,6 +68,14 @@ export function createAdaptiveRiskController(options={}){
     lossPlain,lossWeighted,weightVote:vote,informationReady:available,
     referenceType:"current_observed_median_for_previous_step"});
   },
+  skip(nextStep){
+   if(!Number.isInteger(nextStep)||nextStep!==step+1)
+    throw Error("E1-А риск: недоступный такт должен идти строго по порядку");
+   // Do not compare stale pre-abstention predictions with unrelated future
+   // observations. Retain historical scores but clear pending prediction.
+   step=nextStep;prev=null;
+   return Object.freeze({step,pairs,skipped:true});
+  },
   snapshot:()=>Object.freeze({step,pairs,lossPlain,lossWeighted,
    previous:prev?{...prev}:null,modelVersion:ADAPTIVE_RISK_MODEL_VERSION})
  });
