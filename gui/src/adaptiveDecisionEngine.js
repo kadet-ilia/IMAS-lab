@@ -7,8 +7,9 @@ import {aggregateProposals} from "./trustEngine.js";
 import {ADAPTIVE_SCENARIO_DEFAULTS,validateAdaptiveScenarioOptions} from "./adaptiveScenario.js";
 import {ADAPTIVE_RISK_DEFAULTS,validateAdaptiveRiskOptions} from "./adaptiveRiskController.js";
 import {E1A_DECISION_CHANNEL_DEFAULTS,validateDecisionChannelOptions} from "./adaptiveDecisionChannel.js";
+import {E1A_ROUTED_DEFAULTS,validateRoutedChannelOptions} from "./adaptiveRoutedDecisionChannel.js";
 
-export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.4.0";
+export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.5.0";
 export const ADAPTIVE_METHODS=Object.freeze([
  Object.freeze({id:"trimmed_unweighted",label:"Усечённое среднее E1",color:"#d18a31"}),
  Object.freeze({id:"proposed_robust",label:"Комбинированное среднее E1",color:"#123a63"}),
@@ -21,6 +22,7 @@ export const ADAPTIVE_DEFAULTS=Object.freeze({
  alphaMode:"adaptive",fixedAlpha:0.5,trimMode:"source_first",
  ...ADAPTIVE_RISK_DEFAULTS,
  ...E1A_DECISION_CHANNEL_DEFAULTS,
+ ...E1A_ROUTED_DEFAULTS,
  comparisonMode:"estimator_only",
  adaptiveTrim:false,trimEachSide:null,maxAdaptiveTrim:12,minRetained:5,
  outlierThreshold:2.5,scaleFloor:0.15,
@@ -47,7 +49,7 @@ export function validateAdaptiveOptions(input={}){
  if(input===null||typeof input!=="object"||Array.isArray(input))throw Error("Параметры адаптации должны быть объектом");
  const o={...ADAPTIVE_DEFAULTS,...input};
  if(!["adaptive","off","fixed","risk_aware"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
- if(!["estimator_only","decision_feedback","network_feedback"].includes(o.comparisonMode))
+ if(!["estimator_only","decision_feedback","network_feedback","network_routed"].includes(o.comparisonMode))
   throw Error("Неизвестный режим сравнения E1-А");
  if(!["legacy_clip_first","source_first"].includes(o.trimMode))throw Error("Неизвестный порядок усечения");
  if(!["dynamic","static_bias","subtle_bias","on_off","collusion"].includes(o.scenario))throw Error("Неизвестный сценарий");
@@ -66,6 +68,7 @@ export function validateAdaptiveOptions(input={}){
  validateAdaptiveScenarioOptions(o);
  validateAdaptiveRiskOptions(o);
  validateDecisionChannelOptions(o);
+ validateRoutedChannelOptions(o);
  return o;
 }
 function fractionalRetained(values,trim){
