@@ -13,7 +13,7 @@
  * Byzantine consensus protocol or a fair/shared-priority scheduler.
  */
 import {createRng} from "./trustEngine.js";
-import {localWeightedTrim,validateLocalConsensusOptions} from "./adaptiveLocalConsensus.js";
+import {localWeightedTrim,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFAULTS} from "./adaptiveLocalConsensus.js";
 
 export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.0.0";
 export const E1A_LOCAL_TRANSPORT_DEFAULTS=Object.freeze({
@@ -27,7 +27,7 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export function validateLocalTransportOptions(options={}){
  if(!options||typeof options!=="object"||Array.isArray(options))
   throw Error("Локальные сообщения: требуется объект параметров");
- const o={...E1A_LOCAL_TRANSPORT_DEFAULTS,...options};
+ const o={...E1A_LOCAL_CONSENSUS_DEFAULTS,...E1A_LOCAL_TRANSPORT_DEFAULTS,...options};
  if(typeof o.localTransportEnabled!=="boolean")
   throw Error("Локальные сообщения: localTransportEnabled должен быть логическим");
  for(const [key,lo,hi,int] of [
