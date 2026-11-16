@@ -10,30 +10,30 @@
 | TR-02 | UP-11 | `trustEngine.js` | `trustEngine.test.mjs` |
 | TR-03 | UP-14 | `trustEngine.js`, `main.jsx` | `verify.mjs` |
 | TR-04 | UP-10 | `metricPassport.js` | `metricPassport.test.mjs` |
-| TR-05 | UP-12 | `trustEngine.js` | `remediationWave2.test.mjs`, `test_up34_network_trace.py` |
+| TR-05 | UP-12 | `trustEngine.js` | `tests/gui/trustRemediationRegression.test.mjs`, `tests/python/test_up34_network_trace.py` |
 | TR-06 | UP-13 | `factorialAudit.js` | `factorialAudit.test.mjs` |
-| TR-07 | UP-34 | `up34Bridge.mjs`, `trustEngine.js` | `test_up34_deterministic.py`, `test_up34_network_trace.py` |
+| TR-07 | UP-34 | `tests/gui/up34Bridge.mjs`, `trustEngine.js` | `tests/python/test_up34_deterministic.py`, `tests/python/test_up34_network_trace.py` |
 | UN-01 | UP-17 | `ResearchManual.js`, `research2027.js` | `research2027.test.mjs` |
-| UN-02 | UP-16 | `research2027.js` | `test_up34_research_raw.py` |
+| UN-02 | UP-16 | `research2027.js` | `tests/python/test_up34_research_raw.py` |
 | UN-03 | UP-17 | `research2027.js` | `research2027.test.mjs` |
 | UN-04 | UP-17 | `research2027.js` | `researchRawProvenance.test.mjs` |
 | UN-05 | UP-17 | `ResearchManual.js`, `Research2027.jsx` | `verify.mjs` |
 | PG-01 | UP-18 | `research2027.js` | `research2027.test.mjs` |
-| PG-02 | UP-19 | `research2027.js` | `test_up34_graph_and_marking.py` |
+| PG-02 | UP-19 | `research2027.js` | `tests/python/test_up34_graph_and_marking.py` |
 | PG-03 | UP-20 | `ResearchManual.js` | `research2027.test.mjs` |
 | PG-04 | UP-30 | `statistics2027.js` | `researchStatisticalAudit.test.mjs` |
 | PT-01 | UP-21 | `research2027.js` | `petriOracle.test.mjs` |
 | PT-02 | UP-21 | `ResearchSettings.jsx` | `verify.mjs` |
 | PT-03 | UP-22 | `research2027.js` | `petriOracle.test.mjs` |
 | PT-04 | UP-21 | `research2027.js` | `research2027.test.mjs` |
-| PT-05 | UP-23 | `research2027.js` | `test_up34_graph_and_marking.py` |
+| PT-05 | UP-23 | `research2027.js` | `tests/python/test_up34_graph_and_marking.py` |
 | CA-01 | UP-24 | `research2027.js` | `researchBoundaryConditions.test.mjs` |
-| CA-02 | UP-25 | `research2027.js` | `test_up34_graph_and_marking.py` |
+| CA-02 | UP-25 | `research2027.js` | `tests/python/test_up34_graph_and_marking.py` |
 | CA-03 | UP-26 | `research2027.js` | `research2027.test.mjs` |
 | CA-04 | UP-26 | `research2027.js` | `researchFullArchives.test.mjs` |
 | MI-01 | UP-27 | `research2027.js` | `research2027.test.mjs` |
 | MI-02 | UP-27 / UP-31 | `Research2027.jsx`, `research2027.js` | `verify.mjs` |
-| MI-03 | UP-28 | `research2027.js` | `test_up34_research_raw.py` |
+| MI-03 | UP-28 | `research2027.js` | `tests/python/test_up34_research_raw.py` |
 | MI-04 | UP-29 | `research2027.js` | `metricPassport.test.mjs` |
 | MI-05 | UP-29 | `research2027.js` | `researchRawProvenance.test.mjs` |
 | UI-01 | UP-31 | `Research2027.jsx`, `metricFormatting.js` | `verify.mjs`, `metricFormatting.test.mjs` |

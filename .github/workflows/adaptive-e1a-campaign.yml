@@ -39,7 +39,7 @@ jobs:
         working-directory: gui
         run: |
           npm run adaptive:campaign:design
-          node --test src/adaptiveCampaign.test.mjs
+          node --test ../tests/gui/adaptiveCampaign.test.mjs
       - name: Execute preregistered scientific simulations
         shell: bash
         run: |

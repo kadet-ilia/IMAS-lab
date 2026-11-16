@@ -39,7 +39,7 @@ jobs:
         working-directory: gui
         run: |
           npm run adaptive:risk:design
-          node --test src/adaptiveRiskController.test.mjs src/adaptiveRiskCampaign.test.mjs
+          node --test ../tests/gui/adaptiveRiskController.test.mjs ../tests/gui/adaptiveRiskCampaign.test.mjs
       - name: Execute frozen paired risk campaign
         shell: bash
         run: |

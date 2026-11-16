@@ -4,6 +4,7 @@ on:
     branches: [IMAS_Lab_test]
     paths:
       - 'gui/**'
+      - 'tests/**'
       - '.github/workflows/adaptive-e1a.yml'
   pull_request:
     branches: [IMAS_Lab_test]
