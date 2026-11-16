@@ -161,9 +161,10 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
         onChange={e=>set("decisionBandwidthPolicy",e.target.value)}>
         <option value="static">Статическое резервирование (исходная модель)</option>
         <option value="opportunistic">Двустороннее заимствование свободных слотов</option>
+        <option value="local_floor">Гарантированная квота соседских сообщений</option>
        </select>
       </label>
-      <p className="r27-note">Заимствующий режим перед запуском транспорта E1 резервирует не больше числа уже ожидающих пакетов, имеющих маршрут, затем отдаёт E1 освободившиеся слоты. После передачи предложений и свидетельств остаток общей ёмкости используется маршрутизатором. Новое решение, сформированное на текущем шаге, не резервирует ресурс задним числом. Прежняя политика static сохранена без изменения.</p>
+      <p className="r27-note">В режиме opportunistic часть незанятой полосы заимствуется поэтапно. В режиме local_floor резервируются доля маршрутизируемых решений и спросо-ограниченная квота причинных соседских сообщений; остаток передаётся E1, после чего свободные слоты могут использовать соседские сообщения. Для local_floor включите диагностику и причинный локальный транспорт.</p>
      </React.Fragment>:null}
     </React.Fragment>:null}
     {["network_feedback","network_routed"].includes(options.comparisonMode)?<React.Fragment>
@@ -181,16 +182,21 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <p className="r27-note">Исходная диагностическая модель выполняет мгновенные идеальные раунды соседского обмена без сетевых затрат. Она сохранена как контрольное приближение.</p>
       <label><input type="checkbox" checked={options.localTransportEnabled} disabled={running}
        onChange={e=>set("localTransportEnabled",e.target.checked)}/>
-       Причинные соседские сообщения из свободной части общей полосы E1
+       Причинные соседские сообщения (остаточная полоса или гарантированная квота)
       </label>
       {options.localTransportEnabled?<React.Fragment>
+       {options.comparisonMode==="network_routed"&&options.decisionBandwidthPolicy==="local_floor"?<NumberOption
+        label="Доля общей полосы для локальных сообщений"
+        title="Максимум floor(C·f_local) гарантированных передач за такт при наличии текущего достижимого соседского спроса. Сумма с квотой решений не должна превышать 1."
+        value={options.localTransportBandwidthFraction} min={0} max={1} step={0.05}
+        disabled={running} onChange={v=>set("localTransportBandwidthFraction",v)}/>:null}
        <NumberOption label="Задержка соседского сообщения, шагов" value={options.localTransportDelaySteps}
         min={1} max={50} step={1} disabled={running} onChange={v=>set("localTransportDelaySteps",v)}/>
        <NumberOption label="Потери соседских сообщений" value={options.localTransportLossProbability}
         min={0} max={1} step={0.05} disabled={running} onChange={v=>set("localTransportLossProbability",v)}/>
        <NumberOption label="Максимальный возраст соседского сообщения, шагов" value={options.localTransportMaxAgeSteps}
         min={1} max={500} step={1} disabled={running} onChange={v=>set("localTransportMaxAgeSteps",v)}/>
-       <p className="r27-note">Каждый активный агент рассчитывает локальную оценку только по своему текущему предложению и ранее доставленным однопереходным сообщениям непосредственных соседей. Передача происходит в конце такта через остающиеся после E1 и маршрутизируемых решений свободные слоты; учитываются потери, задержки, TTL, разрывы рёбер и баланс сообщений. Сетевые пакеты не заменяют центральное решение и не управляют доверительным контуром. Это диагностический режим с низким приоритетом, а не протокол византийского согласования.</p>
+       <p className="r27-note">Каждый активный агент рассчитывает локальную оценку только по своему текущему предложению и ранее доставленным однопереходным сообщениям непосредственных соседей. Передача происходит в конце такта через остаточные слоты; в local_floor заранее выделяется ограниченная квота для существующего соседского спроса; учитываются потери, задержки, TTL, разрывы рёбер и баланс сообщений. Сетевые пакеты не заменяют центральное решение и не управляют доверительным контуром. Это диагностический режим с низким приоритетом, а не протокол византийского согласования.</p>
       </React.Fragment>:null}
       <p className="r27-note">Оба диагностических расчёта не изменяют центральное решение E1-А, свидетельства, изоляцию и маршрутизацию и не доказывают византийский консенсус.</p>
      </React.Fragment>:null}

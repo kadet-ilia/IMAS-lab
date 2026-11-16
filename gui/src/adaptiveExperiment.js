@@ -14,7 +14,7 @@ import {E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
 import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.8.0-causal-budgeted-neighbor-local-diagnostic";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.9.0-local-guarantee-scheduler";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -44,6 +44,9 @@ export function validateAdaptiveStudy(config={},options={}){
   throw Error("Локальные сообщения требуют включённой диагностики локального согласования");
  if(adaptive.localTransportEnabled&&!core.network_enabled)
   throw Error("Локальные сообщения требуют включённой сетевой модели E1");
+ if(adaptive.decisionBandwidthPolicy==="local_floor"&&
+  (adaptive.comparisonMode!=="network_routed"||!adaptive.localTransportEnabled))
+  throw Error("Гарантированная локальная квота требует network_routed и локального транспорта");
  const phases=adaptive.scenario==="dynamic"
   ?validateAttackPhases(adaptive.phases??defaultAttackPhases(core.n_steps,core.attack_start_step),core.n_steps)
   :null;

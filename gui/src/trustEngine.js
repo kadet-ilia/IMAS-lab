@@ -461,9 +461,10 @@ export function simulateRun(rawConfig={},scenario="collusion",runIndex=0,scenari
     byzantine:Object.freeze([...bad])
    });
   const transportT0=performance.now();
-  // Research-only static capacity partition: routed decision packets receive
-  // a reserved slice of the SAME configured transmission budget. Base E1's
-  // proposal and evidence messages are scheduled first within the remainder.
+  // E1-A bandwidth reservation is backward-compatible: legacy policies reserve
+  // decision hops only; opt-in local_floor reserves both decision hops and a
+  // demand-capped neighbor-message floor before E1 scheduling. This scalar is
+  // the COMBINED reserved budget, despite its historical variable name.
   const reservedDecisionSlots=simulationAdapter?.reserveDecisionBandwidth
    ?simulationAdapter.reserveDecisionBandwidth({
      step:t+1,capacity:c.bandwidth_messages_per_step

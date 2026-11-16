@@ -14,7 +14,7 @@ import {createRoutedDecisionChannel,validateRoutedChannelOptions,E1A_ROUTED_CHAN
 import {simulateLocalConsensusTick,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFAULTS,E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
 import {createLocalTransport,validateLocalTransportOptions,E1A_LOCAL_TRANSPORT_DEFAULTS,E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 
-export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.6.0-causal-local-neighbor-messages";
+export const ADAPTIVE_SCENARIO_VERSION="e1a-behavior-evidence-1.7.0-local-bandwidth-floor";
 export const ADAPTIVE_ATTACK_STRATEGIES=Object.freeze([
  {id:"legacy",label:"Исходная стратегия E1"},
  {id:"coordinated",label:"Согласованное смещение"},
@@ -241,14 +241,18 @@ export function createAdaptiveScenarioAdapter(config,options,runIndex){
   transformProposals,onProposalsDelivered,onNetworkState,onFeedbackDecision,effectiveIntensity,
   ...(o.localConsensusPilot?{onLocalConsensusProposals}:{}),
   ...(routed?{
-   reserveDecisionBandwidth:context=>channel.reserveDecisionBandwidth(context)
+   reserveDecisionBandwidth:context=>channel.reserveDecisionBandwidth(
+    o.decisionBandwidthPolicy==="local_floor"
+     ?{...context,localDemand:localTransport.getRoutableDemand({step:context.step})}
+     :context)
   }:{}),
   ...((routed||localTransport)?{
    afterEvidenceTransport:context=>{
     const routedResult=routed?channel.afterEvidenceTransport(context):null;
     const localResult=localTransport?.afterEvidenceTransport({
      step:context.step,sharedCapacity:context.sharedCapacity,
-     e1Used:context.e1Used,decisionUsed:routedResult?.routingHops??0
+     e1Used:context.e1Used,decisionUsed:routedResult?.routingHops??0,
+     localReserved:routedResult?.localReserved??0
     })??null;
     return {...routedResult,...localResult};
    }

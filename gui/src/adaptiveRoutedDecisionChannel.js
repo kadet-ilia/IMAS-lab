@@ -6,25 +6,31 @@
  * Packets may wait for a route, but in-flight packets are discarded if their
  * selected link fails before arrival. Lost hops are NOT retransmitted.
  *
- * A strict non-work-conserving static share of the E1 bandwidth is reserved
- * for routed decision hops BEFORE baseline E1 proposal/evidence scheduling:
- * E1 capacity = C - floor(C * fraction), routing capacity = floor(C*fraction).
+ * The legacy static and opportunistic policies retain their semantics.
+ * The opt-in local_floor policy reserves separate bounded decision and causal
+ * neighbor-message quotas BEFORE scheduling baseline E1 traffic.
  * These are not per-edge simultaneous channels and are NOT an optimal router.
  * A publication from t is never visible to witness evidence before t+1.
  */
 import {createRng} from "./trustEngine.js";
 import {validateDecisionChannelOptions} from "./adaptiveDecisionChannel.js";
 
-export const E1A_ROUTED_CHANNEL_VERSION="e1a-shortest-path-shared-scheduler-1.1.0";
-export const E1A_ROUTED_DEFAULTS=Object.freeze({decisionBandwidthFraction:0.25,decisionBandwidthPolicy:"static"});
+export const E1A_ROUTED_CHANNEL_VERSION="e1a-shortest-path-shared-scheduler-1.2.0";
+export const E1A_ROUTED_DEFAULTS=Object.freeze({decisionBandwidthFraction:0.25,decisionBandwidthPolicy:"static",localTransportBandwidthFraction:0.15});
 const finite=Number.isFinite;
 export function validateRoutedChannelOptions(options={}){
  const o={...E1A_ROUTED_DEFAULTS,...validateDecisionChannelOptions(options)};
  if(!finite(o.decisionBandwidthFraction)||o.decisionBandwidthFraction<0||
   o.decisionBandwidthFraction>1)
   throw Error("E1-А маршрутизация: доля резервирования канала должна принадлежать [0,1]");
- if(!["static","opportunistic"].includes(o.decisionBandwidthPolicy))
+ if(!["static","opportunistic","local_floor"].includes(o.decisionBandwidthPolicy))
   throw Error("E1-А маршрутизация: неизвестная политика распределения полосы");
+ if(!finite(o.localTransportBandwidthFraction)||o.localTransportBandwidthFraction<0||
+  o.localTransportBandwidthFraction>1)
+  throw Error("E1-А маршрутизация: недопустимая доля локального транспорта");
+ if(o.decisionBandwidthPolicy==="local_floor"&&
+  o.decisionBandwidthFraction+o.localTransportBandwidthFraction>1+1e-12)
+  throw Error("E1-А маршрутизация: сумма гарантированных долей превышает единицу");
  return o;
 }
 export function nextHopOnActiveGraph(adjacency,labels,active,from,to){
@@ -58,14 +64,16 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
   throw Error("E1-А маршрутизация: требуется целочисленный seed и номер прогона");
  const origin=p.decisionOriginAgent;
  let step=0,originAvailable=false,active=null,labels=null,adjacency=null;
- let lastCapacity=null,lastReserved=null,lastTargetReservation=null,nextId=0;
+ let lastCapacity=null,lastReserved=null,lastTargetReservation=null;
+ let lastDecisionReserved=0,lastLocalReserved=0,nextId=0;
  const waiting=[],inFlight=[],received=Array(n).fill(null),history=[];
  const counters={
   attempted:0,delivered:0,lost:0,blocked:0,expired:0,
   notDispatched:0,abstentions:0,uninformedWitnesses:0,referencesUsed:0,
   hopsScheduled:0,hopsArrived:0,hopsLost:0,routeDeferrals:0,
   bandwidthDeferrals:0,transmittedSlots:0,e1UsedSlots:0,reservedSlots:0,
-  sharedCapacitySlots:0,decisionBorrowedSlots:0,releasedToE1Slots:0
+  sharedCapacitySlots:0,decisionBorrowedSlots:0,releasedToE1Slots:0,
+  decisionGuaranteedSlots:0,localGuaranteedSlots:0
  };
  const reachable=(i,j)=>active[i]&&active[j]&&labels[i]>=0&&labels[i]===labels[j];
  const edge=(i,j)=>reachable(i,j)&&adjacency[i][j];
@@ -101,6 +109,7 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
   active=[...nextActive];labels=[...nextLabels];
   adjacency=nextAdjacency.map(row=>[...row]);
   step=t;originAvailable=false;lastCapacity=null;lastReserved=null;lastTargetReservation=null;
+  lastDecisionReserved=0;lastLocalReserved=0;
   const arrived=[];
   for(const packet of inFlight){
    if(t-packet.emitted>p.decisionMaxStalenessSteps){
@@ -138,22 +147,29 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
    coverage:reachableCount?informedCount/reachableCount:null,
    pending:pending(),routeDeferredThisStep:0,bandwidthDeferredThisStep:0,
    routingHopsThisStep:0,sharedCapacity:null,e1Used:null,
-   reserved:null,availableForE1:null,targetReservation:null,
+   reserved:null,decisionReserved:0,localReserved:0,
+   availableForE1:null,targetReservation:null,
    releasedToE1:0,borrowedFromE1:0,sharedUnused:null});
   audit();
  };
- const reserveDecisionBandwidth=({step:t,capacity})=>{
+ const reserveDecisionBandwidth=({step:t,capacity,localDemand=null})=>{
   if(t!==step||!Number.isSafeInteger(capacity)||capacity<1||lastCapacity!==null)
    throw Error("E1-А маршрутизация: невозможно выделить общий бюджет");
   lastCapacity=capacity;
   const target=Math.floor(capacity*p.decisionBandwidthFraction);
   lastTargetReservation=target;
   if(p.decisionBandwidthPolicy==="static"){
-   lastReserved=target;
+   lastDecisionReserved=target;
+  }else if(p.decisionBandwidthPolicy==="local_floor"){
+   // Local demand is measured AFTER local packets were staged this tick, with
+   // no oracle information. Reserve only packets that can use a live edge.
+   if(!Number.isSafeInteger(localDemand)||localDemand<0)
+    throw Error("E1-А маршрутизация: необходим целочисленный спрос локальных сообщений");
+   lastDecisionReserved=target;
+   lastLocalReserved=Math.min(Math.floor(capacity*p.localTransportBandwidthFraction),localDemand);
   }else{
-   // PRE-current-decision minimum guaranteed to old routable packets.
-   // The same E1 transport algorithm gets the released unused quota.
-   // Current-step decision packets may later borrow idle E1 slots.
+   // Demand-capped protection for OLD routed packets. Fresh decisions may
+   // subsequently use the idle capacity left by E1.
    let demand=0;
    for(const packet of waiting){
     if(t-packet.emitted>=p.decisionMaxStalenessSteps)continue;
@@ -161,8 +177,10 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
      demand++;
     if(demand>=target)break;
    }
-   lastReserved=Math.min(target,demand);
+   lastDecisionReserved=Math.min(target,demand);
   }
+  lastReserved=lastDecisionReserved+lastLocalReserved;
+  if(lastReserved>capacity)throw Error("E1-А маршрутизация: переполнен общий резерв");
   return lastReserved;
  };
  const onProposalsDelivered=({step:t,available})=>{
@@ -190,7 +208,7 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
    !Number.isSafeInteger(e1Used)||e1Used<0||e1Used>sharedCapacity-reserved)
    throw Error("E1-А маршрутизация: неверный бюджет E1 после передачи свидетельств");
   const slotsAvailable=p.decisionBandwidthPolicy==="opportunistic"
-   ?sharedCapacity-e1Used:reserved;
+   ?sharedCapacity-e1Used:lastDecisionReserved;
   let slots=slotsAvailable,hops=0,routes=0,limited=0;
   const deferred=[];
   // Oldest packets first; deterministic tie-break by destination and creation.
@@ -213,25 +231,29 @@ export function createRoutedDecisionChannel(config,options={},runIndex=0){
    }else inFlight.push({...packet,next,due:t+p.decisionDelaySteps,local:false});
   }
   waiting.splice(0,waiting.length,...deferred);
-  const borrowedFromE1=Math.max(0,hops-reserved);
-  const releasedToE1=lastTargetReservation-reserved;
-  if(hops>slotsAvailable||reserved>lastTargetReservation||releasedToE1<0||
-   e1Used+hops>sharedCapacity)
+  const borrowedFromE1=Math.max(0,hops-lastDecisionReserved);
+  const releasedToE1=lastTargetReservation-lastDecisionReserved;
+  if(hops>slotsAvailable||lastDecisionReserved>lastTargetReservation||releasedToE1<0||
+   e1Used+hops+lastLocalReserved>sharedCapacity)
    throw Error("E1-А маршрутизация: превышение адаптивного общего бюджета");
   counters.routeDeferrals+=routes;counters.bandwidthDeferrals+=limited;
   counters.transmittedSlots+=hops;counters.e1UsedSlots+=e1Used;
   counters.reservedSlots+=reserved;counters.sharedCapacitySlots+=sharedCapacity;
+  counters.decisionGuaranteedSlots+=lastDecisionReserved;
+  counters.localGuaranteedSlots+=lastLocalReserved;
   counters.decisionBorrowedSlots+=borrowedFromE1;
   counters.releasedToE1Slots+=releasedToE1;
   Object.assign(history.at(-1),{
    pending:pending(),routeDeferredThisStep:routes,
    bandwidthDeferredThisStep:limited,routingHopsThisStep:hops,
-   sharedCapacity,e1Used,reserved,targetReservation:lastTargetReservation,
+   sharedCapacity,e1Used,reserved,decisionReserved:lastDecisionReserved,
+   localReserved:lastLocalReserved,targetReservation:lastTargetReservation,
    releasedToE1,borrowedFromE1,availableForE1:sharedCapacity-reserved,
    sharedUsed:e1Used+hops,sharedUnused:sharedCapacity-e1Used-hops
   });
   audit();
-  return {routingHops:hops,e1Used,reserved,sharedCapacity};
+  return {routingHops:hops,e1Used,reserved,sharedCapacity,
+   localReserved:lastLocalReserved,decisionReserved:lastDecisionReserved};
  };
  const referenceFor=(observer,target)=>{
   if(!Number.isInteger(observer)||observer<0||observer>=n||
