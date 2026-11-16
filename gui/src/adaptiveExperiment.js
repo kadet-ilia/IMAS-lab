@@ -11,9 +11,10 @@ import {createAdaptiveRiskController,ADAPTIVE_RISK_MODEL_VERSION} from "./adapti
 import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
 import {E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
+import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.7.0-optional-component-local-diagnostic";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-1.8.0-causal-budgeted-neighbor-local-diagnostic";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -39,6 +40,10 @@ export function validateAdaptiveStudy(config={},options={}){
   throw Error("Источник коллективного решения вне множества агентов");
  if(adaptive.localConsensusPilot&&!["network_feedback","network_routed"].includes(adaptive.comparisonMode))
   throw Error("Локальный консенсус как диагностический режим требует сетевой обратной связи");
+ if(adaptive.localTransportEnabled&&!adaptive.localConsensusPilot)
+  throw Error("Локальные сообщения требуют включённой диагностики локального согласования");
+ if(adaptive.localTransportEnabled&&!core.network_enabled)
+  throw Error("Локальные сообщения требуют включённой сетевой модели E1");
  const phases=adaptive.scenario==="dynamic"
   ?validateAttackPhases(adaptive.phases??defaultAttackPhases(core.n_steps,core.attack_start_step),core.n_steps)
   :null;
@@ -144,6 +149,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
   const paths=[],states=[];
   const channelHistory=generator.getDiagnostic().decisionChannel?.history??[];
   const localHistory=generator.getDiagnostic().localConsensus?.history??[];
+  const linkHistory=generator.getDiagnostic().localTransport?.history??[];
+  if(o.localTransportEnabled&&linkHistory.length!==core.n_steps)
+   throw Error("Локальные сообщения: получена неполная причинная трасса");
   if(o.localConsensusPilot&&localHistory.length!==core.n_steps)
    throw Error("Неполная трасса локального согласования E1-А");
   for(let index=0;index<core.n_steps;index++){
@@ -176,7 +184,14 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     local_consensus_spread:localHistory[index]?.maxHonestSpread??null,
     local_consensus_component_count:localHistory[index]?.componentCount??null,
     local_consensus_messages:localHistory[index]?.totalMessages??null,
-    local_consensus_active_agents:localHistory[index]?.activeCount??null});
+    local_consensus_active_agents:localHistory[index]?.activeCount??null,
+    local_link_neighbor_readings:linkHistory[index]?.neighborReadingsThisStep??null,
+    local_link_informed_nodes:linkHistory[index]?.informedNodes??null,
+    local_link_transmissions:linkHistory[index]?.localUsed??null,
+    local_link_honest_spread:linkHistory[index]?.localHonestSpread??null,
+    local_link_shared_utilization:linkHistory[index]?.sharedUtilization??null,
+    local_link_total_used:linkHistory[index]?.totalUsed??null,
+    local_link_shared_capacity:linkHistory[index]?.sharedCapacity??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -217,6 +232,11 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    mean_local_consensus_spread:average(state.map(v=>v.local_consensus_spread).filter(finite)),
    mean_local_consensus_components:average(state.map(v=>v.local_consensus_component_count).filter(finite)),
    mean_local_consensus_messages:average(state.map(v=>v.local_consensus_messages).filter(finite)),
+   mean_local_link_neighbor_readings:average(state.map(v=>v.local_link_neighbor_readings).filter(finite)),
+   mean_local_link_informed_nodes:average(state.map(v=>v.local_link_informed_nodes).filter(finite)),
+   mean_local_link_transmissions:average(state.map(v=>v.local_link_transmissions).filter(finite)),
+   mean_local_link_honest_spread:average(state.map(v=>v.local_link_honest_spread).filter(finite)),
+   mean_local_link_shared_utilization:average(state.map(v=>v.local_link_shared_utilization).filter(finite)),
    ...feedback.metrics};
  });
  const feedback=Object.fromEntries(ADAPTIVE_METHOD_IDS.map(method=>[
@@ -238,7 +258,9 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   "mean_isolated_agents","max_isolated_agents","mean_reputation","mean_decision_reference_coverage",
   "mean_decision_hops_routed","mean_shared_utilization",
   "mean_borrowed_decision_slots","mean_released_to_e1_slots",
-  "mean_local_consensus_spread","mean_local_consensus_components","mean_local_consensus_messages"];
+  "mean_local_consensus_spread","mean_local_consensus_components","mean_local_consensus_messages",
+  "mean_local_link_neighbor_readings","mean_local_link_informed_nodes",
+  "mean_local_link_transmissions","mean_local_link_honest_spread","mean_local_link_shared_utilization"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -273,7 +295,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
    decisionChannel:E1A_DECISION_CHANNEL_VERSION,
    routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION,
-   localConsensus:E1A_LOCAL_CONSENSUS_VERSION},
+   localConsensus:E1A_LOCAL_CONSENSUS_VERSION,
+   localTransport:E1A_LOCAL_TRANSPORT_VERSION},
   methodology:{comparison:"estimator_only: shared E1 proposals, trust, isolation and delivery",
    evidence:"E1-A behavior-linked witnesses use delivered proposals and robust peers, not oracle truth; lagged_observation is an observation lag, not transport latency",
    comparisonMode:o.comparisonMode,
@@ -288,7 +311,10 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    inputLeakage:"adaptive estimator does not receive oracle truth, labels or future evidence",
    routedBandwidthPolicy:o.comparisonMode==="network_routed"?o.decisionBandwidthPolicy:null,
    localConsensus:o.localConsensusPilot
-    ?"Optional diagnostic: active nodes exchange previous-round states only across E1 physical edges in ideal synchronous unbudgeted rounds; Byzantine relay holds generated proposal; no feedback to E1, no distributed Byzantine agreement guarantee"
+    ?"Optional ideal synchronous unbudgeted local diagnostic; no feedback to central E1 decision or Byzantine agreement guarantee"
+    :"disabled",
+   localTransport:o.localTransportEnabled
+    ?"Optional causal one-hop local state transport: each node reads only received neighbor packets from earlier steps; delay, loss, edge state and TTL are enforced. Transmission uses ONLY currently idle global E1+routed slots after E1/routed scheduling, never changes central E1 decisions; packet and total-slot conservation are verified. This is NOT distributed consensus or a fair-priority scheduler."
     :"disabled",
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
