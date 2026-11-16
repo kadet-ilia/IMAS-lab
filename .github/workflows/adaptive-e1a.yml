@@ -37,6 +37,9 @@ jobs:
       - name: Exploratory E1-A pilot (not confirmatory)
         working-directory: gui
         run: npm run adaptive:pilot
+      - name: Protocol-locked campaign smoke (3 x 2 paired seeds)
+        working-directory: gui
+        run: npm run adaptive:campaign:smoke
       - name: Export exploratory pilot data
         if: always()
         uses: actions/upload-artifact@v4
