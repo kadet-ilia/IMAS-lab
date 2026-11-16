@@ -45,11 +45,17 @@ export function createDecisionChannel(config,options={},runIndex=0){
  const pending=[],last=Array(n).fill(null);
  const counters={attempted:0,lost:0,delivered:0,blocked:0,expired:0,
   notDispatched:0,abstentions:0,uninformedWitnesses:0,referencesUsed:0};
- const feedbackCoverage=[],snapshot=()=>({
-  ...counters,pending:pending.length,origin,delay:p.decisionDelaySteps,
-  lossProbability:p.decisionLossProbability,staleness:p.decisionMaxStalenessSteps,
-  history:feedbackCoverage.map(x=>({...x})),modelVersion:E1A_DECISION_CHANNEL_VERSION
- });
+ const feedbackCoverage=[],snapshot=()=>{
+  if(counters.attempted!==counters.lost+counters.delivered+
+   counters.blocked+counters.expired+pending.length)
+   throw Error("E1-А канал решений: нарушен закон сохранения пакетов");
+  return {
+   ...counters,pending:pending.length,origin,delay:p.decisionDelaySteps,
+   lossProbability:p.decisionLossProbability,staleness:p.decisionMaxStalenessSteps,
+   history:feedbackCoverage.map(x=>({...x})),modelVersion:E1A_DECISION_CHANNEL_VERSION,
+   balance:0
+  };
+ };
  const same=(i,j)=>active[i]&&active[j]&&labels[i]>=0&&labels[i]===labels[j];
  const networkStep=({step:t,labels:nextLabels,active:nextActive})=>{
   if(!Number.isInteger(t)||t!==step+1||!Array.isArray(nextLabels)||
