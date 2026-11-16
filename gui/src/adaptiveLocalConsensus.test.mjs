@@ -22,7 +22,7 @@ test("local consensus enforces finite input, symmetry, partition and bounded par
 test("finite topology cannot propagate information faster than one edge per synchronous round",()=>{
  const settings={localConsensusTrim:0,localConsensusRounds:2,localConsensusRelaxation:1};
  const first=simulateLocalConsensusTick(basic(),settings);
- const far=simulateLocalConsensusTick(basic({values:[0,1,2,3,999]}),settings);
+ const far=simulateLocalConsensusTick(basic({values:[0,1,2,3,-2]}),settings);
  for(let round=0;round<=2;round++){
   assert.equal(first.rounds[round].states[0],far.rounds[round].states[0]);
  }
@@ -32,7 +32,7 @@ test("local inference remains separated across disconnected graph components",()
  const g=graph(5,[[0,1],[1,2],[3,4]]);
  const input={...basic(),adjacency:g,labels:[0,0,0,1,1]};
  const a=simulateLocalConsensusTick(input,{localConsensusRounds:6,localConsensusTrim:0});
- const b=simulateLocalConsensusTick({...input,values:[0,1,2,100,200]},
+ const b=simulateLocalConsensusTick({...input,values:[0,1,2,-1,-1.5]},
   {localConsensusRounds:6,localConsensusTrim:0});
  assert.deepEqual(a.states.slice(0,3),b.states.slice(0,3));
  assert.notDeepEqual(a.states.slice(3),b.states.slice(3));
