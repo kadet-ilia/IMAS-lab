@@ -49,7 +49,7 @@ for(const topology of topologies)
      const cross=result.crossTransport;
      const m=result.metrics;
      if(m.safetyViolations!==0||m.issViolations!==0||
-      result.records.some(r=>Math.abs(r.stateAfter)>config.plantSafeBound+1e-9)||
+      result.records.some(r=>Math.abs(r.stateAfter)>result.options.plantSafeBound+1e-9)||
       result.rows.some(r=>r.slotsUsed>r.slotsAvailable)||
       (enabled&&(!cross||cross.generated!==cross.delivered+
        cross.lost+cross.blocked+cross.expired+cross.superseded+cross.pending))||

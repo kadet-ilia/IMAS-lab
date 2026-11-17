@@ -126,7 +126,7 @@ test("dense communication without physical range emits zero remote reports",()=>
  const active=Array(n).fill(true);
  ch.networkStep({time:1,adjacency:all,active});
  assert.equal(ch.emit({time:1,states:Array(n).fill(0),
-  active,faulty:Array(n).fill(false),budget:48}),0);
+  active,faulty:Array(n).fill(false),budget:q.plantCapacity}),0);
  ch.networkStep({time:2,adjacency:all,active});
  assert.deepEqual(ch.read({time:2}),Array.from({length:n},()=>[]));
  const diag=ch.getDiagnostic();

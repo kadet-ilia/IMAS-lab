@@ -16,7 +16,7 @@ import {createLocalTransport} from "./adaptiveLocalTransport.js";
 import {createCertifiedPlantObserver,scheduledSensorFault,shieldCertifiedInterval,SENSOR_FAULT_OBSERVER_VERSION} from "./adaptiveLocalPlantSensorFaults.js";
 import {createCrossSensorTransport,projectCrossReport,fuseCrossCertificates,CROSS_SENSOR_VERSION} from "./adaptiveLocalCrossSensing.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.4.0-physical-observability";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.4.0-cross-sensing-geometric-observability";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,
