@@ -60,6 +60,8 @@ for(const [index,cell] of cells.entries()){
   individual.push({run:run.run,centralRmse:m.rmse,
    honestRmse:m.mean_local_autonomous_honest_rmse,
    honestCoverage:m.mean_local_autonomous_honest_coverage,
+   honestUnconditionalLoss:m.mean_local_autonomous_honest_unconditional_loss,
+   honestAcceptedSquaredContribution:m.mean_local_autonomous_honest_accepted_squared_contribution,
    allCoverage:m.mean_local_autonomous_coverage,
    exclusions:m.mean_local_autonomous_guard_exclusions,
    honestExclusions:m.mean_local_autonomous_guard_honest_exclusions,
@@ -69,6 +71,8 @@ for(const [index,cell] of cells.entries()){
   centralRmse:mean(individual.map(r=>r.centralRmse)),
   honestRmse:mean(individual.map(r=>r.honestRmse)),
   honestCoverage:mean(individual.map(r=>r.honestCoverage)),
+  honestUnconditionalLoss:mean(individual.map(r=>r.honestUnconditionalLoss)),
+  honestAcceptedSquaredContribution:mean(individual.map(r=>r.honestAcceptedSquaredContribution)),
   allCoverage:mean(individual.map(r=>r.allCoverage)),
   exclusions:mean(individual.map(r=>r.exclusions)),
   honestExclusions:mean(individual.map(r=>r.honestExclusions)),
@@ -86,6 +90,12 @@ for(let i=0;i<rows.length;i+=2){
  paired.push({topology:on.topology,partition:on.partition,
   capacity:on.capacity,deltaHonestRmse:on.honestRmse-off.honestRmse,
   deltaHonestCoverage:on.honestCoverage-off.honestCoverage,
+  deltaHonestUnconditionalLoss:on.honestUnconditionalLoss-off.honestUnconditionalLoss,
+  sensitivity:[0,.25,1,4].map(penalty=>({
+   penalty,deltaLoss:on.honestAcceptedSquaredContribution-
+    off.honestAcceptedSquaredContribution+
+    penalty*(off.honestCoverage-on.honestCoverage)
+  })),
   excluded:on.exclusions,honestExcluded:on.honestExclusions,
   activations:on.activations});
 }
@@ -102,6 +112,7 @@ console.log("E1-A LOCAL GUARD SUMMARY "+JSON.stringify({
  cells:rows.length,methodRuns:rows.length*R*5,
  meanDeltaHonestRmse:mean(paired.map(p=>p.deltaHonestRmse)),
  meanDeltaHonestCoverage:mean(paired.map(p=>p.deltaHonestCoverage)),
+ meanDeltaHonestUnconditionalLoss:mean(paired.map(p=>p.deltaHonestUnconditionalLoss)),
  meanExcluded:mean(paired.map(p=>p.excluded)),
  meanHonestExcluded:mean(paired.map(p=>p.honestExcluded)),
  status:"Exploratory; no validated Byzantine or field safety claims"}));

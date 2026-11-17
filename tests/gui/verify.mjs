@@ -526,6 +526,16 @@ await page.getByRole("spinbutton",{
  name:"Минимум новых свидетельств для защитного действия"
 }).fill("2");
 await guardToggle.uncheck();
+const actionLoopToggle=page.getByRole("checkbox",{
+ name:"Замкнутый контур локальных действий и соседских сообщений (пилот)"
+});
+await actionLoopToggle.check();
+await page.getByRole("spinbutton",{
+ name:"Максимальный шаг локального действия"
+}).fill("0.10");
+await page.getByRole("spinbutton",{
+ name:"Стоимость отказа от локального решения"
+}).fill("1.5");
 if(await e1aAction.isDisabled())
  throw Error("Stage-10 local autonomy controls unexpectedly rejected");
 await e1aAction.click();
@@ -538,6 +548,8 @@ const autonomyRun=autonomyResult.runs?.[0];
 const autonomyChannel=autonomyRun?.scenarioDiagnosticsByMethod?.
  adaptive_robust?.localTransport;
 if(!autonomyResult.options.localAutonomyEnabled||
+ !autonomyResult.options.localAutonomyActionFeedbackEnabled||
+ autonomyResult.options.localAutonomyRefusalPenalty!==1.5||
  !autonomyResult.models.localAutonomy?.includes("directed-beta")||
  autonomyResult.methodology.localAutonomy?.includes("SHADOW")!==true||
  !autonomyChannel?.autonomy||autonomyChannel.history?.length!==200||
@@ -545,8 +557,15 @@ if(!autonomyResult.options.localAutonomyEnabled||
  !autonomyChannel.history.some(h=>h.autonomousCoverage>0)||
  !autonomyChannel.history.every(h=>h.autonomousDecisions.length===
   autonomyResult.configuration.n_agents+autonomyResult.configuration.n_sybil_agents)||
+ !autonomyChannel.history.every(h=>Array.isArray(h.autonomousActions)&&
+  h.autonomousActions.length===autonomyResult.configuration.n_agents+
+   autonomyResult.configuration.n_sybil_agents&&
+  h.autonomousActions.every(v=>v===null||v>=-2&&v<=2))||
  !autonomyRun.metrics.every(m=>m.mean_local_autonomous_coverage>=0&&
-  m.mean_local_autonomous_coverage<=1&&Number.isFinite(m.mean_local_autonomous_rmse)))
+  m.mean_local_autonomous_coverage<=1&&
+  Number.isFinite(m.mean_local_autonomous_rmse)&&
+  Number.isFinite(m.mean_local_autonomous_honest_unconditional_loss)&&
+  Number.isFinite(m.mean_local_autonomous_honest_action_mse)))
  throw Error("Stage-10 autonomous local decision worker/browser export incomplete");
 for(const method of autonomyRun.metrics){
  const old=localLinkResult.runs[0].metrics.find(m=>m.method===method.method);
@@ -554,6 +573,8 @@ for(const method of autonomyRun.metrics){
   throw Error("Stage-10 local shadow modified a central E1 estimator");
 }
 e1aAdaptiveSummary.localAutonomyBrowserVerified=true;
+e1aAdaptiveSummary.localActionFeedbackBrowserVerified=true;
+await actionLoopToggle.uncheck();
 await page.getByRole("checkbox",{
  name:"Независимые локальные решения и персональное доверие к соседям (пилот)"
 }).uncheck();

@@ -174,7 +174,12 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     </React.Fragment>:null}
     {["network_feedback","network_routed"].includes(options.comparisonMode)?<React.Fragment>
      <label><input type="checkbox" checked={options.localConsensusPilot} disabled={running}
-      onChange={e=>set("localConsensusPilot",e.target.checked)}/>
+      onChange={e=>setOptions(o=>({...o,
+       localConsensusPilot:e.target.checked,
+       localTransportEnabled:e.target.checked?o.localTransportEnabled:false,
+       localAutonomyEnabled:e.target.checked?o.localAutonomyEnabled:false,
+       localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false,
+       localAutonomyActionFeedbackEnabled:e.target.checked?o.localAutonomyActionFeedbackEnabled:false}))}/>
       Диагностика локального согласования агентов по физическим рёбрам
      </label>
      {options.localConsensusPilot?<React.Fragment>
@@ -187,14 +192,17 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <p className="r27-note">Исходная диагностическая модель выполняет мгновенные идеальные раунды соседского обмена без сетевых затрат. Она сохранена как контрольное приближение.</p>
       <label><input type="checkbox" checked={options.localTransportEnabled} disabled={running}
        onChange={e=>setOptions(o=>({...o,localTransportEnabled:e.target.checked,
-        localAutonomyEnabled:e.target.checked?o.localAutonomyEnabled:false}))}/>
+        localAutonomyEnabled:e.target.checked?o.localAutonomyEnabled:false,
+        localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false,
+        localAutonomyActionFeedbackEnabled:e.target.checked?o.localAutonomyActionFeedbackEnabled:false}))}/>
        Причинные соседские сообщения (остаточная полоса или гарантированная квота)
       </label>
       {options.localTransportEnabled?<React.Fragment>
        <label><input type="checkbox" checked={options.localAutonomyEnabled} disabled={running}
         onChange={e=>setOptions(o=>({...o,
          localAutonomyEnabled:e.target.checked,
-         localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false}))}/>
+         localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false,
+         localAutonomyActionFeedbackEnabled:e.target.checked?o.localAutonomyActionFeedbackEnabled:false}))}/>
         Независимые локальные решения и персональное доверие к соседям (пилот)
        </label>
        {options.localAutonomyEnabled?<React.Fragment>
@@ -229,6 +237,33 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
           disabled={running} onChange={v=>set("localAutonomyGuardMinEvidence",v)}/>
          <p className="r27-note">Локальное исключение действует только в оценивателе данного агента. При изменении доверия повторный допуск возможен по новым пакетам. Физические соединения и глобальная изоляция E1 не изменяются; возможны ложные исключения честных соседей.</p>
         </React.Fragment>:null}
+        <label><input type="checkbox" checked={options.localAutonomyActionFeedbackEnabled} disabled={running}
+         onChange={e=>set("localAutonomyActionFeedbackEnabled",e.target.checked)}/>
+         Замкнутый контур локальных действий и соседских сообщений (пилот)
+        </label>
+        {options.localAutonomyActionFeedbackEnabled?<React.Fragment>
+         <NumberOption label="Коэффициент перехода локального действия"
+          title="Множитель отклонения нового локального решения от ранее применённого собственного действия."
+          value={options.localAutonomyActionGain} min={0} max={1} step={0.05}
+          disabled={running} onChange={v=>set("localAutonomyActionGain",v)}/>
+         <NumberOption label="Максимальный шаг локального действия"
+          title="Абсолютное ограничение изменения принятого локального действия за один активный такт."
+          value={options.localAutonomyActionMaxStep} min={0.001} max={100} step={0.05}
+          disabled={running} onChange={v=>set("localAutonomyActionMaxStep",v)}/>
+         <label>Действие при отказе от локального решения
+          <select aria-label="Действие при отказе от локального решения" disabled={running}
+           value={options.localAutonomyActionRefusalPolicy}
+           onChange={e=>set("localAutonomyActionRefusalPolicy",e.target.value)}>
+           <option value="hold">Удерживать последнее действие</option>
+           <option value="observe">Вернуться к собственному наблюдению</option>
+          </select>
+         </label>
+         <p className="r27-note">Принятое локальное действие отправляется соседям только после расчёта текущего такта. Отказ не считается принятым решением; для обмена отправляется собственное наблюдение. Контур не воздействует на физический объект, центральную изоляцию или свидетельства E1.</p>
+        </React.Fragment>:null}
+        <NumberOption label="Стоимость отказа от локального решения"
+         title="Постфактум штраф за каждый такт честного активного агента без принятого решения, в единицах квадрата ошибки. На локальный алгоритм не влияет."
+         value={options.localAutonomyRefusalPenalty} min={0} max={10000} step={0.1}
+         disabled={running} onChange={v=>set("localAutonomyRefusalPenalty",v)}/>
         <p className="r27-note">Доверие Tᵢⱼ рассчитывается отдельно каждым агентом по его собственным историческим наблюдениям и фактически доставленным сообщениям непосредственных соседей. Глобальная репутация E1 не используется локальным решателем. Отказ отличается от первичного сообщения. Полученные решения пока не воздействуют на центральный контур свидетельств и изоляции.</p>
        </React.Fragment>:null}
        {options.comparisonMode==="network_routed"&&options.decisionBandwidthPolicy==="local_floor"?<NumberOption
@@ -370,7 +405,15 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Kpi label="RMSE всех локальных решений" value={num(adaptive?.mean_local_autonomous_rmse?.mean,5)}
       note="Включая имитационные решения нарушителей; только постфактум"/>
      <Kpi label="RMSE локальных решений честных агентов" value={num(adaptive?.mean_local_autonomous_honest_rmse?.mean,5)}
-      note="Синтетическая разметка честности используется исключительно для оценки"/>
+      note="Только принятые решения — возможна селекция по отказам"/>
+     <Kpi label="Безусловная потеря честных агентов" value={num(adaptive?.mean_local_autonomous_honest_unconditional_loss?.mean,5)}
+      note="Все активные агент-такты, при отказе применяется заданный штраф"/>
+     {options.localAutonomyActionFeedbackEnabled?<React.Fragment>
+      <Kpi label="MSE локально применённых действий" value={num(adaptive?.mean_local_autonomous_honest_action_mse?.mean,5)}
+       note="Включая удержание либо собственное наблюдение при отказе"/>
+      <Kpi label="Переходы локальных действий" value={num(adaptive?.mean_local_autonomous_action_updates?.mean,1)}
+       note="Количество принятых обновлений локального контура"/>
+     </React.Fragment>:null}
      <Kpi label="Обновления направленного доверия" value={num(adaptive?.mean_local_autonomous_trust_updates?.mean,1)}
       note="По уникальным впервые доставленным соседским сообщениям"/>
      {options.localAutonomyGuardEnabled?<React.Fragment>
@@ -388,7 +431,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Line dataKey="trust" name="Средняя локальная оценка доверия" stroke="#123a63"
       dot={false} isAnimationActive={false}/>
     </LineChart></ResponsiveContainer>
-    <p className="r27-note">Графики и выводы отражают только синтетический диагностический режим. Независимая локальная адаптация не эквивалентна устойчивому распределённому консенсусу.</p>
+    <p className="r27-note">Безусловная потеря включает отказы; RMSE принятых решений — нет. Замкнутый локальный обмен действиями не моделирует физический объект или глобальную защиту E1 и не доказывает византийский консенсус.</p>
    </Panel>:null}
    <Panel title="Динамика параметров адаптации" subtitle="Эвристическая степень использования доверительных весов α(t) и симметричное усечение k(t).">
     <ResponsiveContainer width="100%" height={280}><LineChart data={trace}>

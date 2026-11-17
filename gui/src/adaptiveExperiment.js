@@ -15,7 +15,7 @@ import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.2.0-shadow-local-guard-pilot";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.3.0-local-action-loop-and-unconditional-loss";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -49,6 +49,8 @@ export function validateAdaptiveStudy(config={},options={}){
   throw Error("Автономные локальные решения требуют причинного локального транспорта");
  if(adaptive.localAutonomyGuardEnabled&&!adaptive.localAutonomyEnabled)
   throw Error("Локальная защитная фильтрация требует автономных локальных решений");
+ if(adaptive.localAutonomyActionFeedbackEnabled&&!adaptive.localAutonomyEnabled)
+  throw Error("Замкнутый локальный контур действий требует автономных локальных решений");
  if(adaptive.decisionBandwidthPolicy==="local_floor"&&
   (adaptive.comparisonMode!=="network_routed"||!adaptive.localTransportEnabled))
   throw Error("Гарантированная локальная квота требует network_routed и локального транспорта");
@@ -207,7 +209,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     local_autonomous_guarded:linkHistory[index]?.autonomousGuarded??null,
     local_autonomous_released:linkHistory[index]?.autonomousReleased??null,
     local_autonomous_excluded:linkHistory[index]?.autonomousExcluded??null,
-    local_autonomous_honest_excluded:linkHistory[index]?.autonomousHonestExcluded??null});
+    local_autonomous_honest_excluded:linkHistory[index]?.autonomousHonestExcluded??null,
+    local_autonomous_action_updates:linkHistory[index]?.autonomousActionUpdates??null,
+    local_autonomous_action_refusals:linkHistory[index]?.autonomousActionRefusals??null});
   }
   methodPaths[method]=paths;
   methodStates[method]=states;
@@ -237,6 +241,15 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
    .filter((v,i)=>h.autonomousHonestMask?.[i]&&finite(v)));
   const honestDenominator=localRows.reduce((total,h)=>total+
    (h.autonomousHonestMask??[]).filter(Boolean).length,0);
+  // Post-hoc: every honest active node/tick pays accepted squared error OR
+  // the explicit refusal penalty, never a selection-biased accepted-only loss.
+  const honestCosts=localRows.flatMap(h=>(h.autonomousDecisions??[])
+   .flatMap((v,i)=>h.autonomousHonestMask?.[i]?
+    [finite(v)?(v-core.desired_action)**2:o.localAutonomyRefusalPenalty]:[]));
+  if(honestCosts.length!==honestDenominator)
+   throw Error("Локальная оценка риска: нарушен состав честных наблюдений");
+  const honestApplied=localRows.flatMap(h=>(h.autonomousActions??[])
+   .filter((v,i)=>h.autonomousHonestMask?.[i]&&finite(v)));
   return {method,run:runIndex,decision_coverage:accepted.length/core.n_steps,
    probability_correct:errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/core.n_steps,
    accuracy_accepted:accepted.length?
@@ -269,6 +282,15 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
     honestAccepted.length/honestDenominator:null,
    mean_local_autonomous_honest_rmse:honestAccepted.length?
     Math.sqrt(average(honestAccepted.map(x=>(x-core.desired_action)**2))):null,
+   mean_local_autonomous_honest_unconditional_loss:honestDenominator?
+    average(honestCosts):null,
+   mean_local_autonomous_honest_accepted_squared_contribution:honestDenominator?
+    sum(honestAccepted.map(x=>(x-core.desired_action)**2))/honestDenominator:null,
+   // Applied-action MSE also includes fallback after refusals.
+   mean_local_autonomous_honest_action_mse:honestApplied.length?
+    average(honestApplied.map(x=>(x-core.desired_action)**2)):null,
+   mean_local_autonomous_action_updates:o.localAutonomyActionFeedbackEnabled?
+    localRows.reduce((total,h)=>total+(h.autonomousActionUpdates??0),0):null,
    mean_local_autonomous_trust_updates:o.localAutonomyEnabled?
     localRows.reduce((sum,h)=>sum+(h.autonomousTrustUpdates??0),0):null,
    mean_local_autonomous_guard_exclusions:o.localAutonomyEnabled?
@@ -305,7 +327,11 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   "mean_local_autonomous_honest_coverage","mean_local_autonomous_honest_rmse",
   "mean_local_autonomous_trust_updates","mean_local_autonomous_guard_exclusions",
   "mean_local_autonomous_guard_honest_exclusions",
-  "mean_local_autonomous_guard_activations"];
+  "mean_local_autonomous_guard_activations",
+  "mean_local_autonomous_honest_unconditional_loss",
+  "mean_local_autonomous_honest_accepted_squared_contribution",
+  "mean_local_autonomous_honest_action_mse",
+  "mean_local_autonomous_action_updates"];
  const summary=ADAPTIVE_METHOD_IDS.map(method=>{
   const group=ordered.map(run=>run.metrics.find(row=>row.method===method));
   if(group.some(v=>!v))throw Error("Отсутствует оценка метода "+method);
@@ -363,7 +389,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
     ?"Optional causal one-hop local neighbor transport with delayed/lossy delivery and shared budget; legacy and local_floor bandwidth modes preserved"
     :"disabled",
    localAutonomy:o.localAutonomyEnabled
-    ?"Optional independent directed soft-Beta trust from delivered neighbor estimates compared with OWN emission-time observations. SHADOW research only. Local vs central RMSE have different estimands. Honest masks and false guard exclusions are simulator POST-HOC diagnostics; no E1 global reputation, labels, oracle or central decision enter local trust. Opt-in guard excludes a directed neighbor only after enough fresh evidence, with hysteretic readmission. The network graph, isolation and original E1 remain centrally controlled. NOT Byzantine consensus or distributed closed-loop control."
+    ?"Independent directed soft-Beta local trust from causal delivered observations. Opt-in two-threshold local guard, with post-hoc honest false exclusion counts. Optional BOUNDED local action-state loop z(t) feeds the NEXT neighbor message but NOT physical plant state, E1 evidence, global topology, isolation or E1 central decision. All honest active (node,tick) units enter predeclared unconditional loss: squared error if accepted, configured refusal penalty if absent. Truth and labels enter only offline evaluation, never local estimation, action or trust. Distinct local and central evaluation units preclude direct paired RMSE claims; NOT Byzantine consensus or full cyberdefence closed-loop control."
     :"disabled",
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",

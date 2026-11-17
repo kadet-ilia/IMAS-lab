@@ -17,7 +17,7 @@ import {localWeightedTrim,validateLocalConsensusOptions,E1A_LOCAL_CONSENSUS_DEFA
 import {createLocalAutonomy,validateLocalAutonomyOptions,
  E1A_LOCAL_AUTONOMY_DEFAULTS,E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 
-export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.4.0";
+export const E1A_LOCAL_TRANSPORT_VERSION="e1a-local-causal-idle-slot-1.5.0-action-loop";
 export const E1A_LOCAL_TRANSPORT_DEFAULTS=Object.freeze({
  localTransportEnabled:false,
  localTransportDelaySteps:1,
@@ -48,6 +48,8 @@ export function validateLocalTransportOptions(options={}){
   throw Error("Локальные сообщения: срок актуальности меньше задержки");
  validateLocalConsensusOptions(o);
  validateLocalAutonomyOptions(o);
+ if(o.localAutonomyActionFeedbackEnabled&&!o.localAutonomyEnabled)
+  throw Error("Локальный контур действий требует автономного оценивателя");
  return o;
 }
 export function createLocalTransport(config,options={},runIndex=0){
@@ -123,7 +125,9 @@ export function createLocalTransport(config,options={},runIndex=0){
    autonomousTrustUpdates:null,autonomousMeanTrust:null,
    autonomousGuarded:null,autonomousReleased:null,
    autonomousExcluded:null,autonomousHonestExcluded:null,
-   autonomousDecisions:null,autonomousTrust:null});
+   autonomousDecisions:null,autonomousTrust:null,
+   autonomousActions:null,autonomousActionUpdates:null,
+   autonomousActionRefusals:null,autonomousActionResets:null});
   audit();
  };
  const onProposals=({step:t,values,reputation,active:a,faulty})=>{
@@ -185,7 +189,13 @@ export function createLocalTransport(config,options={},runIndex=0){
    const own=clamp(values[i],low,high);
    // An abstaining node may advertise its raw proposal as bootstrap evidence;
    // this is a separate type of value, NOT an accepted collective decision.
-   outgoing[i]=faulty[i]?own:(finite(next[i])?next[i]:own);
+   // Local actions are causal state outputs from the prior action state,
+   // never from future neighbor packets. During refusal, bootstrap sends
+   // the current raw observation rather than an unverified held action.
+   const action=autonomy&&p.localAutonomyActionFeedbackEnabled&&
+    finite(next[i])?autonomousRecord.actions[i]:null;
+   outgoing[i]=faulty[i]?own:(finite(action)?action:
+    (finite(next[i])?next[i]:own));
    if(autonomy&&faulty[i]){next[i]=own;counters.maliciousHolds++;}
   }
   counters.neighborReadingsUsed+=readings;
@@ -222,6 +232,11 @@ export function createLocalTransport(config,options={},runIndex=0){
     autonomousHonestExcluded:autonomousRecord.trustByNode.reduce((sum,relations)=>
      sum+(relations??[]).filter(r=>r.quarantined&&!faulty[r.source]).length,0),
     autonomousDecisions:next.slice(),
+    autonomousActions:p.localAutonomyActionFeedbackEnabled?
+     autonomousRecord.actions.map((a,i)=>active[i]&&!faulty[i]?a:null):null,
+    autonomousActionUpdates:autonomousRecord.actionUpdates,
+    autonomousActionRefusals:autonomousRecord.actionRefusals,
+    autonomousActionResets:autonomousRecord.actionResets,
     // SIMULATOR-ONLY labels, solely for post-hoc scientific stratification.
     // Not passed into createLocalAutonomy.tick or into trust updates.
     autonomousHonestMask:active.map((alive,i)=>alive&&!faulty[i]),
@@ -288,7 +303,9 @@ export function createLocalTransport(config,options={},runIndex=0){
   return {...counters,waiting:waiting.size,inFlight:inFlight.length,
    pending:waiting.size+inFlight.length,
    modelVersion:E1A_LOCAL_TRANSPORT_VERSION,
-   role:autonomy?"autonomous_local_decision_shadow":"causal_local_diagnostic_only",
+   role:autonomy?(p.localAutonomyActionFeedbackEnabled?
+    "causal_local_action_feedback_shadow":"autonomous_local_decision_shadow"):
+    "causal_local_diagnostic_only",
    autonomy:autonomy?.getDiagnostic()??null,
    autonomyModel:autonomy?E1A_LOCAL_AUTONOMY_VERSION:null,
    policy:p.decisionBandwidthPolicy==="local_floor"

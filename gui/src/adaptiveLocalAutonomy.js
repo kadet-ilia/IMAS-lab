@@ -6,7 +6,7 @@
  */
 import {localWeightedTrim} from "./adaptiveLocalConsensus.js";
 
-export const E1A_LOCAL_AUTONOMY_VERSION="e1a-local-directed-beta-shadow-1.1.0";
+export const E1A_LOCAL_AUTONOMY_VERSION="e1a-local-directed-beta-shadow-1.2.0-action-feedback";
 export const E1A_LOCAL_AUTONOMY_DEFAULTS=Object.freeze({
  localAutonomyEnabled:false,
  localAutonomyEvidenceTolerance:0.45,
@@ -15,7 +15,15 @@ export const E1A_LOCAL_AUTONOMY_DEFAULTS=Object.freeze({
  localAutonomyGuardEnabled:false,
  localAutonomyGuardThreshold:0.30,
  localAutonomyGuardHysteresis:0.15,
- localAutonomyGuardMinEvidence:3
+ localAutonomyGuardMinEvidence:3,
+ // Optional local-only action state: accepted decisions affect NEXT neighbor
+ // packets. They never affect the central E1 simulator or trust oracle.
+ localAutonomyActionFeedbackEnabled:false,
+ localAutonomyActionGain:0.5,
+ localAutonomyActionMaxStep:0.25,
+ localAutonomyActionRefusalPolicy:"hold",
+ // Evaluation-only squared-error cost of missing a local decision.
+ localAutonomyRefusalPenalty:1
 });
 const finite=Number.isFinite;
 const clamp=(x,low,high)=>Math.max(low,Math.min(high,x));
@@ -35,7 +43,15 @@ export function validateLocalAutonomyOptions(options={}){
   !finite(p.localAutonomyGuardHysteresis)||p.localAutonomyGuardHysteresis<0||
   p.localAutonomyGuardThreshold+p.localAutonomyGuardHysteresis>=1||
   !Number.isInteger(p.localAutonomyGuardMinEvidence)||
-  p.localAutonomyGuardMinEvidence<1||p.localAutonomyGuardMinEvidence>500)
+  p.localAutonomyGuardMinEvidence<1||p.localAutonomyGuardMinEvidence>500||
+  typeof p.localAutonomyActionFeedbackEnabled!=="boolean"||
+  !finite(p.localAutonomyActionGain)||p.localAutonomyActionGain<0||
+  p.localAutonomyActionGain>1||
+  !finite(p.localAutonomyActionMaxStep)||p.localAutonomyActionMaxStep<=0||
+  p.localAutonomyActionMaxStep>100||
+  !["hold","observe"].includes(p.localAutonomyActionRefusalPolicy)||
+  !finite(p.localAutonomyRefusalPenalty)||p.localAutonomyRefusalPenalty<0||
+  p.localAutonomyRefusalPenalty>10000)
   throw Error("Автономные локальные решения: недопустимые параметры");
  return p;
 }
@@ -51,8 +67,11 @@ export function createLocalAutonomy(n,low,high,options={}){
   throw Error("Автономные локальные решения: неверная численная область");
  const ownHistory=Array.from({length:n},()=>new Map());
  const trust=Array.from({length:n},()=>new Map());
+ // Last applied local action; NO central aggregated decision or ground truth.
+ const actionState=Array(n).fill(null);
  let lastStep=0,totalUpdates=0,totalRefusals=0,totalUnmatched=0;
  let totalGuarded=0,totalReleased=0,totalExcluded=0;
+ let totalActionUpdates=0,totalActionRefusals=0,totalActionResets=0;
  const decay=(entry,t)=>{
   const age=t-entry.lastUpdate;
   if(age>0){
@@ -142,10 +161,34 @@ export function createLocalAutonomy(n,low,high,options={}){
     p.localConsensusRelaxation*localWeightedTrim(values,weights,p.localConsensusTrim),
     low,high);
   }
+  // A bounded local information-feedback loop, distinct from plant or E1
+  // control: z_i(t) depends only on z_i(t-1) and u_i(t), and is offered
+  // as a causal message to neighbors at the END of this tick.
+  const actions=Array(n).fill(null);
+  let actionUpdates=0,actionRefusals=0,actionResets=0;
+  if(p.localAutonomyActionFeedbackEnabled)for(let i=0;i<n;i++){
+   if(!active[i]){
+    if(finite(actionState[i])){actionResets++;totalActionResets++;}
+    actionState[i]=null;continue;
+   }
+   const prior=finite(actionState[i])?actionState[i]:projected[i];
+   if(finite(decisions[i])){
+    const delta=clamp(p.localAutonomyActionGain*(decisions[i]-prior),
+     -p.localAutonomyActionMaxStep,p.localAutonomyActionMaxStep);
+    actions[i]=clamp(prior+delta,low,high);
+    actionUpdates++;totalActionUpdates++;
+   }else{
+    // A refusal never counts as a new accepted collective decision.
+    // The local action state can hold safely or reset to own observation.
+    actions[i]=p.localAutonomyActionRefusalPolicy==="hold"?prior:projected[i];
+    actionRefusals++;totalActionRefusals++;
+   }
+   actionState[i]=actions[i];
+  }
   const activeCount=active.filter(Boolean).length;
   const allObserved=readings+excluded;
   return {step,decisions,trustByNode,updates,refusals,unmatched,readings,
-   guarded,released,excluded,
+   guarded,released,excluded,actions,actionUpdates,actionRefusals,actionResets,
    meanTrust:allObserved?trustSum/allObserved:null,activeCount,
    coverage:activeCount?decisions.filter(finite).length/activeCount:null};
  };
@@ -153,6 +196,9 @@ export function createLocalAutonomy(n,low,high,options={}){
   steps:lastStep,updates:totalUpdates,refusals:totalRefusals,
   unmatched:totalUnmatched,guarded:totalGuarded,released:totalReleased,
   excluded:totalExcluded,
+  actionFeedbackEnabled:p.localAutonomyActionFeedbackEnabled,
+  actionUpdates:totalActionUpdates,actionRefusals:totalActionRefusals,
+  actionResets:totalActionResets,
   directedGuardedPairs:trust.reduce((sum,relations)=>sum+
    [...relations.values()].filter(x=>x.quarantined).length,0),
   role:"independent_directed_trust_from_delivered_messages"});

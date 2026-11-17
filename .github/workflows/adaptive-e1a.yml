@@ -70,6 +70,9 @@ jobs:
       - name: Directed-trust local quarantine / readmission pilot (16 cells)
         working-directory: gui
         run: npm run adaptive:local:guard:pilot
+      - name: Bounded causal local action feedback research pilot (16 cells)
+        working-directory: gui
+        run: npm run adaptive:local:action:pilot
       - name: Export exploratory pilot data
         if: always()
         uses: actions/upload-artifact@v4
