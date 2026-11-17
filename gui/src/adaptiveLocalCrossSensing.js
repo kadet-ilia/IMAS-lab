@@ -13,7 +13,7 @@
 import {createRng} from "./trustEngine.js";
 import {syntheticOrbitVisibility} from "./adaptiveCrossOrbitalVisibility.js";
 
-export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.3.0-bounded-async-sensing";
+export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.4.0-authenticated-packet-boundary";
 const finite=Number.isFinite;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
 const EPS=1e-10;
@@ -183,8 +183,16 @@ export function fuseCrossCertificates(prior,intervals,maxCorrupt,p){
 }
 
 /** Delayed/lossy, bandwidth-capped, one-hop authenticated remote reports. */
-export function createCrossSensorTransport(p,runIndex=0){
+export function createCrossSensorTransport(p,runIndex=0,authAdapter=null){
  const n=p.plantAgents,ttl=p.plantCrossTTL;
+ if(p.plantCrossAuthMode==="verified_envelope"&&(
+  !authAdapter||typeof authAdapter.sign!=="function"||
+  typeof authAdapter.verify!=="function"))
+  throw invalid("режим проверенных пакетов требует внешний криптографический адаптер");
+ const authenticated=p.plantCrossAuthMode==="verified_envelope";
+ const canonical=packet=>JSON.stringify([
+  "e1a-cross-sensor-envelope-v1",packet.source,packet.target,
+  packet.emitted,packet.value]);
  if(!Number.isInteger(n)||n<2||n>32||
   !Number.isInteger(runIndex)||runIndex<0)
   throw invalid("неверная конфигурация канала");
@@ -192,7 +200,7 @@ export function createCrossSensorTransport(p,runIndex=0){
  const waiting=new Map(),inFlight=[],cached=Array.from({length:n},()=>new Map());
  const history=[];
  const counts={generated:0,transmitted:0,delivered:0,lost:0,blocked:0,
-  expired:0,superseded:0};
+  expired:0,superseded:0,authenticationRejected:0};
  const key=(j,i)=>j+":"+i;
  const edge=(j,i)=>j!==i&&active[j]&&active[i]&&adjacency[j][i];
  const audit=()=>{
@@ -219,6 +227,14 @@ export function createCrossSensorTransport(p,runIndex=0){
    if(time-packet.emitted>ttl){counts.expired++;continue;}
    if(packet.due>time){pending.push(packet);continue;}
    if(!edge(packet.source,packet.target)){counts.blocked++;continue;}
+   if(authenticated){
+    let valid=false;
+    try{valid=authAdapter.verify(packet.source,canonical(packet),
+     packet.signature)===true;}catch{valid=false;}
+    if(!valid){
+     counts.blocked++;counts.authenticationRejected++;continue;
+    }
+   }
    const prior=cached[packet.target].get(packet.source);
    if(!prior||packet.emitted>=prior.emitted)
     cached[packet.target].set(packet.source,{...packet,arrived:time});
@@ -279,7 +295,14 @@ export function createCrossSensorTransport(p,runIndex=0){
      value=clamp(value+(source%2?-1:1)*p.plantAttackBias,
       -p.plantSafeBound,p.plantSafeBound);
     if(waiting.has(id)){waiting.delete(id);counts.superseded++;}
-    waiting.set(id,{source,target,emitted:time,value});
+    const packet={source,target,emitted:time,value};
+    if(authenticated){
+     const signature=authAdapter.sign(source,canonical(packet));
+     if(typeof signature!=="string"||!/^[0-9a-f]{64}$/.test(signature))
+      throw invalid("криптографический адаптер вернул недопустимую подпись");
+     packet.signature=signature;
+    }
+    waiting.set(id,packet);
     counts.generated++;
    }
   const ordered=[...waiting.entries()].sort((a,b)=>
@@ -310,6 +333,8 @@ export function createCrossSensorTransport(p,runIndex=0){
    observationMode:p.plantCrossObservationMode??"network_proxy",
    observationGeometryEpoch:"actual sample in [emitted-L,emitted], no disclosure",
    sampleLagBoundSteps:p.plantCrossSampleLagMaxSteps??0,
+   authenticationMode:p.plantCrossAuthMode??"assumed_origin",
+   authenticationRejected:counts.authenticationRejected,
    packetSampleEpochDisclosure:false,
    role:"simulator_only_authenticated_physical_cross_sensors",
    history:history.map(r=>({...r}))};

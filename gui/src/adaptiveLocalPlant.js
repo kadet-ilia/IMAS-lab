@@ -16,7 +16,7 @@ import {createLocalTransport} from "./adaptiveLocalTransport.js";
 import {createCertifiedPlantObserver,scheduledSensorFault,shieldCertifiedInterval,SENSOR_FAULT_OBSERVER_VERSION} from "./adaptiveLocalPlantSensorFaults.js";
 import {createCrossSensorTransport,projectCrossReport,fuseCrossCertificates,CROSS_SENSOR_VERSION} from "./adaptiveLocalCrossSensing.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.6.0-cross-sensing-bounded-asynchronous-sampling";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.7.0-cross-sensing-authenticated-boundary";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,
@@ -75,6 +75,8 @@ export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantCrossOrbitPositionError:0,
  plantCrossOrbitPointingError:0,
  plantCrossSampleLagMaxSteps:0, // undisclosed physically buffered sample age
+ // Assumed origin for legacy simulations, or fail-closed external HMAC/etc.
+ plantCrossAuthMode:"assumed_origin", // assumed_origin | verified_envelope
  // Public certified UPPER bound on bad authenticated reporter identities.
  // Deliberately separate from simulator-only actual Byzantine membership.
  plantCrossFaultBudget:2,
@@ -146,6 +148,8 @@ export function validateLocalPlantOptions(input={}){
   throw Error("Локальный объект: неизвестная модель измерительной доступности");
  if(!["omnidirectional","prograde"].includes(p.plantCrossPointingMode))
   throw Error("Локальный объект: неизвестный режим наведения внешнего датчика");
+ if(!["assumed_origin","verified_envelope"].includes(p.plantCrossAuthMode))
+  throw Error("Локальный объект: неверный режим удостоверения источников");
  if(!["ring","complete"].includes(p.plantTopology)||
   !["local_action","local_decision","local_sensor"].includes(p.plantControlMode)||
   !["barrier_zero","trusted_sensor"].includes(p.plantFallbackPolicy)||
@@ -255,7 +259,7 @@ const draw=(p,runIndex,salt,step,node)=>
  * bounded requested u_t -> robust measurement-based safety barrier ->
  * x_(t+1). The network uses x_t-derived emissions ONLY on later ticks.
  */
-export function simulateLocalPlant(input={},runIndex=0){
+export function simulateLocalPlant(input={},runIndex=0,authAdapter=null){
  const p=validateLocalPlantOptions(input);
  if(!Number.isInteger(runIndex)||runIndex<0||runIndex>100000)
   throw Error("Локальный объект: недопустимый индекс реализации");
@@ -287,7 +291,8 @@ export function simulateLocalPlant(input={},runIndex=0){
   return sign*p.plantInitialMagnitude*scale;
  });
  const initial=[...states],records=[],rows=[];
- const cross=p.plantCrossEnabled?createCrossSensorTransport(p,runIndex):null;
+ const cross=p.plantCrossEnabled?
+  createCrossSensorTransport(p,runIndex,authAdapter):null;
  const crossBudget=cross?Math.floor(p.plantCapacity*p.plantCrossBandwidthFraction):0;
  const controlTape=[];
  const measurementTruthTape=[]; // simulator instrument only
@@ -530,5 +535,5 @@ export function simulateLocalPlant(input={},runIndex=0){
    nominalContractionFactor:q,nominalContractive:q<1},
   rows,records,transport:link,
   ...(cross?{crossTransport:crossLink}:{}),
-  methodology:"Standalone synthetic scalar plant. Missing own sensors use model-predicted certified intervals. Optional authenticated PHYSICAL remote sensors measure neighboring target states with certified individual error. Only delayed packets enter the conservative m-f support hull; intervals propagate via actual executed controls. Remote sampling may precede packet emission by an undisclosed bounded number of steps; the certificate is the union hull over all eligible epochs. Remote transmissions consume a reserved share of the SAME capacity. Authentication, honest remote instruments and published bounds, f and model are assumed. Unsafe certificates fail closed; incomplete episodes pay the full-horizon penalty. This is not Byzantine agreement or field-ready closed-loop control."};
+  methodology:"Standalone synthetic scalar plant. Missing own sensors use model-predicted certified intervals. Optional authenticated PHYSICAL remote sensors measure neighboring target states with certified individual error. Only delayed packets enter the conservative m-f support hull; intervals propagate via actual executed controls. Remote sampling may precede packet emission by an undisclosed bounded number of steps; the certificate is the union hull over all eligible epochs. Remote transmissions consume a reserved share of the SAME capacity. Authentication is assumed by default; verified_envelope requires a caller-supplied trusted signature adapter. Its key provenance is NOT certified by this simulator. Honest remote instruments and published bounds, f and model are assumed. Unsafe certificates fail closed; incomplete episodes pay the full-horizon penalty. This is not Byzantine agreement or field-ready closed-loop control."};
 }
