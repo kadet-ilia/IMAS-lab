@@ -18,6 +18,7 @@ test("cross sensing is opt-in and validates certified bounds and same-tick quota
  assert.equal(defaults.plantCrossEnabled,false);
  for(const bad of [
   {plantCrossEnabled:1},{plantCrossBound:2},{plantCrossDelay:0},
+  {plantCrossEnabled:true,plantCrossFaultBudget:1},
   {plantCrossTTL:0},{plantCrossDelay:5,plantCrossTTL:2},
   {plantCrossLoss:1.5},{plantCrossBandwidthFraction:1.5},
   {plantCrossEnabled:true,plantCrossBandwidthFraction:0}

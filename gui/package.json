@@ -32,7 +32,8 @@
     "adaptive:local:guard:pilot": "node scripts/adaptiveLocalAutonomyGuardPilot.mjs",
     "adaptive:local:action:pilot": "node scripts/adaptiveLocalActionFeedbackPilot.mjs",
     "adaptive:local:plant:pilot": "node scripts/adaptiveLocalPlantPilot.mjs",
-    "adaptive:local:sensor:pilot": "node scripts/adaptiveLocalPlantSensorFaultPilot.mjs"
+    "adaptive:local:sensor:pilot": "node scripts/adaptiveLocalPlantSensorFaultPilot.mjs",
+    "adaptive:local:cross:pilot": "node scripts/adaptiveLocalCrossSensorPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

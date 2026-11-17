@@ -80,6 +80,9 @@ jobs:
       - name: Set-valued observer and sensor dropout/degradation pilot (24 cells, 72 runs)
         working-directory: gui
         run: npm run adaptive:local:sensor:pilot
+      - name: Causal authenticated physical cross-sensor pilot (72 episodes)
+        working-directory: gui
+        run: npm run adaptive:local:cross:pilot
       - name: Export exploratory pilot data
         if: always()
         uses: actions/upload-artifact@v4
