@@ -111,7 +111,10 @@ export function validateLocalPlantOptions(input={}){
   p.plantSensorFaultStart>p.plantSensorFaultEnd||
   (p.plantSensorFaultMode!=="nominal"&&p.plantSensorFaultEnd>p.plantSteps)||
   p.plantDegradedSensorBound>=S||
-  p.plantCertificationPenalty<=S*S)
+  (p.plantSensorFaultMode==="degraded"&&
+   p.plantDegradedSensorBound<p.plantSensorBound)||
+  (p.plantSensorFaultMode!=="nominal"&&
+   p.plantCertificationPenalty<=S*S))
   throw Error("Локальный объект: несовместимые границы или горизонт");
  // Sufficient robust viability for EVERY admissible x and bounded sensor
  // uncertainty; actual barrier intersection is still checked every tick.

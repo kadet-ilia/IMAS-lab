@@ -60,6 +60,12 @@ export function refineCertifiedInterval({prior,measurement=null,errorBound=null}
 export function shieldCertifiedInterval({interval,requested},p){
  bounds(interval,p);
  if(!finite(requested))throw Error("Локальный объект: неопределённая команда");
+ // Necessary feasibility independent of actuator size or requested action:
+ // a*(H-L)+2W <= 2S. Every control shifts both interval endpoints equally.
+ const imageWidth=p.plantA*(interval.max-interval.min)+
+  2*p.plantDisturbanceBound;
+ if(imageWidth>2*p.plantSafeBound+EPS)
+  throw loss("неустранимая ширина интервала состояния: a·(H−L)+2W>2S");
  const lo=Math.max(-p.plantControlLimit,
   (-p.plantSafeBound+p.plantDisturbanceBound-p.plantA*interval.min)/p.plantB);
  const hi=Math.min(p.plantControlLimit,

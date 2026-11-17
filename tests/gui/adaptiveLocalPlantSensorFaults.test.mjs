@@ -22,6 +22,7 @@ test("sensor failure schedule, bounds and penalty are explicit and opt-in",()=>{
   {plantSensorFaultEnd:501},
   {plantDegradedSensorBound:Infinity},
   {plantDegradedSensorBound:2},
+  {plantSensorFaultMode:"degraded",plantDegradedSensorBound:0.01},
   {plantCertificationPenalty:0},
   {plantSensorFaultStart:12,plantSensorFaultEnd:10},
   {plantSensorFaultMode:"dropout",plantSteps:10,plantSensorFaultEnd:12}
@@ -37,6 +38,9 @@ test("sensor failure schedule, bounds and penalty are explicit and opt-in",()=>{
  assert.equal(scheduledSensorFault(10,0,opts),"nominal");
  assert.equal(scheduledSensorFault(4,7,opts),"nominal");
  assert.throws(()=>scheduledSensorFault(0,1,opts),/неверный адрес/);
+ assert.equal(validateLocalPlantOptions({plantSafeBound:4})
+  .plantCertificationPenalty,10,
+  "A fault-only penalty constraint must not break the historical nominal mode");
 });
 
 test("certified observation intersects only current, authenticated measurement",()=>{
@@ -83,7 +87,7 @@ test("wide interval has no admissible control: fails closed without clipping",()
  const wide={min:-2,max:2};
  assert.throws(()=>shieldCertifiedInterval({
   interval:wide,requested:0},p),e=>
-   e.code==="CERTIFICATION_LOST"&&/исполнительного/.test(e.reason));
+   e.code==="CERTIFICATION_LOST"&&/ширина/.test(e.reason));
  assert.throws(()=>forecastCertifiedInterval({
   interval:{min:1.9,max:2},control:1},p),e=>
    e.code==="CERTIFICATION_LOST");
@@ -204,4 +208,16 @@ test("paired exogenous disturbances are identical across policies; physical plan
  assert.ok(sensor.records.some(x=>x.honest&&x.sensorStatus==="dropout"&&
   x.controlSource==="prediction_fallback"));
  assert.ok(sensor.metrics.honestFallbackFraction>0);
+});
+
+test("a*(H-L)+2W<=2S is a control-independent necessary feasibility limit",()=>{
+ const threshold=2*(p.plantSafeBound-p.plantDisturbanceBound)/p.plantA;
+ const wide={min:-1.9,max:1.9};
+ assert.ok(wide.max-wide.min>threshold);
+ for(const requested of [-100,-1,0,1,100])
+  assert.throws(()=>shieldCertifiedInterval({interval:wide,requested},p),
+   e=>e.code==="CERTIFICATION_LOST"&&/ширина/.test(e.reason));
+ const feasible={min:-.2,max:.2};
+ const safety=shieldCertifiedInterval({interval:feasible,requested:0},p);
+ assert.ok(safety.lo<=safety.hi);
 });

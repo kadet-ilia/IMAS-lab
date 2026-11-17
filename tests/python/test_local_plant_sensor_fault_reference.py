@@ -142,5 +142,24 @@ class TestLocalPlantSensorFaultOracle(unittest.TestCase):
                 ))
 
 
+    def test_loss_of_certification_has_independently_impossible_width(self):
+        found = False
+        for case in self.data["results"]:
+            failure = case["certificateFailure"]
+            if not failure:
+                continue
+            if failure["phase"] != "control_feasibility":
+                continue
+            p = case["options"]
+            interval = failure["certifiedInterval"]
+            L, H = interval["min"], interval["max"]
+            image_width = (p["plantA"] * (H - L) +
+                           2 * p["plantDisturbanceBound"])
+            if "ширина" in failure["reason"]:
+                self.assertGreater(image_width, 2 * p["plantSafeBound"] + 1e-10)
+                found = True
+        self.assertTrue(found, "Long outage must expose the necessary width failure")
+
+
 if __name__ == "__main__":
     unittest.main()

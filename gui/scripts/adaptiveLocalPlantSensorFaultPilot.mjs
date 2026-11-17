@@ -109,6 +109,16 @@ for(const topology of topologies)
      deltas});
    }
   }
+// Post-hoc penalty sensitivity reweights only the SAME saved outcomes;
+ // no selective successful-only RMSE and no claim of calibrated accident cost.
+const sensitivity=[4.01,10,25,100].map(penalty=>{
+ const score=x=>x.complete?x.honestStateRmse**2:penalty;
+ const group=Object.fromEntries(modes.map(mode=>[mode,round(mean(
+  runs.filter(x=>x.mode===mode).map(score)))]));
+ return {penalty,group,contrasts:{
+  actionVsDecision:round(group.local_action-group.local_decision),
+  actionVsSensor:round(group.local_action-group.local_sensor)}};
+});
 const cols=["topology","fault","duration","mode","run","seed","complete",
  "completedSteps","failedStep","failedNode","failurePhase",
  "honestStateRmse","fixedHorizonLoss","honestCoverage",
@@ -124,6 +134,7 @@ writeFileSync(path.join(outDir,"adaptive-local-sensor-fault-pilot.json"),
   design:"2 topology x 2 sensor fault x 2 durations x 3 controllers x 3 paired seeds",
   fixedHorizon:44,penalty:lambda,units:"full honest agent-steps",
   censoring:"Never score incomplete runs using success-only RMSE",
+  penaltySensitivityPostHoc:sensitivity,
   cells,runs,pairs},null,2)+"\n");
 const agg=modes.map(mode=>({mode,completionRate:round(mean(
  runs.filter(x=>x.mode===mode).map(x=>Number(x.complete)))),
@@ -131,4 +142,5 @@ const agg=modes.map(mode=>({mode,completionRate:round(mean(
   .map(x=>x.fixedHorizonLoss)))}));
 console.log("E1-A SENSOR SUMMARY "+JSON.stringify({cells:cells.length,
  runs:runs.length,certificationLost:runs.filter(x=>!x.complete).length,
- aggregation:agg,pairedCells:pairs.length,scientificStatus:"synthetic exploratory; no independent calibration"}));
+ aggregation:agg,pairedCells:pairs.length,
+ penaltySensitivityPostHoc:sensitivity,scientificStatus:"synthetic exploratory; no independent calibration"}));
