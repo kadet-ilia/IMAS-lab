@@ -218,3 +218,32 @@ test("optional local guard never changes central E1 decisions or requires simula
   localAutonomyGuardThreshold:.45,localAutonomyGuardMinEvidence:1},0);
  assert.deepEqual(a.methodStates,again.methodStates);
 });
+
+test("malformed late-node input leaves the entire local step atomic and retryable",()=>{
+ const options={...opt,localAutonomyActionFeedbackEnabled:true,
+  localAutonomyActionGain:0.6,localAutonomyActionMaxStep:0.2};
+ const actual=createLocalAutonomy(3,-2,2,options);
+ const control=createLocalAutonomy(3,-2,2,options);
+ const first={step:1,own:[0,0.5,-0.5],active,
+  messages:empty()};
+ assert.deepEqual(actual.tick(first),control.tick(first));
+ const valid={step:2,own:[0.25,0.75,-0.75],active,
+  messages:[[sample(1,0.5,1,2)],[],[sample(0,0,1,2)]]};
+ const snapshot=actual.getDiagnostic();
+ const corruptLate={...valid,messages:[
+  valid.messages[0],[],[sample(0,0,1,2),sample(0,0,1,2)]
+ ]};
+ assert.throws(()=>actual.tick(corruptLate),/недоставленное или повторное сообщение/);
+ assert.deepEqual(actual.getDiagnostic(),snapshot,
+  "An invalid packet in a later node cannot commit an earlier node trust update");
+ assert.deepEqual(actual.tick(valid),control.tick(valid),
+  "The failed tick must be replayed identically at the same time index");
+ assert.deepEqual(actual.getDiagnostic(),control.getDiagnostic());
+ const another={step:3,own:[0,0.6,-0.6],active,
+  messages:[[sample(1,0.75,2,3)],[],[]]};
+ assert.throws(()=>actual.tick({...another,messages:[[],[],null]}),
+  /сообщения неактивного узла/);
+ assert.deepEqual(actual.tick(another),control.tick(another),
+  "Malformed nested message arrays must also leave the clock and state unchanged");
+ assert.deepEqual(actual.getDiagnostic(),control.getDiagnostic());
+});

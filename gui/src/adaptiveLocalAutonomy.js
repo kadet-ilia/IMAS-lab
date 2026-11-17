@@ -6,7 +6,7 @@
  */
 import {localWeightedTrim} from "./adaptiveLocalConsensus.js";
 
-export const E1A_LOCAL_AUTONOMY_VERSION="e1a-local-directed-beta-shadow-1.2.0-action-feedback";
+export const E1A_LOCAL_AUTONOMY_VERSION="e1a-local-directed-beta-shadow-1.3.0-atomic-input";
 export const E1A_LOCAL_AUTONOMY_DEFAULTS=Object.freeze({
  localAutonomyEnabled:false,
  localAutonomyEvidenceTolerance:0.45,
@@ -88,6 +88,25 @@ export function createLocalAutonomy(n,low,high,options={}){
    active.some(x=>typeof x!=="boolean")||
    own.some((v,i)=>active[i]&&!finite(v)))
    throw Error("Автономные локальные решения: нарушен порядок тактов или форма входа");
+  // Validate the ENTIRE incoming tick before changing the clock, histories,
+  // private Beta records, action state, or cumulative diagnostics.
+  // Otherwise a malformed late-node packet could partially commit a tick.
+  for(let i=0;i<n;i++){
+   if(!Array.isArray(messages[i])||(!active[i]&&messages[i].length))
+    throw Error("Автономные локальные решения: сообщения неактивного узла");
+   const seen=new Set();
+   for(const sample of messages[i]){
+    if(!sample||!Number.isInteger(sample.source)||sample.source<0||
+     sample.source>=n||sample.source===i||seen.has(sample.source)||
+     !finite(sample.value)||sample.value<low||sample.value>high||
+     !Number.isInteger(sample.emitted)||sample.emitted<1||sample.emitted>=step||
+     step-sample.emitted>p.localTransportMaxAgeSteps||
+     !Number.isInteger(sample.arrived)||sample.arrived<sample.emitted+1||
+     sample.arrived>step)
+     throw Error("Автономные локальные решения: недоставленное или повторное сообщение");
+    seen.add(sample.source);
+   }
+  }
   lastStep=step;
   const projected=own.map((v,i)=>active[i]?clamp(v,low,high):null);
   for(let i=0;i<n;i++){
@@ -99,21 +118,10 @@ export function createLocalAutonomy(n,low,high,options={}){
   let updates=0,refusals=0,unmatched=0,readings=0,trustSum=0;
   let guarded=0,released=0,excluded=0;
   for(let i=0;i<n;i++){
-   if(!Array.isArray(messages[i])||(!active[i]&&messages[i].length))
-    throw Error("Автономные локальные решения: сообщения неактивного узла");
    if(!active[i])continue;
-   const values=[projected[i]],weights=[1],seen=new Set(),relations=[];
+   const values=[projected[i]],weights=[1],relations=[];
    let acceptedNeighbors=0;
    for(const sample of messages[i]){
-    if(!sample||!Number.isInteger(sample.source)||sample.source<0||
-     sample.source>=n||sample.source===i||seen.has(sample.source)||
-     !finite(sample.value)||sample.value<low||sample.value>high||
-     !Number.isInteger(sample.emitted)||sample.emitted<1||sample.emitted>=step||
-     step-sample.emitted>p.localTransportMaxAgeSteps||
-     !Number.isInteger(sample.arrived)||sample.arrived<sample.emitted+1||
-     sample.arrived>step)
-     throw Error("Автономные локальные решения: недоставленное или повторное сообщение");
-    seen.add(sample.source);
     let entry=trust[i].get(sample.source);
     if(!entry){
      entry={alpha:1,beta:1,lastUpdate:step,lastProcessed:0,
