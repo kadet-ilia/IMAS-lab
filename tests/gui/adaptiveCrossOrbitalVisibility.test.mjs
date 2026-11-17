@@ -104,3 +104,39 @@ test("orbital parameters reject impossible geometry or unverifiable error envelo
   {plantCrossBound:1.8,plantCrossDistanceErrorSlope:.1}
  ])assert.throws(()=>validateLocalPlantOptions({...p,...patch}),/Локальный объект/);
 });
+
+
+test("undisclosed bounded sensing lag uses convex outer hull of all eligible sample epochs",()=>{
+ const q=validateLocalPlantOptions({...p,plantCrossSampleLagMaxSteps:1});
+ const tape=[Array(8).fill(0),Array(8).fill(0),Array(8).fill(0)];
+ // At physical sample epoch 2 pair 0->4 is visible, at emission
+ // epoch 3 it is occulted. The buffered reading is still legitimate.
+ const r=projectCrossReport({source:0,target:4,emitted:3,value:.1},4,tape,q);
+ const V=crossSensorPhysicalPair(0,4,q,2).errorBound;
+ let lo=.1-V,hi=.1+V;
+ for(let k=2;k<4;k++){
+  lo=q.plantA*lo-q.plantDisturbanceBound;
+  hi=q.plantA*hi+q.plantDisturbanceBound;
+ }
+ near(r.min,lo);
+ near(r.max,hi);
+ assert.throws(()=>projectCrossReport(
+  {source:0,target:4,emitted:3,value:.1},4,tape,
+  {...q,plantCrossSampleLagMaxSteps:0}),
+  /геометрически недоступный/);
+ const history=Array.from({length:3},()=>Array(8).fill(.1));
+ const ch=createCrossSensorTransport({...q,plantCapacity:100},0);
+ const active=Array(8).fill(true);
+ for(let step=1;step<=3;step++){
+  ch.networkStep({time:step,active,adjacency:graph});
+  ch.emit({time:step,states:history[step-1],historyStates:history.slice(0,step),
+   active,faulty:Array(8).fill(false),budget:100});
+ }
+ ch.networkStep({time:4,active,adjacency:graph});
+ assert.ok(ch.read({time:4})[4].some(packet=>
+  packet.source===0&&packet.emitted===3));
+ assert.equal(ch.getDiagnostic().packetSampleEpochDisclosure,false);
+ assert.throws(()=>validateLocalPlantOptions({
+  ...p,plantCrossSampleLagMaxSteps:6,plantCrossTTL:5}),
+  /Локальный объект/);
+});

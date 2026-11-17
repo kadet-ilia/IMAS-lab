@@ -31,7 +31,8 @@ const configs=[
   plantCrossPointingHalfAngle:2.6,
   plantCrossOrbitPositionError:.06,
   plantCrossOrbitPointingError:.08},
- {...base,plantTopology:"ring",plantCrossCentralBodyRadius:0}
+ {...base,plantTopology:"ring",plantCrossCentralBodyRadius:0},
+ {...base,plantCrossCentralBodyRadius:1.5,plantCrossSampleLagMaxSteps:2}
 ];
 const results=configs.map((config,i)=>{
  const r=simulateLocalPlant(config,i%2);

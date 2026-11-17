@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * E1-A stage-15 exploratory physical-visibility pilot: 96 synthetic
+ * E1-A stage-15 exploratory physical-visibility pilot: 120 synthetic
  * episodes. No satellite ephemeris, measured metrology, hardware keys,
  * or independent hardware validation.
  */
@@ -24,7 +24,9 @@ const profiles=[
  {name:"prograde_field",body:0,pointing:"prograde",halfAngle:Math.PI/2,
   positionError:0,attitudeError:0},
  {name:"bounded_pose",body:1.5,pointing:"prograde",halfAngle:2.6,
-  positionError:.06,attitudeError:.08}
+  positionError:.06,attitudeError:.08},
+ {name:"buffered_sample_lag2",body:1.5,pointing:"omnidirectional",
+  halfAngle:Math.PI,positionError:0,attitudeError:0,sampleLag:2}
 ];
 const episodes=[],cells=[];
 const mean=x=>x.reduce((s,v)=>s+v,0)/x.length;
@@ -51,6 +53,7 @@ for(const topology of topologies)
      plantCrossPointingHalfAngle:profile.halfAngle,
      plantCrossOrbitPositionError:profile.positionError,
      plantCrossOrbitPointingError:profile.attitudeError,
+     plantCrossSampleLagMaxSteps:profile.sampleLag??0,
      plantCrossBound:.04,plantCrossDistanceErrorSlope:.02,
      plantCrossFaultBudget:2,plantCrossDelay:1,plantCrossTTL:5,
      plantCrossLoss:.04,plantCrossBandwidthFraction:.65,
@@ -71,10 +74,15 @@ for(const topology of topologies)
       !enabled&&ch)
       throw Error("Stage 15: unsafe transition or invalid shared quota");
      if(enabled)for(const record of r.records)
-      for(const msg of record.crossReports)
-       if(!crossSensorPhysicalPair(msg.source,msg.target,r.options,
-        msg.emitted).eligible)
-        throw Error("Stage 15: impossible physical emission is accepted");
+      for(const msg of record.crossReports){
+       const possiblySampled=Array.from({
+        length:Math.min(r.options.plantCrossSampleLagMaxSteps+1,msg.emitted)
+       },(_,offset)=>msg.emitted-offset).some(sampleTime=>
+        crossSensorPhysicalPair(msg.source,msg.target,r.options,
+         sampleTime).eligible);
+       if(!possiblySampled)
+        throw Error("Stage 15: no admissible physical sampling epoch");
+      }
      if(enabled&&topology==="ring"&&
       r.records.some(x=>x.crossSupported||x.crossRefined))
       throw Error("Stage 15: ring fabricated m>f remote evidence");
@@ -134,6 +142,7 @@ writeFileSync(path.join(directory,"adaptive-local-orbital-visibility-pilot.json"
   design:{T,R,lambda,topologies,durations,profiles},episodes,cells},null,2)+"\n");
 console.log("E1-A ORBITAL VISIBILITY SUMMARY "+JSON.stringify({
  episodes:episodes.length,cells:cells.length,
+ sampleLagExperimental:true,
  offCompleted:episodes.filter(x=>!x.enabled&&x.completed).length,
  onCompleted:episodes.filter(x=>x.enabled&&x.completed).length,
  meanLossOff:round(mean(episodes.filter(x=>!x.enabled)

@@ -87,7 +87,7 @@ class TestOrbitalCrossSensorIndependentReference(unittest.TestCase):
         cls.results = json.loads(proc.stdout)["results"]
 
     def test_orbital_geometry_and_spherical_occlusion_without_js_arithmetic(self):
-        self.assertEqual(len(self.results), 5)
+        self.assertEqual(len(self.results), 6)
         hidden = available = pointing_blocked = 0
         for case in self.results:
             p = case["options"]
@@ -149,20 +149,33 @@ class TestOrbitalCrossSensorIndependentReference(unittest.TestCase):
                         self.assertLess(s,time)
                         self.assertLessEqual(time-s,p["plantCrossTTL"])
                         self.assertLessEqual(report["arrived"],time)
-                        g = geometry(p,sender,i,s)
-                        self.assertTrue(g["eligible"])
-                        err = g["errorBound"]
+                        # Emission s is authenticated, the instrument's
+                        # actual sample time is NOT disclosed to receiver.
+                        # Rebuild all physical possibilities [s-lag,s]
+                        # and take the OUTER envelope of projected ranges.
+                        alternatives = []
+                        valid_honest_samples = 0
+                        for sample in range(max(1,s-p["plantCrossSampleLagMaxSteps"]),s+1):
+                            g = geometry(p,sender,i,sample)
+                            if not g["eligible"]:
+                                continue
+                            err = g["errorBound"]
+                            if sender < n-p["plantByzantine"]:
+                                x_past = case["records"][(sample-1)*n+i]["stateBefore"]
+                                if abs(report["value"]-x_past) <= err+TOL:
+                                    valid_honest_samples += 1
+                            lo, hi = report["value"]-err,report["value"]+err
+                            for k in range(sample,time):
+                                command = tape[k-1][i]
+                                lo = A*lo+B*command-W
+                                hi = A*hi+B*command+W
+                            alternatives.append((lo,hi))
+                        self.assertTrue(alternatives)
                         if sender < n-p["plantByzantine"]:
-                            x_past = case["records"][(s-1)*n+i]["stateBefore"]
-                            self.assertLessEqual(abs(report["value"]-x_past),
-                                                 err+TOL)
-                        a = report["value"]-err
-                        b = report["value"]+err
-                        for k in range(s,time):
-                            command = tape[k-1][i]
-                            a = A*a+B*command-W
-                            b = A*b+B*command+W
-                        intervals.append((max(-S,a),min(S,b)))
+                            self.assertGreater(valid_honest_samples,0)
+                        intervals.append((
+                            max(-S,min(lo for lo,_ in alternatives)),
+                            min(S,max(hi for _,hi in alternatives))))
                     self.assertEqual(len(sources),r["crossReporters"])
                     m = len(intervals)
                     count = m-f
