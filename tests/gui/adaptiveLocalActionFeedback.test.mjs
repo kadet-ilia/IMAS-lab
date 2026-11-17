@@ -29,7 +29,7 @@ test("local action feedback is opt-in and parameters and prerequisites fail clos
   localAutonomyActionFeedbackEnabled:true,localAutonomyEnabled:false}),
   /требует автономного оценивателя/);
  const core={seed:7,n_agents:8,n_byzantine:1,n_steps:10,trim_each_side:2,
-  network_enabled:true,network_topology:"ring"};
+  attack_start_step:3,network_enabled:true,network_topology:"ring"};
  assert.throws(()=>validateAdaptiveStudy(core,{
   comparisonMode:"network_routed",evidenceModel:"behavior_linked",
   localConsensusPilot:true,localTransportEnabled:true,
@@ -130,16 +130,8 @@ test("all-honest-units unconditional loss reconciles and refusal cost has no alg
   const other=b.metrics.find(x=>x.method===method.method);
   const hist=a.scenarioDiagnosticsByMethod[method.method].localTransport.history;
   assert.deepEqual(hist,b.scenarioDiagnosticsByMethod[method.method].localTransport.history);
-  const losses=hist.flatMap(h=>h.autonomousDecisions.flatMap((v,i)=>
-   h.autonomousHonestMask[i]?[Number.isFinite(v)?
-    (v-studyCore.desired_action)**2:0.5]:[]));
-  // The core defaults supply desired_action when user omitted it.
-  const truth=studyCore.desired_action??0.5;
-  const validated=hist.flatMap(h=>h.autonomousDecisions.flatMap((v,i)=>
-   h.autonomousHonestMask[i]?[Number.isFinite(v)?
-    (v-truth)**2:0.5]:[]));
-  const expected=validated.reduce((sum,v)=>sum+v,0)/validated.length;
-  // Prefer using validatedConfig() for actual mathematical reference if default changes.
+  // Reference is the actual validated simulation configuration, not an
+  // assumed default or an oracle supplied to the online estimator.
   const target=validateAdaptiveStudy(studyCore,studyOpt).core.desired_action;
   const precise=hist.flatMap(h=>h.autonomousDecisions.flatMap((v,i)=>
    h.autonomousHonestMask[i]?[Number.isFinite(v)?
