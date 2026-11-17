@@ -14,7 +14,7 @@
 import {createRng} from "./trustEngine.js";
 import {createLocalTransport} from "./adaptiveLocalTransport.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-measurement-barrier-1.0.0";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-measurement-barrier-1.1.0-control-attribution";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,

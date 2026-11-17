@@ -134,5 +134,25 @@ class TestLocalPlantIndependentOracle(unittest.TestCase):
             self.assertTrue(all(h["slots"] <= h["capacity"] for h in case["network"]))
 
 
+    def test_diagnostic_coverage_differs_from_actuation_source(self):
+        for case in self.archive["output"]:
+            honest = [r for r in case["records"] if r["honest"]]
+            m = case["metrics"]
+            coverage = sum(bool(r["accepted"]) for r in honest) / len(honest)
+            local = sum(r["controlSource"] == "local" for r in honest) / len(honest)
+            fallback = sum(bool(r["refused"]) for r in honest) / len(honest)
+            self.assertAlmostEqual(m["honestCoverage"], coverage, places=11)
+            self.assertAlmostEqual(
+                m["honestLocalControlFraction"], local, places=11
+            )
+            self.assertAlmostEqual(m["honestFallbackFraction"], fallback, places=11)
+            if case["options"]["plantControlMode"] == "local_sensor":
+                self.assertEqual(local, 0)
+                self.assertEqual(fallback, 0)
+                self.assertGreater(coverage, 0)
+            else:
+                self.assertAlmostEqual(local + fallback, 1, places=11)
+
+
 if __name__ == "__main__":
     unittest.main()

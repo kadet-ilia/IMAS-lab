@@ -188,3 +188,26 @@ test("the scalar plant is a sidecar, not a silent mutation of original E1",()=>{
  assert.deepEqual(original.metrics,after.metrics);
  assert.deepEqual(original.methodStates,after.methodStates);
 });
+
+test("physical-control attribution distinguishes diagnostic availability from accepted actuation",()=>{
+ const setup={plantSteps:16,plantCapacity:30,plantGuardEnabled:false,
+  plantTransportLoss:0,plantSeed:44561};
+ const sensor=simulateLocalPlant({...setup,plantControlMode:"local_sensor"},0);
+ assert.ok(sensor.metrics.honestCoverage>0,
+  "The auxiliary local estimator still runs");
+ assert.equal(sensor.metrics.honestLocalControlFraction,0,
+  "Sensor baseline never uses collective control");
+ assert.equal(sensor.metrics.honestFallbackFraction,0,
+  "Own-sensor controller is not a fallback after refusal");
+ assert.ok(sensor.records.filter(x=>x.honest).every(x=>
+  x.controlSource==="trusted_sensor"&&!x.refused));
+ for(const mode of ["local_action","local_decision"]){
+  const r=simulateLocalPlant({...setup,plantControlMode:mode},0);
+  assert.ok(r.metrics.honestCoverage>0);
+  assert.ok(Math.abs(r.metrics.honestLocalControlFraction+
+   r.metrics.honestFallbackFraction-1)<1e-12);
+  assert.ok(Math.abs(r.metrics.honestLocalControlFraction-
+   r.metrics.honestCoverage)<1e-12);
+  assert.ok(r.records.some(x=>x.honest&&x.controlSource==="local"));
+ }
+});

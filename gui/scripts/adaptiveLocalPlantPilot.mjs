@@ -46,7 +46,7 @@ for(const topology of topologies)
     }
     runsByMode.set(mode,runs);
     const numeric=["honestStateRmse","honestMeanFinalV","honestCoverage",
-     "honestFallbackFraction","honestBarrierOverrideFraction","maxAbsoluteState"];
+     "honestLocalControlFraction","honestFallbackFraction","honestBarrierOverrideFraction","maxAbsoluteState"];
     const row={topology,partition,capacity,mode,seed,R:3,N:8,T:24};
     for(const key of numeric)row[key]=round(mean(runs.map(r=>r[key])));
     rows.push(row);
@@ -67,6 +67,8 @@ for(const topology of topologies)
        other[i].honestMeanFinalV,
       deltaHonestCoverage:action[i].honestCoverage-
        other[i].honestCoverage,
+      deltaLocalControlUse:action[i].honestLocalControlFraction-
+       other[i].honestLocalControlFraction,
       deltaOverrideRate:action[i].honestBarrierOverrideFraction-
        other[i].honestBarrierOverrideFraction});
     }
@@ -74,6 +76,7 @@ for(const topology of topologies)
      meanDeltaRmse:round(mean(deltas.map(d=>d.deltaHonestStateRmse))),
      meanDeltaFinalV:round(mean(deltas.map(d=>d.deltaHonestFinalV))),
      meanDeltaCoverage:round(mean(deltas.map(d=>d.deltaHonestCoverage))),
+     meanDeltaLocalControlUse:round(mean(deltas.map(d=>d.deltaLocalControlUse))),
      meanDeltaBarrierOverrides:round(mean(deltas.map(d=>d.deltaOverrideRate))),
      deltas});
    }
