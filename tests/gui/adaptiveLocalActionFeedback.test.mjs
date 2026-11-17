@@ -171,3 +171,37 @@ test("closed local action state preserves central E1 and has separate bounded ac
  }
  assert.ok(changed,"New local loop must affect future local decisions in at least one case");
 });
+
+test("network partitions isolate bounded action feedback, private trust and decision trajectories",()=>{
+ const topology=[
+  [false,true,false,false],
+  [true,false,false,false],
+  [false,false,false,true],
+  [false,false,true,false]
+ ];
+ const trace=(others)=>{
+  const link=createLocalTransport({
+   seed:101,n_agents:4,n_sybil_agents:0,
+   safe_action_min:-2,safe_action_max:2
+  },{...base,localTransportDelaySteps:1,localTransportLossProbability:0},0);
+  const decisions=[];
+  for(let step=1;step<=5;step++){
+   link.networkStep({step,adjacency:topology,labels:[0,0,1,1],
+    active:[true,true,true,true]});
+   decisions.push(link.onProposals({step,values:[0,0.4,...others],
+    reputation:[0.01,0.99,0.25,0.75],
+    active:[true,true,true,true],faulty:[false,false,false,false]}));
+   link.afterEvidenceTransport({step,sharedCapacity:10,e1Used:0,decisionUsed:0});
+  }
+  return {decisions,history:link.getDiagnostic().history};
+ };
+ const a=trace([1,2]),b=trace([-2,-1]);
+ assert.deepEqual(a.decisions.map(x=>x.slice(0,2)),
+  b.decisions.map(x=>x.slice(0,2)));
+ assert.deepEqual(a.history.map(x=>x.autonomousActions.slice(0,2)),
+  b.history.map(x=>x.autonomousActions.slice(0,2)));
+ assert.deepEqual(a.history.map(x=>x.autonomousTrust.slice(0,2)),
+  b.history.map(x=>x.autonomousTrust.slice(0,2)));
+ assert.ok(a.history.some(h=>h.autonomousActionUpdates>0));
+ assert.ok(a.history.every(h=>h.totalUsed<=h.sharedCapacity));
+});
