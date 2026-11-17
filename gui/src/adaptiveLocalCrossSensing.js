@@ -56,6 +56,44 @@ export function crossSensorPhysicalPair(source,target,p){
  return Object.freeze({eligible,distance,errorBound});
 }
 
+/**
+ * A necessary (NOT sufficient) physical/communication condition for
+ * certifying a remote state with <=f compromised reporter identities.
+ * Only direct links are counted; the graph is supplied by the simulator
+ * and no plant state, outcomes, or simulator attacker labels are used.
+ * Queue loss and actual measurement overlap can still prevent certification.
+ */
+export function auditCrossObservationGraph(communicationAdjacency,p){
+ const n=p?.plantAgents;
+ if(!Number.isInteger(n)||!Array.isArray(communicationAdjacency)||
+  communicationAdjacency.length!==n||
+  communicationAdjacency.some((row,i)=>!Array.isArray(row)||
+   row.length!==n||row.some((v,j)=>typeof v!=="boolean"||
+    v!==communicationAdjacency[j]?.[i]||i===j&&v)))
+  throw invalid("некорректный граф коммуникационной достижимости");
+ if(!Number.isInteger(p.plantCrossFaultBudget)||p.plantCrossFaultBudget<0||
+  p.plantCrossFaultBudget>=n)
+  throw invalid("некорректная публичная граница числа нарушителей");
+ const physicalSources=Array(n).fill(0);
+ const admissibleDirectSources=Array(n).fill(0);
+ for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j){
+  const physical=crossSensorPhysicalPair(j,i,p);
+  if(physical.eligible){
+   physicalSources[i]++;
+   if(communicationAdjacency[j][i])admissibleDirectSources[i]++;
+  }
+ }
+ return Object.freeze({
+  physicalSources:Object.freeze(physicalSources),
+  admissibleDirectSources:Object.freeze(admissibleDirectSources),
+  structurallyObservable:Object.freeze(admissibleDirectSources.map(
+   count=>count>p.plantCrossFaultBudget)),
+  potentiallyObservableCount:admissibleDirectSources.filter(
+   count=>count>p.plantCrossFaultBudget).length,
+  necessaryCondition:"distinct delivered authenticated reporters m>f; not sufficient"
+ });
+}
+
 /** Advance a timestamped, source-authenticated remote measurement to time t.
  * Every intervening control is the actual target actuator output, never a
  * neighbor decision. The true state is not used for propagation.

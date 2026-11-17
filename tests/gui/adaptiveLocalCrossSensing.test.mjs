@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {validateLocalPlantOptions} from "../../gui/src/adaptiveLocalPlant.js";
 import {projectCrossReport,fuseCrossCertificates,
- createCrossSensorTransport,crossSensorPhysicalPair,CROSS_SENSOR_VERSION} from
+ createCrossSensorTransport,crossSensorPhysicalPair,auditCrossObservationGraph,CROSS_SENSOR_VERSION} from
  "../../gui/src/adaptiveLocalCrossSensing.js";
 
 const p=validateLocalPlantOptions({plantCrossEnabled:true,plantCrossBound:.1,
@@ -133,4 +133,31 @@ test("dense communication without physical range emits zero remote reports",()=>
  assert.equal(diag.generated,0);
  assert.equal(diag.transmitted,0);
  assert.equal(diag.delivered,0);
+});
+
+test("structural physical and direct-link observability requires m>f",()=>{
+ const q=validateLocalPlantOptions({plantCrossEnabled:true,
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:1.45,
+  plantCrossFaultBudget:2});
+ const n=q.plantAgents;
+ const complete=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>i!==j));
+ const ring=Array.from({length:n},(_,i)=>Array.from({length:n},(_,j)=>
+  i!==j&&(Math.abs(i-j)===1||Math.abs(i-j)===n-1)));
+ const a=auditCrossObservationGraph(complete,q);
+ assert.deepEqual(a.physicalSources,Array(n).fill(4));
+ assert.deepEqual(a.admissibleDirectSources,Array(n).fill(4));
+ assert.equal(a.potentiallyObservableCount,n);
+ const b=auditCrossObservationGraph(ring,q);
+ assert.deepEqual(b.physicalSources,Array(n).fill(4));
+ assert.deepEqual(b.admissibleDirectSources,Array(n).fill(2));
+ assert.equal(b.potentiallyObservableCount,0,
+  "Four physical sensors cannot help if only two have direct data links");
+ assert.ok(b.structurallyObservable.every(x=>x===false));
+ const narrow=auditCrossObservationGraph(complete,{
+  ...q,plantCrossMaxRange:.8});
+ assert.deepEqual(narrow.admissibleDirectSources,Array(n).fill(2));
+ assert.equal(narrow.potentiallyObservableCount,0);
+ assert.throws(()=>auditCrossObservationGraph(complete.map(x=>x.slice(1)),q),
+  /некорректный граф/);
 });

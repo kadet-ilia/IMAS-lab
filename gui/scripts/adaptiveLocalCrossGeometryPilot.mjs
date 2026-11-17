@@ -9,8 +9,9 @@ import {mkdirSync,writeFileSync} from "node:fs";
 import {fileURLToPath} from "node:url";
 import path from "node:path";
 import {simulateLocalPlant,LOCAL_PLANT_VERSION} from "../src/adaptiveLocalPlant.js";
-import {CROSS_SENSOR_VERSION,crossSensorPhysicalPair}
+import {CROSS_SENSOR_VERSION,auditCrossObservationGraph}
  from "../src/adaptiveLocalCrossSensing.js";
+import {localPlantAdjacency} from "../src/adaptiveLocalPlant.js";
 
 const directory=path.resolve(path.dirname(fileURLToPath(import.meta.url)),
  "../adaptive-results");
@@ -59,11 +60,15 @@ for(const topology of topologies)
       throw Error("Opt-in geometry leaked into the disabled baseline");
      if(result.status!=="completed"&&m.honestStateRmse!==null)
       throw Error("Censored run passed as full-horizon success");
-     const availableSources=Array.from({length:config.plantAgents},(_,i)=>
-      Array.from({length:config.plantAgents},(_,j)=>i!==j&&
-       crossSensorPhysicalPair(j,i,result.options).eligible).filter(Boolean).length);
+     const graph=localPlantAdjacency(config.plantAgents,topology).adjacency;
+     const structural=auditCrossObservationGraph(graph,result.options);
+     if(structural.potentiallyObservableCount===0&&
+      result.records.some(r=>r.crossSupported||r.crossRefined))
+      throw Error("Impossible remote certificate: direct-source count <= f");
      const row={topology,duration,sensingRange,enabled,seed,run:k,
-      possiblePhysicalSources:availableSources[0],
+      possiblePhysicalSources:structural.physicalSources[0],
+      possibleDirectSources:structural.admissibleDirectSources[0],
+      potentiallyObservableNodes:structural.potentiallyObservableCount,
       completed:result.status==="completed",
       completedSteps:result.completedSteps,
       failedStep:result.certificateFailure?.step??null,
@@ -91,6 +96,8 @@ for(const topology of topologies)
     c.duration===duration&&c.sensingRange===sensingRange&&c.enabled);
    const row={topology,duration,sensingRange,
     possiblePhysicalSources:on[0].possiblePhysicalSources,
+    possibleDirectSources:on[0].possibleDirectSources,
+    potentiallyObservableNodes:on[0].potentiallyObservableNodes,
     completionOff:off.filter(x=>x.completed).length,
     completionOn:on.filter(x=>x.completed).length,
     meanLossOff:round(mean(off.map(x=>x.loss))),
@@ -103,7 +110,8 @@ for(const topology of topologies)
    console.log("E1-A CROSS GEOMETRY CELL "+JSON.stringify(row));
   }
 const columns=["topology","duration","sensingRange","enabled","seed","run",
- "possiblePhysicalSources","completed","completedSteps","failedStep",
+ "possiblePhysicalSources","possibleDirectSources","potentiallyObservableNodes",
+ "completed","completedSteps","failedStep",
  "loss","coverage","refinement","certifiedSources","sent"];
 writeFileSync(path.join(directory,"adaptive-local-cross-geometry-pilot.csv"),
  [columns.join(";"),...cases.map(r=>columns.map(k=>r[k]??"").join(";"))].join("\n")+"\n");
