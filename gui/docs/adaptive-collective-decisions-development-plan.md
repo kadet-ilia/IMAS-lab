@@ -408,9 +408,9 @@ M_i>f_max, где M_i — число независимых допустимых
 выполнены (по 8 пар).
 
 Документы:
-\`gui/docs/adaptive-local-cross-geometry-model.md\`,
-\`gui/docs/adaptive-local-cross-geometry-results-2026-11-17.md\`,
-\`gui/docs/adaptive-local-cross-geometry-holdout-protocol.md\`.
+`gui/docs/adaptive-local-cross-geometry-model.md`,
+`gui/docs/adaptive-local-cross-geometry-results-2026-11-17.md`,
+`gui/docs/adaptive-local-cross-geometry-holdout-protocol.md`.
 Выполнены 346 JS, 53 Python
 и браузерный контроль;
 оба CI успешны на

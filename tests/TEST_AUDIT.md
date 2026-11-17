@@ -193,14 +193,14 @@ localPlantCrossSensorReferenceBridge.mjs.
 ## Дополнение 17.11.2026: геометрические измерения и зафиксированный внутренний holdout
 
 Расширены
-\`adaptiveLocalCrossSensing.test.mjs\` —
+`adaptiveLocalCrossSensing.test.mjs` —
 дальность, публичная
 геометрическая погрешность,
 невозможность передачи
 при недоступном
 измерении, структурное
 необходимое условие M>f;
-\`adaptiveLocalCrossIntegration.test.mjs\` —
+`adaptiveLocalCrossIntegration.test.mjs` —
 отделение графа измерений
 от полного графа
 коммуникаций, неизменность
@@ -208,7 +208,7 @@ localPlantCrossSensorReferenceBridge.mjs.
 недоступном физическом
 измерении.
 Добавлен самостоятельный
-\`adaptiveCrossHoldoutStatistics.test.mjs\` —
+`adaptiveCrossHoldoutStatistics.test.mjs` —
 точная бинарная
 арифметика Мак-Немара,
 симметрия двухстороннего
@@ -226,10 +226,10 @@ localPlantCrossSensorReferenceBridge.mjs.
 из модуля JavaScript.
 
 Научный CI выполняет
-\`npm run adaptive:local:geometry:pilot\`
+`npm run adaptive:local:geometry:pilot`
 (96 эпизодов)
 и
-\`npm run adaptive:local:geometry:holdout\`
+`npm run adaptive:local:geometry:holdout`
 (32 пары + 16
 контрольных пар) с
 проверкой исходной

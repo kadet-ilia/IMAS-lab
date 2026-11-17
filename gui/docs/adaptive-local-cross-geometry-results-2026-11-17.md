@@ -1,10 +1,10 @@
 # E1-А. Результаты этапа 14: ограничения геометрии измерений и внутренняя численная проверка
 
 **Дата:** 17.11.2026.
-**Версия исследования:** \`e1a-causal-remote-sensor-f-hull-1.1.0-geometric-observability\`;
-\`e1a-scalar-robust-plant-1.4.0-cross-sensing-geometric-observability\`.
+**Версия исследования:** `e1a-causal-remote-sensor-f-hull-1.1.0-geometric-observability`;
+`e1a-scalar-robust-plant-1.4.0-cross-sensing-geometric-observability`.
 **Протокол внутренней выборки:**
-\`e1a-physical-range-internal-holdout-1.0.0\`.
+`e1a-physical-range-internal-holdout-1.0.0`.
 **Состояние:** синтетическое исследование,
 не внешняя калибровка или
 проверка реального защищаемого объекта.
@@ -12,7 +12,7 @@
 **Проверенные CI (коммит 15d77d5b3005c3b25f747e4840cbded4a4dbadf8):**
 [научный GitHub Actions 44139957609](https://github.com/kadet-ilia/IMAS-lab/actions/runs/44139957609),
 [общий GitHub Actions 44139957588](https://github.com/kadet-ilia/IMAS-lab/actions/runs/44139957588),
-оба \`success\`. Успешно 346/346 JS,
+оба `success`. Успешно 346/346 JS,
 53/53 независимых Python, 2/2
 проверки Cloudflare,
 Vite-сборка и Chromium.
@@ -55,7 +55,7 @@ V_0=0.04, β=0.04,
 максимальные |x|≤2,
 |u|≤1.2, |w|≤0.04.
 Политика управления для геометрического
-пилота — \`local_sensor\`,
+пилота — `local_sensor`,
 что отделяет эффект внешних
 измерений от управления соседскими
 эвристическими оценками.
@@ -144,7 +144,7 @@ t=4…39) ×
 сценариев на независимом
 списке seed (новом относительно
 поисковых серий):
-\`seed_k=20300101+7919k\`,
+`seed_k=20300101+7919k`,
 k=0,…,31. SHA-256 байтов
 протокола:
 
@@ -156,7 +156,7 @@ k=0,…,31. SHA-256 байтов
 при полном графе, D=2.05,
 длительном отсутствии
 собственного датчика и
-политике \`local_sensor\`.
+политике `local_sensor`.
 Одинаковые для пары
 экзогенные события;
 ни один незавершённый эпизод
