@@ -16,7 +16,7 @@ import {createLocalTransport} from "./adaptiveLocalTransport.js";
 import {createCertifiedPlantObserver,scheduledSensorFault,shieldCertifiedInterval,SENSOR_FAULT_OBSERVER_VERSION} from "./adaptiveLocalPlantSensorFaults.js";
 import {createCrossSensorTransport,projectCrossReport,fuseCrossCertificates,CROSS_SENSOR_VERSION} from "./adaptiveLocalCrossSensing.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.3.0-causal-cross-sensing";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.4.0-physical-observability";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,
@@ -58,6 +58,12 @@ export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  // Optional independent authenticated physical remote sensors. Disabled
  // by default; their packets compete for the same plant network capacity.
  plantCrossEnabled:false,
+ // A SYNTHETIC physical capability assumption distinct from packet edges.
+ // Keep the old ideal communication-edge proxy unless explicitly opted in.
+ plantCrossObservationMode:"network_proxy", // network_proxy | range_geometry
+ plantCrossGeometryRadius:1,
+ plantCrossMaxRange:2,
+ plantCrossDistanceErrorSlope:0,
  // Public certified UPPER bound on bad authenticated reporter identities.
  // Deliberately separate from simulator-only actual Byzantine membership.
  plantCrossFaultBudget:2,
@@ -104,6 +110,9 @@ export function validateLocalPlantOptions(input={}){
   ["plantSensorFaultStart",1,500,true],
   ["plantSensorFaultEnd",1,500,true],
   ["plantDegradedSensorBound",0,10,false],
+  ["plantCrossGeometryRadius",0.001,100,false],
+  ["plantCrossMaxRange",0,200,false],
+  ["plantCrossDistanceErrorSlope",0,10,false],
   ["plantCrossFaultBudget",0,31,true],
   ["plantCrossBound",0,10,false],["plantCrossDelay",1,50,true],
   ["plantCrossTTL",1,500,true],["plantCrossLoss",0,1,false],
@@ -112,6 +121,8 @@ export function validateLocalPlantOptions(input={}){
  ])numeric(p,key,lo,hi,int);
  for(const k of ["plantPartition","plantGuardEnabled","plantCrossEnabled"])
   if(typeof p[k]!=="boolean")throw Error("Локальный объект: неверный тип "+k);
+ if(!["network_proxy","range_geometry"].includes(p.plantCrossObservationMode))
+  throw Error("Локальный объект: неизвестная модель измерительной доступности");
  if(!["ring","complete"].includes(p.plantTopology)||
   !["local_action","local_decision","local_sensor"].includes(p.plantControlMode)||
   !["barrier_zero","trusted_sensor"].includes(p.plantFallbackPolicy)||
@@ -127,6 +138,9 @@ export function validateLocalPlantOptions(input={}){
   p.plantSensorFaultStart>p.plantSensorFaultEnd||
   (p.plantSensorFaultMode!=="nominal"&&p.plantSensorFaultEnd>p.plantSteps)||
   p.plantCrossBound>=S||p.plantCrossTTL<p.plantCrossDelay||
+  (p.plantCrossObservationMode==="range_geometry"&&
+   p.plantCrossBound+2*p.plantCrossGeometryRadius*
+    p.plantCrossDistanceErrorSlope>=S)||
   (p.plantCrossEnabled&&(p.plantCrossBandwidthFraction<=0||
    p.plantCrossFaultBudget<p.plantByzantine||
    p.plantCrossFaultBudget>=p.plantAgents))||

@@ -18,6 +18,9 @@ test("cross sensing is opt-in and validates certified bounds and same-tick quota
  assert.equal(defaults.plantCrossEnabled,false);
  for(const bad of [
   {plantCrossEnabled:1},{plantCrossBound:2},{plantCrossDelay:0},
+  {plantCrossObservationMode:"unknown"},
+  {plantCrossObservationMode:"range_geometry",
+   plantCrossGeometryRadius:1,plantCrossDistanceErrorSlope:1},
   {plantCrossEnabled:true,plantCrossFaultBudget:1},
   {plantCrossTTL:0},{plantCrossDelay:5,plantCrossTTL:2},
   {plantCrossLoss:1.5},{plantCrossBandwidthFraction:1.5},
@@ -82,4 +85,21 @@ test("cross-sensor channel does not change legacy E1 or invent full-horizon succ
    assert.equal(run.metrics.fixedHorizonLoss,run.options.plantCertificationPenalty);
   }
  }
+});
+
+test("complete data network does not create physical remote sensing outside range",()=>{
+ const q={...cfg,plantTopology:"complete",
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:.5,
+  plantCrossDistanceErrorSlope:.02};
+ const a=simulateLocalPlant(q,0);
+ const off=simulateLocalPlant({...q,plantCrossEnabled:false},0);
+ assert.equal(a.crossTransport.generated,0);
+ assert.ok(a.records.every(r=>r.crossReports.length===0&&
+  !r.crossSupported&&!r.crossRefined));
+ assert.equal(a.status,off.status);
+ assert.equal(a.completedSteps,off.completedSteps);
+ assert.deepEqual(a.records.map(r=>r.stateAfter),
+  off.records.map(r=>r.stateAfter));
+ assert.ok(a.rows.every(r=>r.slotsUsed<=r.slotsAvailable));
 });

@@ -12,7 +12,7 @@
  */
 import {createRng} from "./trustEngine.js";
 
-export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.0.0";
+export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.1.0-geometric-observability";
 const finite=Number.isFinite;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
 const EPS=1e-10;
@@ -24,6 +24,37 @@ function lost(reason){
  return error;
 }
 const range=(v,p)=>finite(v)&&Math.abs(v)<=p.plantSafeBound+EPS;
+/**
+ * Fixed-coordinate SYNTHETIC physical observation geometry. This geometry
+ * is distinct from the communication adjacency supplied each tick.
+ * Adjacent vertices in the communication graph do not imply optical/radio
+ * range or independent availability of a measurement.
+ *
+ * network_proxy: backward-compatible ideal physically observable edge.
+ * range_geometry: static agents equally spaced on a planar circle of
+ * radius R, with public range D and bounded error V0+beta*d.
+ * Both parties compute the SAME public error bound. Source declarations
+ * about measurement accuracy are NOT trusted.
+ */
+export function crossSensorPhysicalPair(source,target,p){
+ const n=p?.plantAgents;
+ if(!Number.isInteger(n)||n<2||!Number.isInteger(source)||
+  !Number.isInteger(target)||source<0||target<0||
+  source>=n||target>=n||source===target)
+  throw invalid("некорректная физическая пара измерителей");
+ if(p.plantCrossObservationMode==="network_proxy"||
+  p.plantCrossObservationMode===undefined)
+  return Object.freeze({eligible:true,distance:null,errorBound:p.plantCrossBound});
+ if(p.plantCrossObservationMode!=="range_geometry")
+  throw invalid("неизвестная геометрическая модель");
+ const gap=Math.min(Math.abs(source-target),n-Math.abs(source-target));
+ const distance=2*p.plantCrossGeometryRadius*Math.sin(Math.PI*gap/n);
+ const eligible=distance<=p.plantCrossMaxRange+EPS;
+ const errorBound=p.plantCrossBound+p.plantCrossDistanceErrorSlope*distance;
+ if(!finite(errorBound)||errorBound<0||errorBound>=p.plantSafeBound)
+  throw invalid("ошибка физического измерения не сертифицирована");
+ return Object.freeze({eligible,distance,errorBound});
+}
 
 /** Advance a timestamped, source-authenticated remote measurement to time t.
  * Every intervening control is the actual target actuator output, never a
@@ -40,8 +71,11 @@ export function projectCrossReport(report,time,controlTape,p){
   !range(report.value,p)||!Array.isArray(controlTape)||
   controlTape.length<time-1)
   throw invalid("некорректная отметка времени, источник или журнал команд");
- let min=report.value-p.plantCrossBound;
- let max=report.value+p.plantCrossBound;
+ const geometry=crossSensorPhysicalPair(report.source,report.target,p);
+ if(!geometry.eligible)
+  throw invalid("геометрически недоступный внешний измеритель");
+ let min=report.value-geometry.errorBound;
+ let max=report.value+geometry.errorBound;
  for(let k=report.emitted;k<time;k++){
   const control=controlTape[k-1]?.[report.target];
   if(!finite(control)||Math.abs(control)>p.plantControlLimit+EPS)
@@ -164,10 +198,12 @@ export function createCrossSensorTransport(p,runIndex=0){
    throw invalid("некорректный такт отправки или бюджет");
   for(let source=0;source<n;source++)if(active[source])
    for(let target=0;target<n;target++)if(edge(source,target)){
+    const geometry=crossSensorPhysicalPair(source,target,p);
+    if(!geometry.eligible)continue;
     const id=key(source,target);
     const rng=createRng(p.plantSeed,runIndex,0xC205,source,target,time);
     let value=clamp(states[target]+
-     p.plantCrossBound*(rng.random()*2-1),
+     geometry.errorBound*(rng.random()*2-1),
      -p.plantSafeBound,p.plantSafeBound);
     if(faulty[source]&&time>=p.plantAttackStart)
      value=clamp(value+(source%2?-1:1)*p.plantAttackBias,
@@ -201,6 +237,7 @@ export function createCrossSensorTransport(p,runIndex=0){
   return {...counts,pending:waiting.size+inFlight.length,
    waiting:waiting.size,inFlight:inFlight.length,
    modelVersion:CROSS_SENSOR_VERSION,
+   observationMode:p.plantCrossObservationMode??"network_proxy",
    role:"simulator_only_authenticated_physical_cross_sensors",
    history:history.map(r=>({...r}))};
  };

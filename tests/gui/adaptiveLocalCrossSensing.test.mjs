@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {validateLocalPlantOptions} from "../../gui/src/adaptiveLocalPlant.js";
 import {projectCrossReport,fuseCrossCertificates,
- createCrossSensorTransport,CROSS_SENSOR_VERSION} from
+ createCrossSensorTransport,crossSensorPhysicalPair,CROSS_SENSOR_VERSION} from
  "../../gui/src/adaptiveLocalCrossSensing.js";
 
 const p=validateLocalPlantOptions({plantCrossEnabled:true,plantCrossBound:.1,
@@ -89,4 +89,48 @@ test("dropouts, edge splits and packet loss cannot create future evidence",()=>{
  assert.ok(diag.lost>0);
  assert.equal(diag.generated,diag.delivered+diag.lost+diag.blocked+
   diag.expired+diag.superseded+diag.pending);
+});
+
+test("physical sensor visibility is distinct from communication links",()=>{
+ const q=validateLocalPlantOptions({plantCrossEnabled:true,
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:0.8,
+  plantCrossBound:.05,plantCrossDistanceErrorSlope:.02});
+ const adjacent=crossSensorPhysicalPair(0,1,q);
+ const second=crossSensorPhysicalPair(0,2,q);
+ const opposite=crossSensorPhysicalPair(0,4,q);
+ close(adjacent.distance,2*Math.sin(Math.PI/8));
+ close(second.distance,Math.SQRT2);
+ close(opposite.distance,2);
+ assert.equal(adjacent.eligible,true);
+ assert.equal(second.eligible,false);
+ assert.equal(opposite.eligible,false);
+ close(adjacent.errorBound,.05+.02*adjacent.distance);
+ assert.throws(()=>projectCrossReport({source:2,target:0,
+  emitted:1,value:.3},2,[Array(8).fill(0)],q),
+  /геометрически недоступный/);
+ const r=projectCrossReport({source:1,target:0,
+  emitted:1,value:.3},2,[Array(8).fill(0)],q);
+ close(r.min,q.plantA*(.3-adjacent.errorBound)-q.plantDisturbanceBound);
+ close(r.max,q.plantA*(.3+adjacent.errorBound)+q.plantDisturbanceBound);
+});
+
+test("dense communication without physical range emits zero remote reports",()=>{
+ const q=validateLocalPlantOptions({plantCrossEnabled:true,
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:.5,
+  plantCrossBound:.08,plantCrossLoss:0});
+ const n=q.plantAgents,ch=createCrossSensorTransport(q,1);
+ const all=Array.from({length:n},(_,i)=>
+  Array.from({length:n},(_,j)=>i!==j));
+ const active=Array(n).fill(true);
+ ch.networkStep({time:1,adjacency:all,active});
+ assert.equal(ch.emit({time:1,states:Array(n).fill(0),
+  active,faulty:Array(n).fill(false),budget:48}),0);
+ ch.networkStep({time:2,adjacency:all,active});
+ assert.deepEqual(ch.read({time:2}),Array.from({length:n},()=>[]));
+ const diag=ch.getDiagnostic();
+ assert.equal(diag.generated,0);
+ assert.equal(diag.transmitted,0);
+ assert.equal(diag.delivered,0);
 });
