@@ -200,7 +200,7 @@ export function simulateLocalPlant(input={},runIndex=0){
   return sign*p.plantInitialMagnitude*scale;
  });
  const initial=[...states],records=[],rows=[];
- let abstentions=0,overrides=0,acceptedCount=0,accumSquared=0;
+ let abstentions=0,overrides=0,acceptedCount=0,usedLocalCount=0,accumSquared=0;
  let activeHonestUnits=0,issViolations=0;
  const q=Math.abs(A-B*K);
  const bound=states.map(Math.abs);
@@ -250,8 +250,9 @@ export function simulateLocalPlant(input={},runIndex=0){
    current.push(row);records.push(row);next.push(updated);
    if(!faulty[i]){
     activeHonestUnits++;accumSquared+=updated*updated;
-    if(!accepted)abstentions++;
-    else acceptedCount++;
+    if(accepted)acceptedCount++;
+    if(inputControl.refused)abstentions++;
+    if(inputControl.acceptedLocal)usedLocalCount++;
     if(inputControl.overridden)overrides++;
    }
   }
@@ -262,6 +263,8 @@ export function simulateLocalPlant(input={},runIndex=0){
    maxAbsoluteState:Math.max(...next.map(Math.abs)),
    honestCoverage:current.filter(x=>x.honest&&x.accepted).length/
     (n-p.plantByzantine),
+   honestLocalControlFraction:current.filter(x=>x.honest&&
+    x.controlSource==="local").length/(n-p.plantByzantine),
    fallbackCount:current.filter(x=>x.honest&&x.refused).length,
    overrideCount:current.filter(x=>x.honest&&x.safetyOverride).length,
    transmitted:history.localUsed,received:history.receivedThisStep,
@@ -277,7 +280,10 @@ export function simulateLocalPlant(input={},runIndex=0){
   initial,final:[...states],
   metrics:{honestStateRmse:Math.sqrt(accumSquared/activeHonestUnits),
    honestMeanFinalV:mean(records.filter(r=>r.step===p.plantSteps&&r.honest).map(r=>r.V)),
+   // Diagnostic neighbor decision availability is not equivalent to
+   // physical control use, notably for the local_sensor baseline.
    honestCoverage:acceptedCount/activeHonestUnits,
+   honestLocalControlFraction:usedLocalCount/activeHonestUnits,
    honestFallbackFraction:abstentions/activeHonestUnits,
    honestBarrierOverrideFraction:overrides/activeHonestUnits,
    maxAbsoluteState:Math.max(...records.map(r=>Math.abs(r.stateAfter))),
