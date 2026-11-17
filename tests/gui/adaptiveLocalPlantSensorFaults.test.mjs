@@ -23,7 +23,7 @@ test("sensor failure schedule, bounds and penalty are explicit and opt-in",()=>{
   {plantDegradedSensorBound:Infinity},
   {plantDegradedSensorBound:2},
   {plantSensorFaultMode:"degraded",plantDegradedSensorBound:0.01},
-  {plantCertificationPenalty:0},
+  {plantSensorFaultMode:"dropout",plantCertificationPenalty:0},
   {plantSensorFaultStart:12,plantSensorFaultEnd:10},
   {plantSensorFaultMode:"dropout",plantSteps:10,plantSensorFaultEnd:12}
  ])assert.throws(()=>validateLocalPlantOptions(bad),/Локальный объект/);
