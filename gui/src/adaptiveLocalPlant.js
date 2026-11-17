@@ -58,6 +58,9 @@ export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  // Optional independent authenticated physical remote sensors. Disabled
  // by default; their packets compete for the same plant network capacity.
  plantCrossEnabled:false,
+ // Public certified UPPER bound on bad authenticated reporter identities.
+ // Deliberately separate from simulator-only actual Byzantine membership.
+ plantCrossFaultBudget:2,
  plantCrossBound:0.08,
  plantCrossDelay:1,
  plantCrossTTL:5,
@@ -101,6 +104,7 @@ export function validateLocalPlantOptions(input={}){
   ["plantSensorFaultStart",1,500,true],
   ["plantSensorFaultEnd",1,500,true],
   ["plantDegradedSensorBound",0,10,false],
+  ["plantCrossFaultBudget",0,31,true],
   ["plantCrossBound",0,10,false],["plantCrossDelay",1,50,true],
   ["plantCrossTTL",1,500,true],["plantCrossLoss",0,1,false],
   ["plantCrossBandwidthFraction",0,1,false],
@@ -123,7 +127,9 @@ export function validateLocalPlantOptions(input={}){
   p.plantSensorFaultStart>p.plantSensorFaultEnd||
   (p.plantSensorFaultMode!=="nominal"&&p.plantSensorFaultEnd>p.plantSteps)||
   p.plantCrossBound>=S||p.plantCrossTTL<p.plantCrossDelay||
-  (p.plantCrossEnabled&&p.plantCrossBandwidthFraction<=0)||
+  (p.plantCrossEnabled&&(p.plantCrossBandwidthFraction<=0||
+   p.plantCrossFaultBudget<p.plantByzantine||
+   p.plantCrossFaultBudget>=p.plantAgents))||
   p.plantDegradedSensorBound>=S||
   (p.plantSensorFaultMode==="degraded"&&
    p.plantDegradedSensorBound<p.plantSensorBound)||
@@ -280,7 +286,7 @@ export function simulateLocalPlant(input={},runIndex=0){
       const reports=received[i].map(r=>projectCrossReport(
        r,step,controlTape,p));
       const result=fuseCrossCertificates(certified[i],reports,
-       p.plantByzantine,p);
+       p.plantCrossFaultBudget,p);
       fused.push(result.interval);crossDetails.push(result);
      }catch(e){
       if(e.code!=="CERTIFICATION_LOST")throw e;
