@@ -262,7 +262,7 @@ export function simulateLocalPlant(input={},runIndex=0){
    kind==="degraded"?p.plantDegradedSensorBound:p.plantSensorBound);
   const trueSensors=states.map((x,i)=>accuracy[i]===null?null:
    clamp(x+accuracy[i]*draw(p,runIndex,0x702,step,i),-S,S));
-  let certified=null,crossDetails=null;
+  let certified=null,crossDetails=null,crossReceived=null;
   if(observer){
    try{certified=observer.observe({
     time:step,readings:trueSensors,bounds:accuracy});
@@ -272,7 +272,8 @@ export function simulateLocalPlant(input={},runIndex=0){
     break;
    }
    if(cross){
-    const received=cross.read({time:step}),fused=[];
+    crossReceived=cross.read({time:step});
+    const received=crossReceived,fused=[];
     crossDetails=[];
     for(let i=0;i<n;i++){
      try{
@@ -363,7 +364,10 @@ export function simulateLocalPlant(input={},runIndex=0){
     refused:inputControl.refused,disturbance,
     stateAfter:updated,V:updated*updated,
     issOneStepBound:oneStepBound,issRecursiveBound:propagated,
-    ...(cross?{crossReporters:crossDetails[i].reporters,
+    ...(cross?{crossReports:crossReceived[i].map(r=>({
+     source:r.source,target:r.target,emitted:r.emitted,
+     arrived:r.arrived,value:r.value})),
+     crossReporters:crossDetails[i].reporters,
      crossRequiredSupport:crossDetails[i].requiredSupport,
      crossSupported:crossDetails[i].supported,
      crossRefined:crossDetails[i].refined}: {})};
