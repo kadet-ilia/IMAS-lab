@@ -86,6 +86,9 @@ jobs:
       - name: Geometric remote-sensor observability range pilot (96 synthetic episodes)
         working-directory: gui
         run: npm run adaptive:local:geometry:pilot
+      - name: Protocol-locked internal synthetic cross-geometry holdout (32 pairs and controls)
+        working-directory: gui
+        run: npm run adaptive:local:geometry:holdout
       - name: Export exploratory pilot data
         if: always()
         uses: actions/upload-artifact@v4

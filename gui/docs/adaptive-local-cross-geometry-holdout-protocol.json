@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "e1a-physical-range-internal-holdout-1.0.0",
+  "status": "PREDECLARED INTERNAL SYNTHETIC REPLICATION; NOT EXTERNAL VALIDATION",
+  "researchQuestion": "Does long sensor dropout retain a full-horizon safety certificate when independently bounded physical cross-sensing is range-feasible in a complete communication network?",
+  "primaryEndpoint": "binary full 44-step safety-certification completion",
+  "primaryContrast": "cross-enabled minus cross-disabled on identical exogenous scenario IDs",
+  "primaryHypothesis": "two-sided equality of paired marginal completion probabilities",
+  "primaryTest": "exact conditional two-sided McNemar",
+  "alpha": 0.05,
+  "nPaired": 32,
+  "seedBase": 20300101,
+  "seedStride": 7919,
+  "negativeControlRuns": 8,
+  "negativeControls": [
+    {
+      "name": "no_physical_range",
+      "topology": "complete",
+      "maximumRange": 0.5
+    },
+    {
+      "name": "two_direct_reporters_at_most",
+      "topology": "ring",
+      "maximumRange": 2.05
+    }
+  ],
+  "selectedPrimary": {
+    "topology": "complete",
+    "maximumRange": 2.05,
+    "plantSteps": 44,
+    "plantAgents": 8,
+    "plantByzantine": 2,
+    "plantControlMode": "local_sensor",
+    "plantSensorFaultMode": "dropout",
+    "plantSensorFaultFraction": 0.5,
+    "plantSensorFaultStart": 4,
+    "plantSensorFaultEnd": 39,
+    "plantGuardEnabled": false,
+    "plantCapacity": 48,
+    "plantTransportLoss": 0.04,
+    "plantCrossFaultBudget": 2,
+    "plantCrossObservationMode": "range_geometry",
+    "plantCrossGeometryRadius": 1,
+    "plantCrossDistanceErrorSlope": 0.04,
+    "plantCrossBound": 0.04,
+    "plantCrossDelay": 1,
+    "plantCrossTTL": 5,
+    "plantCrossLoss": 0.04,
+    "plantCrossBandwidthFraction": 0.65,
+    "plantCertificationPenalty": 10
+  },
+  "secondaryEndpoints": [
+    "paired fixed-horizon J_10",
+    "mean completion count",
+    "fraction with physical remote support"
+  ],
+  "secondaryPenaltySensitivity": [
+    4.01,
+    10,
+    25,
+    100
+  ],
+  "exclusions": "none; every configured seed contributes one pair, including certificate losses",
+  "researchLimitations": "No physical sensor calibration, authenticity verification, independent laboratory data, or whole-system Byzantine guarantee; repeated CI runs on SAME locked seeds are regression replications, not additional independent samples."
+}
