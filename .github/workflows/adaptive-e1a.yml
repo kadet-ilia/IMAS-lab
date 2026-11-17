@@ -10,6 +10,7 @@ on:
     branches: [IMAS_Lab_test]
     paths:
       - 'gui/**'
+      - 'tests/**'
       - '.github/workflows/adaptive-e1a.yml'
 permissions:
   contents: read
@@ -73,6 +74,9 @@ jobs:
       - name: Bounded causal local action feedback research pilot (16 cells)
         working-directory: gui
         run: npm run adaptive:local:action:pilot
+      - name: Closed scalar plant, trusted measurement barrier and 3-controller pilot (24 cells)
+        working-directory: gui
+        run: npm run adaptive:local:plant:pilot
       - name: Export exploratory pilot data
         if: always()
         uses: actions/upload-artifact@v4

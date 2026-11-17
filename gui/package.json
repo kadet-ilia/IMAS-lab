@@ -30,7 +30,8 @@
     "adaptive:local:transport:pilot": "node scripts/adaptiveLocalTransportPilot.mjs",
     "adaptive:local:autonomy:pilot": "node scripts/adaptiveLocalAutonomyPilot.mjs",
     "adaptive:local:guard:pilot": "node scripts/adaptiveLocalAutonomyGuardPilot.mjs",
-    "adaptive:local:action:pilot": "node scripts/adaptiveLocalActionFeedbackPilot.mjs"
+    "adaptive:local:action:pilot": "node scripts/adaptiveLocalActionFeedbackPilot.mjs",
+    "adaptive:local:plant:pilot": "node scripts/adaptiveLocalPlantPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
