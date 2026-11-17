@@ -13,7 +13,7 @@
 import {createRng} from "./trustEngine.js";
 import {syntheticOrbitVisibility} from "./adaptiveCrossOrbitalVisibility.js";
 
-export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.2.0-orbital-visibility-bounds";
+export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.3.0-bounded-async-sensing";
 const finite=Number.isFinite;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
 const EPS=1e-10;
@@ -115,22 +115,31 @@ export function projectCrossReport(report,time,controlTape,p){
   !range(report.value,p)||!Array.isArray(controlTape)||
   controlTape.length<time-1)
   throw invalid("некорректная отметка времени, источник или журнал команд");
- const geometry=crossSensorPhysicalPair(report.source,report.target,p,report.emitted);
- if(!geometry.eligible)
-  throw invalid("геометрически недоступный внешний измеритель");
- let min=report.value-geometry.errorBound;
- let max=report.value+geometry.errorBound;
- for(let k=report.emitted;k<time;k++){
-  const control=controlTape[k-1]?.[report.target];
-  if(!finite(control)||Math.abs(control)>p.plantControlLimit+EPS)
-   throw invalid("нет достоверной исполненной команды для причинного прогноза");
-  min=p.plantA*min+p.plantB*control-p.plantDisturbanceBound;
-  max=p.plantA*max+p.plantB*control+p.plantDisturbanceBound;
+ // The authenticated PACKET time s bounds, but does not reveal, the actual
+ // PHYSICAL measurement epoch k in [max(1,s-L),s]. The hull covers all
+ // physically eligible k, using only real executed controls k..t-1.
+ const L=p.plantCrossSampleLagMaxSteps??0;
+ let outerMin=Infinity,outerMax=-Infinity;
+ for(let s=Math.max(1,report.emitted-L);s<=report.emitted;s++){
+  const g=crossSensorPhysicalPair(report.source,report.target,p,s);
+  if(!g.eligible)continue;
+  let min=report.value-g.errorBound,max=report.value+g.errorBound;
+  for(let k=s;k<time;k++){
+   const control=controlTape[k-1]?.[report.target];
+   if(!finite(control)||Math.abs(control)>p.plantControlLimit+EPS)
+    throw invalid("нет достоверной исполненной команды для причинного прогноза");
+   min=p.plantA*min+p.plantB*control-p.plantDisturbanceBound;
+   max=p.plantA*max+p.plantB*control+p.plantDisturbanceBound;
+  }
+  outerMin=Math.min(outerMin,min);
+  outerMax=Math.max(outerMax,max);
  }
+ if(!finite(outerMin)||!finite(outerMax))
+  throw invalid("геометрически недоступный внешний измеритель");
  return Object.freeze({source:report.source,target:report.target,
   emitted:report.emitted,
-  min:Math.max(-p.plantSafeBound,min),
-  max:Math.min(p.plantSafeBound,max)});
+  min:Math.max(-p.plantSafeBound,outerMin),
+  max:Math.min(p.plantSafeBound,outerMax)});
 }
 
 /**
@@ -230,7 +239,7 @@ export function createCrossSensorTransport(p,runIndex=0){
    packet.emitted<time&&time-packet.emitted<=ttl)
    .sort((a,b)=>a.source-b.source).map(packet=>({...packet})));
  };
- const emit=({time,states,active:a,faulty,budget})=>{
+ const emit=({time,states,historyStates=null,active:a,faulty,budget})=>{
   if(time!==step||history.at(-1)?.budget!==null||
    !Array.isArray(states)||states.length!==n||
    !Array.isArray(a)||a.length!==n||
@@ -238,16 +247,33 @@ export function createCrossSensorTransport(p,runIndex=0){
    !Array.isArray(faulty)||faulty.length!==n||
    faulty.some(v=>typeof v!=="boolean")||
    states.some((v,i)=>active[i]&&!range(v,p))||
-   !Number.isSafeInteger(budget)||budget<0||budget>p.plantCapacity)
+   !Number.isSafeInteger(budget)||budget<0||budget>p.plantCapacity||
+   (p.plantCrossSampleLagMaxSteps>0&&(
+    !Array.isArray(historyStates)||historyStates.length!==time||
+    historyStates.some(row=>!Array.isArray(row)||row.length!==n||
+     row.some(x=>!range(x,p)))||
+    states.some((x,i)=>active[i]&&Math.abs(
+     x-historyStates[time-1][i])>EPS))))
    throw invalid("некорректный такт отправки или бюджет");
   for(let source=0;source<n;source++)if(active[source])
    for(let target=0;target<n;target++)if(edge(source,target)){
-    const geometry=crossSensorPhysicalPair(source,target,p,time);
-    if(!geometry.eligible)continue;
+    // The physical instrument chooses a buffered eligible epoch; its
+    // actual sample epoch remains SIMULATOR-ONLY (not in its packet).
+    const samples=[];
+    for(let t=Math.max(1,time-(p.plantCrossSampleLagMaxSteps??0));
+     t<=time;t++){
+     const g=crossSensorPhysicalPair(source,target,p,t);
+     if(g.eligible)samples.push({time:t,errorBound:g.errorBound});
+    }
+    if(!samples.length)continue;
     const id=key(source,target);
     const rng=createRng(p.plantSeed,runIndex,0xC205,source,target,time);
-    let value=clamp(states[target]+
-     geometry.errorBound*(rng.random()*2-1),
+    const sample=samples.length===1?samples[0]:
+     samples[Math.floor(rng.random()*samples.length)];
+    const measured=p.plantCrossSampleLagMaxSteps?
+     historyStates[sample.time-1][target]:states[target];
+    let value=clamp(measured+
+     sample.errorBound*(rng.random()*2-1),
      -p.plantSafeBound,p.plantSafeBound);
     if(faulty[source]&&time>=p.plantAttackStart)
      value=clamp(value+(source%2?-1:1)*p.plantAttackBias,
@@ -282,7 +308,9 @@ export function createCrossSensorTransport(p,runIndex=0){
    waiting:waiting.size,inFlight:inFlight.length,
    modelVersion:CROSS_SENSOR_VERSION,
    observationMode:p.plantCrossObservationMode??"network_proxy",
-   observationGeometryEpoch:"emitted; no current LOS is needed for cached reports",
+   observationGeometryEpoch:"actual sample in [emitted-L,emitted], no disclosure",
+   sampleLagBoundSteps:p.plantCrossSampleLagMaxSteps??0,
+   packetSampleEpochDisclosure:false,
    role:"simulator_only_authenticated_physical_cross_sensors",
    history:history.map(r=>({...r}))};
  };
