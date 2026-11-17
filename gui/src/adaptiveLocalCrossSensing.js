@@ -11,8 +11,9 @@
  * It remains conservative even when Byzantine intervals are disjoint.
  */
 import {createRng} from "./trustEngine.js";
+import {syntheticOrbitVisibility} from "./adaptiveCrossOrbitalVisibility.js";
 
-export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.1.0-geometric-observability";
+export const CROSS_SENSOR_VERSION="e1a-causal-remote-sensor-f-hull-1.2.0-orbital-visibility-bounds";
 const finite=Number.isFinite;
 const clamp=(x,lo,hi)=>Math.max(lo,Math.min(hi,x));
 const EPS=1e-10;
@@ -36,7 +37,7 @@ const range=(v,p)=>finite(v)&&Math.abs(v)<=p.plantSafeBound+EPS;
  * Both parties compute the SAME public error bound. Source declarations
  * about measurement accuracy are NOT trusted.
  */
-export function crossSensorPhysicalPair(source,target,p){
+export function crossSensorPhysicalPair(source,target,p,time=1){
  const n=p?.plantAgents;
  if(!Number.isInteger(n)||n<2||!Number.isInteger(source)||
   !Number.isInteger(target)||source<0||target<0||
@@ -45,6 +46,11 @@ export function crossSensorPhysicalPair(source,target,p){
  if(p.plantCrossObservationMode==="network_proxy"||
   p.plantCrossObservationMode===undefined)
   return Object.freeze({eligible:true,distance:null,errorBound:p.plantCrossBound});
+ if(p.plantCrossObservationMode==="orbital_visibility"){
+  if(!Number.isInteger(time)||time<1)
+   throw invalid("неверная эпоха наблюдения");
+  return syntheticOrbitVisibility(source,target,time,p);
+ }
  if(p.plantCrossObservationMode!=="range_geometry")
   throw invalid("неизвестная геометрическая модель");
  const gap=Math.min(Math.abs(source-target),n-Math.abs(source-target));
@@ -63,7 +69,7 @@ export function crossSensorPhysicalPair(source,target,p){
  * and no plant state, outcomes, or simulator attacker labels are used.
  * Queue loss and actual measurement overlap can still prevent certification.
  */
-export function auditCrossObservationGraph(communicationAdjacency,p){
+export function auditCrossObservationGraph(communicationAdjacency,p,time=1){
  const n=p?.plantAgents;
  if(!Number.isInteger(n)||!Array.isArray(communicationAdjacency)||
   communicationAdjacency.length!==n||
@@ -77,7 +83,7 @@ export function auditCrossObservationGraph(communicationAdjacency,p){
  const physicalSources=Array(n).fill(0);
  const admissibleDirectSources=Array(n).fill(0);
  for(let i=0;i<n;i++)for(let j=0;j<n;j++)if(i!==j){
-  const physical=crossSensorPhysicalPair(j,i,p);
+  const physical=crossSensorPhysicalPair(j,i,p,time);
   if(physical.eligible){
    physicalSources[i]++;
    if(communicationAdjacency[j][i])admissibleDirectSources[i]++;
@@ -109,7 +115,7 @@ export function projectCrossReport(report,time,controlTape,p){
   !range(report.value,p)||!Array.isArray(controlTape)||
   controlTape.length<time-1)
   throw invalid("некорректная отметка времени, источник или журнал команд");
- const geometry=crossSensorPhysicalPair(report.source,report.target,p);
+ const geometry=crossSensorPhysicalPair(report.source,report.target,p,report.emitted);
  if(!geometry.eligible)
   throw invalid("геометрически недоступный внешний измеритель");
  let min=report.value-geometry.errorBound;
@@ -236,7 +242,7 @@ export function createCrossSensorTransport(p,runIndex=0){
    throw invalid("некорректный такт отправки или бюджет");
   for(let source=0;source<n;source++)if(active[source])
    for(let target=0;target<n;target++)if(edge(source,target)){
-    const geometry=crossSensorPhysicalPair(source,target,p);
+    const geometry=crossSensorPhysicalPair(source,target,p,time);
     if(!geometry.eligible)continue;
     const id=key(source,target);
     const rng=createRng(p.plantSeed,runIndex,0xC205,source,target,time);
@@ -276,6 +282,7 @@ export function createCrossSensorTransport(p,runIndex=0){
    waiting:waiting.size,inFlight:inFlight.length,
    modelVersion:CROSS_SENSOR_VERSION,
    observationMode:p.plantCrossObservationMode??"network_proxy",
+   observationGeometryEpoch:"emitted; no current LOS is needed for cached reports",
    role:"simulator_only_authenticated_physical_cross_sensors",
    history:history.map(r=>({...r}))};
  };

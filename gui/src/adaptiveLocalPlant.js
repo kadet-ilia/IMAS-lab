@@ -16,7 +16,7 @@ import {createLocalTransport} from "./adaptiveLocalTransport.js";
 import {createCertifiedPlantObserver,scheduledSensorFault,shieldCertifiedInterval,SENSOR_FAULT_OBSERVER_VERSION} from "./adaptiveLocalPlantSensorFaults.js";
 import {createCrossSensorTransport,projectCrossReport,fuseCrossCertificates,CROSS_SENSOR_VERSION} from "./adaptiveLocalCrossSensing.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.4.0-cross-sensing-geometric-observability";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.5.0-cross-sensing-orbital-visibility";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,
@@ -60,10 +60,20 @@ export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantCrossEnabled:false,
  // A SYNTHETIC physical capability assumption distinct from packet edges.
  // Keep the old ideal communication-edge proxy unless explicitly opted in.
- plantCrossObservationMode:"network_proxy", // network_proxy | range_geometry
+ plantCrossObservationMode:"network_proxy", // network_proxy | range_geometry | orbital_visibility
  plantCrossGeometryRadius:1,
  plantCrossMaxRange:2,
  plantCrossDistanceErrorSlope:0,
+ // Normalized SYNTHETIC 3D circular trajectories, NOT an orbital propagator.
+ plantCrossOrbitRadius:2,
+ plantCrossCentralBodyRadius:1,
+ plantCrossOrbitPlanes:2,
+ plantCrossOrbitInclination:0.7,
+ plantCrossOrbitAngularRate:0.15,
+ plantCrossPointingMode:"omnidirectional", // omnidirectional | prograde
+ plantCrossPointingHalfAngle:Math.PI,
+ plantCrossOrbitPositionError:0,
+ plantCrossOrbitPointingError:0,
  // Public certified UPPER bound on bad authenticated reporter identities.
  // Deliberately separate from simulator-only actual Byzantine membership.
  plantCrossFaultBudget:2,
@@ -110,6 +120,14 @@ export function validateLocalPlantOptions(input={}){
   ["plantSensorFaultStart",1,500,true],
   ["plantSensorFaultEnd",1,500,true],
   ["plantDegradedSensorBound",0,10,false],
+  ["plantCrossOrbitRadius",0.01,100,false],
+  ["plantCrossCentralBodyRadius",0,100,false],
+  ["plantCrossOrbitPlanes",1,32,true],
+  ["plantCrossOrbitInclination",0,Math.PI/2,false],
+  ["plantCrossOrbitAngularRate",0,Math.PI,false],
+  ["plantCrossPointingHalfAngle",0,Math.PI,false],
+  ["plantCrossOrbitPositionError",0,10,false],
+  ["plantCrossOrbitPointingError",0,Math.PI,false],
   ["plantCrossGeometryRadius",0.001,100,false],
   ["plantCrossMaxRange",0,200,false],
   ["plantCrossDistanceErrorSlope",0,10,false],
@@ -121,8 +139,11 @@ export function validateLocalPlantOptions(input={}){
  ])numeric(p,key,lo,hi,int);
  for(const k of ["plantPartition","plantGuardEnabled","plantCrossEnabled"])
   if(typeof p[k]!=="boolean")throw Error("Локальный объект: неверный тип "+k);
- if(!["network_proxy","range_geometry"].includes(p.plantCrossObservationMode))
+ if(!["network_proxy","range_geometry","orbital_visibility"].includes(
+  p.plantCrossObservationMode))
   throw Error("Локальный объект: неизвестная модель измерительной доступности");
+ if(!["omnidirectional","prograde"].includes(p.plantCrossPointingMode))
+  throw Error("Локальный объект: неизвестный режим наведения внешнего датчика");
  if(!["ring","complete"].includes(p.plantTopology)||
   !["local_action","local_decision","local_sensor"].includes(p.plantControlMode)||
   !["barrier_zero","trusted_sensor"].includes(p.plantFallbackPolicy)||
@@ -141,6 +162,14 @@ export function validateLocalPlantOptions(input={}){
   (p.plantCrossObservationMode==="range_geometry"&&
    p.plantCrossBound+2*p.plantCrossGeometryRadius*
     p.plantCrossDistanceErrorSlope>=S)||
+  (p.plantCrossObservationMode==="orbital_visibility"&&(
+   p.plantAgents%p.plantCrossOrbitPlanes!==0||
+   p.plantCrossCentralBodyRadius>=p.plantCrossOrbitRadius||
+   p.plantCrossOrbitPositionError>=
+    p.plantCrossOrbitRadius-p.plantCrossCentralBodyRadius||
+   p.plantCrossBound+
+    (2*p.plantCrossOrbitRadius+2*p.plantCrossOrbitPositionError)*
+    p.plantCrossDistanceErrorSlope>=S))||
   (p.plantCrossEnabled&&(p.plantCrossBandwidthFraction<=0||
    p.plantCrossFaultBudget<p.plantByzantine||
    p.plantCrossFaultBudget>=p.plantAgents))||
