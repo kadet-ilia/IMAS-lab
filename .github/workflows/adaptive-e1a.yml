@@ -89,7 +89,7 @@ jobs:
       - name: Protocol-locked internal synthetic cross-geometry holdout (32 pairs and controls)
         working-directory: gui
         run: npm run adaptive:local:geometry:holdout
-      - name: Time-varying synthetic orbit occlusion and pointing pilot (96 episodes)
+      - name: Time-varying orbital occlusion, time ambiguity and pointing pilot (120 episodes)
         working-directory: gui
         run: npm run adaptive:local:orbital:pilot
       - name: Export exploratory pilot data
