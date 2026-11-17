@@ -13,8 +13,9 @@
  */
 import {createRng} from "./trustEngine.js";
 import {createLocalTransport} from "./adaptiveLocalTransport.js";
+import {createCertifiedPlantObserver,scheduledSensorFault,shieldCertifiedInterval,SENSOR_FAULT_OBSERVER_VERSION} from "./adaptiveLocalPlantSensorFaults.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-measurement-barrier-1.1.0-control-attribution";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.2.0-certified-observer";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,
@@ -46,7 +47,14 @@ export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantGuardMinEvidence:2,
  plantConsensusRelaxation:0.8,
  plantLocalActionGain:0.5,
- plantLocalActionMaxStep:0.25
+ plantLocalActionMaxStep:0.25,
+ // Off by default: a sensor fault has to be explicitly scheduled.
+ plantSensorFaultMode:"nominal", // nominal | dropout | degraded
+ plantSensorFaultFraction:0.5, // first ceil(fraction*honestCount) agents
+ plantSensorFaultStart:8,
+ plantSensorFaultEnd:12,
+ plantDegradedSensorBound:0.3,
+ plantCertificationPenalty:10 // synthetic terminal loss if horizon is not certified
 });
 const finite=Number.isFinite;
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -79,13 +87,19 @@ export function validateLocalPlantOptions(input={}){
   ["plantGuardMinEvidence",1,500,true],
   ["plantConsensusRelaxation",0,1,false],
   ["plantLocalActionGain",0,1,false],
-  ["plantLocalActionMaxStep",1e-8,10,false]
+  ["plantLocalActionMaxStep",1e-8,10,false],
+  ["plantSensorFaultFraction",0,1,false],
+  ["plantSensorFaultStart",1,500,true],
+  ["plantSensorFaultEnd",1,500,true],
+  ["plantDegradedSensorBound",0,10,false],
+  ["plantCertificationPenalty",0,1000000,false]
  ])numeric(p,key,lo,hi,int);
  for(const k of ["plantPartition","plantGuardEnabled"])
   if(typeof p[k]!=="boolean")throw Error("Локальный объект: неверный тип "+k);
  if(!["ring","complete"].includes(p.plantTopology)||
   !["local_action","local_decision","local_sensor"].includes(p.plantControlMode)||
-  !["barrier_zero","trusted_sensor"].includes(p.plantFallbackPolicy))
+  !["barrier_zero","trusted_sensor"].includes(p.plantFallbackPolicy)||
+  !["nominal","dropout","degraded"].includes(p.plantSensorFaultMode))
   throw Error("Локальный объект: недопустимый дискретный режим");
  const S=p.plantSafeBound,W=p.plantDisturbanceBound,V=p.plantSensorBound;
  if(p.plantByzantine>=p.plantAgents/2||p.plantInitialMagnitude>S||
@@ -93,7 +107,11 @@ export function validateLocalPlantOptions(input={}){
   p.plantAttackStart>p.plantSteps||
   p.plantPartitionStart>p.plantPartitionEnd||
   (p.plantPartition&&p.plantPartitionEnd>p.plantSteps)||
-  p.plantGuardThreshold+p.plantGuardHysteresis>=1)
+  p.plantGuardThreshold+p.plantGuardHysteresis>=1||
+  p.plantSensorFaultStart>p.plantSensorFaultEnd||
+  (p.plantSensorFaultMode!=="nominal"&&p.plantSensorFaultEnd>p.plantSteps)||
+  p.plantDegradedSensorBound>=S||
+  p.plantCertificationPenalty<=S*S)
   throw Error("Локальный объект: несовместимые границы или горизонт");
  // Sufficient robust viability for EVERY admissible x and bounded sensor
  // uncertainty; actual barrier intersection is still checked every tick.
@@ -200,6 +218,10 @@ export function simulateLocalPlant(input={},runIndex=0){
   return sign*p.plantInitialMagnitude*scale;
  });
  const initial=[...states],records=[],rows=[];
+ // No change to the original plant dynamics in the default nominal mode.
+ const faultEnabled=p.plantSensorFaultMode!=="nominal";
+ const observer=faultEnabled?createCertifiedPlantObserver(n,p):null;
+ let certificateFailure=null,sensorDropoutUnits=0,sensorDegradedUnits=0;
  let abstentions=0,overrides=0,acceptedCount=0,usedLocalCount=0,accumSquared=0;
  let activeHonestUnits=0,issViolations=0;
  const q=Math.abs(A-B*K);
@@ -209,20 +231,70 @@ export function simulateLocalPlant(input={},runIndex=0){
    step<=p.plantPartitionEnd;
   const {labels,adjacency}=localPlantAdjacency(n,p.plantTopology,partition);
   transport.networkStep({step,labels,adjacency,active});
-  const trueSensors=states.map((x,i)=>
-   clamp(x+p.plantSensorBound*draw(p,runIndex,0x702,step,i),-S,S));
-  const telemetry=trueSensors.map((y,i)=>faulty[i]&&step>=p.plantAttackStart?
-   clamp(y+p.plantAttackBias,-S,S):y);
+  // Fault schedule is a SIMULATOR input. The estimator only receives
+  // a real reading or an explicitly labelled prediction midpoint.
+  // It never receives x(t) or an oracle-generated replacement reading.
+  const status=states.map((_,i)=>faultEnabled?
+   scheduledSensorFault(step,i,p):"nominal");
+  const accuracy=status.map(kind=>kind==="dropout"?null:
+   kind==="degraded"?p.plantDegradedSensorBound:p.plantSensorBound);
+  const trueSensors=states.map((x,i)=>accuracy[i]===null?null:
+   clamp(x+accuracy[i]*draw(p,runIndex,0x702,step,i),-S,S));
+  let certified=null;
+  if(observer){
+   try{certified=observer.observe({
+    time:step,readings:trueSensors,bounds:accuracy});
+   }catch(e){
+    if(e.code!=="CERTIFICATION_LOST")throw e;
+    certificateFailure={step,node:null,reason:e.reason,phase:"sensor_consistency"};
+    break;
+   }
+  }
+  const telemetry=trueSensors.map((y,i)=>{
+   const own=finite(y)?y:(certified[i].min+certified[i].max)/2;
+   return faulty[i]&&step>=p.plantAttackStart?
+    clamp(own+p.plantAttackBias,-S,S):own;
+  });
   const decisions=transport.onProposals({
    step,values:telemetry,reputation,active,faulty});
   const hist=transport.getDiagnostic().history.at(-1);
   const actions=hist.autonomousActions;
-  const before=[...states],current=[],next=[];
+  const before=[...states],current=[],next=[],controls=[];
   for(let i=0;i<n;i++){
    const accepted=!faulty[i]&&finite(decisions[i]);
    const estimate=accepted?(localMode?actions[i]:decisions[i]):null;
-   const inputControl=computeRobustSafetyControl({
-    measurement:trueSensors[i],estimate,accepted},p);
+   let inputControl;
+   if(!observer){
+    inputControl=computeRobustSafetyControl({
+     measurement:trueSensors[i],estimate,accepted},p);
+   }else{
+    const available=finite(trueSensors[i]),kind=p.plantControlMode;
+    const fromLocal=kind!=="local_sensor"&&accepted;
+    const fallback=kind!=="local_sensor"&&!accepted;
+    const center=(certified[i].min+certified[i].max)/2;
+    const target=fromLocal?estimate:available?trueSensors[i]:center;
+    // A missing trusted reading MUST NOT be replaced by a false small-V
+    // measurement. The model prediction only supplies a requested action.
+    const requested=(fromLocal||kind==="local_sensor"||
+     (fallback&&p.plantFallbackPolicy==="trusted_sensor"))?
+     -K*target:0;
+    let shield;
+    try{
+     shield=shieldCertifiedInterval({interval:certified[i],requested},p);
+    }catch(e){
+     if(e.code!=="CERTIFICATION_LOST")throw e;
+     certificateFailure={step,node:i,reason:e.reason,phase:"control_feasibility",
+      certifiedInterval:certified[i]};
+     break;
+    }
+    const source=fromLocal?"local":
+     !available?"prediction_fallback":
+     kind==="local_sensor"?"trusted_sensor":p.plantFallbackPolicy;
+    inputControl={...shield,
+     source,refused:fallback||(!available&&kind==="local_sensor"),
+     acceptedLocal:fromLocal,diagnosticEstimate:target,
+     xMin:certified[i].min,xMax:certified[i].max};
+   }
    const disturbance=p.plantDisturbanceBound*draw(p,runIndex,0x703,step,i);
    const updated=advanceScalarPlant({
     state:before[i],control:inputControl.control,disturbance},p);
@@ -238,6 +310,9 @@ export function simulateLocalPlant(input={},runIndex=0){
    bound[i]=propagated;
    const row={step,node:i,honest:!faulty[i],partition,
     stateBefore:before[i],trustedSensor:trueSensors[i],
+    sensorStatus:status[i],sensorBound:accuracy[i],
+    measurementOrigin:finite(trueSensors[i])?"trusted":"prediction",
+    certifiedInterval:certified?{...certified[i]}:null,
     emittedValue:telemetry[i],accepted,
     localDecision:decisions[i],localAction:actions?.[i]??null,
     control:inputControl.control,requested:inputControl.requested,
@@ -247,14 +322,26 @@ export function simulateLocalPlant(input={},runIndex=0){
     refused:inputControl.refused,disturbance,
     stateAfter:updated,V:updated*updated,
     issOneStepBound:oneStepBound,issRecursiveBound:propagated};
-   current.push(row);records.push(row);next.push(updated);
-   if(!faulty[i]){
-    activeHonestUnits++;accumSquared+=updated*updated;
-    if(accepted)acceptedCount++;
-    if(inputControl.refused)abstentions++;
-    if(inputControl.acceptedLocal)usedLocalCount++;
-    if(inputControl.overridden)overrides++;
+   current.push(row);next.push(updated);controls.push(inputControl.control);
+  }
+  if(certificateFailure)break; // No partly computed plant tick is recorded.
+  if(observer){
+   try{observer.advance({time:step,current:certified,controls});}
+   catch(e){
+    if(e.code!=="CERTIFICATION_LOST")throw e;
+    certificateFailure={step,node:null,reason:e.reason,phase:"interval_forecast"};
+    break;
    }
+  }
+  records.push(...current);
+  for(const row of current)if(row.honest){
+   activeHonestUnits++;accumSquared+=row.V;
+   if(row.accepted)acceptedCount++;
+   if(row.refused)abstentions++;
+   if(row.controlSource==="local")usedLocalCount++;
+   if(row.safetyOverride)overrides++;
+   if(row.sensorStatus==="dropout")sensorDropoutUnits++;
+   if(row.sensorStatus==="degraded")sensorDegradedUnits++;
   }
   transport.afterEvidenceTransport({step,sharedCapacity:p.plantCapacity,
    e1Used:0,decisionUsed:0});
@@ -266,6 +353,10 @@ export function simulateLocalPlant(input={},runIndex=0){
    honestLocalControlFraction:current.filter(x=>x.honest&&
     x.controlSource==="local").length/(n-p.plantByzantine),
    fallbackCount:current.filter(x=>x.honest&&x.refused).length,
+   dropoutCount:current.filter(x=>x.honest&&x.sensorStatus==="dropout").length,
+   degradedCount:current.filter(x=>x.honest&&x.sensorStatus==="degraded").length,
+   intervalWidthMean:certified?mean(certified.filter((_,i)=>!faulty[i])
+    .map(x=>x.max-x.min)):null,
    overrideCount:current.filter(x=>x.honest&&x.safetyOverride).length,
    transmitted:history.localUsed,received:history.receivedThisStep,
    slotsUsed:history.totalUsed,slotsAvailable:history.sharedCapacity});
@@ -276,19 +367,34 @@ export function simulateLocalPlant(input={},runIndex=0){
   link.expired+link.superseded+link.pending||
   link.history.some(h=>h.totalUsed>h.sharedCapacity))
   throw Error("Локальный объект: неверный баланс сетевых сообщений");
- return {version:LOCAL_PLANT_VERSION,options:p,run:runIndex,
+ const complete=!certificateFailure&&rows.length===p.plantSteps;
+ return {version:LOCAL_PLANT_VERSION,observerVersion:faultEnabled?
+   SENSOR_FAULT_OBSERVER_VERSION:null,
+  options:p,run:runIndex,status:complete?"completed":"certification_lost",
+  completedSteps:rows.length,certificateFailure,
+  observer:observer?.getDiagnostic()??null,
   initial,final:[...states],
-  metrics:{honestStateRmse:Math.sqrt(accumSquared/activeHonestUnits),
-   honestMeanFinalV:mean(records.filter(r=>r.step===p.plantSteps&&r.honest).map(r=>r.V)),
+  metrics:{honestStateRmse:complete?Math.sqrt(accumSquared/activeHonestUnits):null,
+   honestMeanFinalV:complete?mean(records.filter(
+    r=>r.step===p.plantSteps&&r.honest).map(r=>r.V)):null,
+   // Predeclared full-horizon loss, accounting for all aborts without
+   // choosing only successful trajectories. Penalty is an explicit assumption.
+   fixedHorizonLoss:complete?accumSquared/activeHonestUnits:p.plantCertificationPenalty,
+   certificationLost:complete?0:1,completedFraction:rows.length/p.plantSteps,
    // Diagnostic neighbor decision availability is not equivalent to
    // physical control use, notably for the local_sensor baseline.
-   honestCoverage:acceptedCount/activeHonestUnits,
-   honestLocalControlFraction:usedLocalCount/activeHonestUnits,
-   honestFallbackFraction:abstentions/activeHonestUnits,
-   honestBarrierOverrideFraction:overrides/activeHonestUnits,
-   maxAbsoluteState:Math.max(...records.map(r=>Math.abs(r.stateAfter))),
+   honestCoverage:activeHonestUnits?acceptedCount/activeHonestUnits:null,
+   honestLocalControlFraction:activeHonestUnits?usedLocalCount/activeHonestUnits:null,
+   honestFallbackFraction:activeHonestUnits?abstentions/activeHonestUnits:null,
+   honestSensorDropoutFraction:activeHonestUnits?
+    sensorDropoutUnits/activeHonestUnits:null,
+   honestSensorDegradedFraction:activeHonestUnits?
+    sensorDegradedUnits/activeHonestUnits:null,
+   honestBarrierOverrideFraction:activeHonestUnits?overrides/activeHonestUnits:null,
+   maxAbsoluteState:records.length?
+    Math.max(...records.map(r=>Math.abs(r.stateAfter))):null,
    safetyViolations:0,issViolations,
    nominalContractionFactor:q,nominalContractive:q<1},
   rows,records,transport:link,
-  methodology:"Separate synthetic physical/logical closed loop. Controller uses trusted bounded-error sensor and causally delivered messages, never true state or oracle. All actuators assumed to enforce independent robust safety barrier even if telemetry is compromised. No physical hardware or Byzantine consensus guarantee."};
+  methodology:"Standalone synthetic scalar plant. A missing authenticated sensor uses model-predicted state intervals, never a fictitious accurate measurement. The robust actuator filter fails closed when no safe command exists; incomplete runs receive an explicit fixed-horizon penalty. The sensor and its reported accuracy, system model, and actuator remain trusted. No Byzantine agreement, full-system ISS or external calibration guarantee."};
 }
