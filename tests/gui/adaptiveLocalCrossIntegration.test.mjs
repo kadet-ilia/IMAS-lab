@@ -103,3 +103,29 @@ test("complete data network does not create physical remote sensing outside rang
   off.records.map(r=>r.stateAfter));
  assert.ok(a.rows.every(r=>r.slotsUsed<=r.slotsAvailable));
 });
+
+
+test("orbital visibility integrates into the optional interval safety plant",()=>{
+ const q={...cfg,plantTopology:"complete",
+  plantCrossObservationMode:"orbital_visibility",
+  plantCrossOrbitRadius:2,plantCrossCentralBodyRadius:1.2,
+  plantCrossOrbitPlanes:2,plantCrossOrbitInclination:.9,
+  plantCrossOrbitAngularRate:.31,plantCrossMaxRange:5,
+  plantCrossDistanceErrorSlope:.02};
+ const r=simulateLocalPlant(q,1);
+ assert.deepEqual(r,simulateLocalPlant(q,1));
+ assert.equal(r.crossTransport.observationMode,"orbital_visibility");
+ assert.ok(r.crossTransport.generated>0);
+ assert.ok(r.records.every(row=>
+  row.certifiedInterval.min<=row.stateBefore+1e-9&&
+  row.certifiedInterval.max>=row.stateBefore-1e-9&&
+  Math.abs(row.stateAfter)<=r.options.plantSafeBound+1e-9));
+ assert.ok(r.records.every(row=>row.crossReports.every(packet=>
+  packet.emitted<row.step&&packet.arrived<=row.step)));
+ assert.ok(r.rows.every(row=>row.slotsUsed<=row.slotsAvailable));
+ const old=simulateLocalPlant({...q,plantCrossEnabled:false},1);
+ const baseline=simulateLocalPlant({...q,plantCrossEnabled:false,
+  plantCrossObservationMode:"network_proxy"},1);
+ assert.deepEqual(old.records.map(x=>x.stateAfter),
+  baseline.records.map(x=>x.stateAfter));
+});
