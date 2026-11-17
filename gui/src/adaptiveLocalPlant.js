@@ -14,8 +14,9 @@
 import {createRng} from "./trustEngine.js";
 import {createLocalTransport} from "./adaptiveLocalTransport.js";
 import {createCertifiedPlantObserver,scheduledSensorFault,shieldCertifiedInterval,SENSOR_FAULT_OBSERVER_VERSION} from "./adaptiveLocalPlantSensorFaults.js";
+import {createCrossSensorTransport,projectCrossReport,fuseCrossCertificates,CROSS_SENSOR_VERSION} from "./adaptiveLocalCrossSensing.js";
 
-export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.2.0-certified-observer";
+export const LOCAL_PLANT_VERSION="e1a-scalar-robust-plant-1.3.0-causal-cross-sensing";
 export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSeed:731101,
  plantAgents:8,
@@ -54,6 +55,14 @@ export const LOCAL_PLANT_DEFAULTS=Object.freeze({
  plantSensorFaultStart:8,
  plantSensorFaultEnd:12,
  plantDegradedSensorBound:0.3,
+ // Optional independent authenticated physical remote sensors. Disabled
+ // by default; their packets compete for the same plant network capacity.
+ plantCrossEnabled:false,
+ plantCrossBound:0.08,
+ plantCrossDelay:1,
+ plantCrossTTL:5,
+ plantCrossLoss:0.02,
+ plantCrossBandwidthFraction:0.5,
  plantCertificationPenalty:10 // synthetic terminal loss if horizon is not certified
 });
 const finite=Number.isFinite;
@@ -92,9 +101,12 @@ export function validateLocalPlantOptions(input={}){
   ["plantSensorFaultStart",1,500,true],
   ["plantSensorFaultEnd",1,500,true],
   ["plantDegradedSensorBound",0,10,false],
+  ["plantCrossBound",0,10,false],["plantCrossDelay",1,50,true],
+  ["plantCrossTTL",1,500,true],["plantCrossLoss",0,1,false],
+  ["plantCrossBandwidthFraction",0,1,false],
   ["plantCertificationPenalty",0,1000000,false]
  ])numeric(p,key,lo,hi,int);
- for(const k of ["plantPartition","plantGuardEnabled"])
+ for(const k of ["plantPartition","plantGuardEnabled","plantCrossEnabled"])
   if(typeof p[k]!=="boolean")throw Error("Локальный объект: неверный тип "+k);
  if(!["ring","complete"].includes(p.plantTopology)||
   !["local_action","local_decision","local_sensor"].includes(p.plantControlMode)||
@@ -110,6 +122,8 @@ export function validateLocalPlantOptions(input={}){
   p.plantGuardThreshold+p.plantGuardHysteresis>=1||
   p.plantSensorFaultStart>p.plantSensorFaultEnd||
   (p.plantSensorFaultMode!=="nominal"&&p.plantSensorFaultEnd>p.plantSteps)||
+  p.plantCrossBound>=S||p.plantCrossTTL<p.plantCrossDelay||
+  (p.plantCrossEnabled&&p.plantCrossBandwidthFraction<=0)||
   p.plantDegradedSensorBound>=S||
   (p.plantSensorFaultMode==="degraded"&&
    p.plantDegradedSensorBound<p.plantSensorBound)||
@@ -221,12 +235,16 @@ export function simulateLocalPlant(input={},runIndex=0){
   return sign*p.plantInitialMagnitude*scale;
  });
  const initial=[...states],records=[],rows=[];
- // No change to the original plant dynamics in the default nominal mode.
+ const cross=p.plantCrossEnabled?createCrossSensorTransport(p,runIndex):null;
+ const crossBudget=cross?Math.floor(p.plantCapacity*p.plantCrossBandwidthFraction):0;
+ const controlTape=[];
+ // The opt-in cross-sensor channel never changes the original nominal path.
  const faultEnabled=p.plantSensorFaultMode!=="nominal";
- const observer=faultEnabled?createCertifiedPlantObserver(n,p):null;
+ const observer=faultEnabled||cross?createCertifiedPlantObserver(n,p):null;
  let certificateFailure=null,sensorDropoutUnits=0,sensorDegradedUnits=0;
  let abstentions=0,overrides=0,acceptedCount=0,usedLocalCount=0,accumSquared=0;
  let activeHonestUnits=0,issViolations=0;
+ let crossSupported=0,crossRefined=0,crossReporterSum=0;
  const q=Math.abs(A-B*K);
  const bound=states.map(Math.abs);
  for(let step=1;step<=p.plantSteps;step++){
@@ -234,6 +252,7 @@ export function simulateLocalPlant(input={},runIndex=0){
    step<=p.plantPartitionEnd;
   const {labels,adjacency}=localPlantAdjacency(n,p.plantTopology,partition);
   transport.networkStep({step,labels,adjacency,active});
+  if(cross)cross.networkStep({time:step,active,adjacency});
   // Fault schedule is a SIMULATOR input. The estimator only receives
   // a real reading or an explicitly labelled prediction midpoint.
   // It never receives x(t) or an oracle-generated replacement reading.
@@ -243,7 +262,7 @@ export function simulateLocalPlant(input={},runIndex=0){
    kind==="degraded"?p.plantDegradedSensorBound:p.plantSensorBound);
   const trueSensors=states.map((x,i)=>accuracy[i]===null?null:
    clamp(x+accuracy[i]*draw(p,runIndex,0x702,step,i),-S,S));
-  let certified=null;
+  let certified=null,crossDetails=null;
   if(observer){
    try{certified=observer.observe({
     time:step,readings:trueSensors,bounds:accuracy});
@@ -251,6 +270,25 @@ export function simulateLocalPlant(input={},runIndex=0){
     if(e.code!=="CERTIFICATION_LOST")throw e;
     certificateFailure={step,node:null,reason:e.reason,phase:"sensor_consistency"};
     break;
+   }
+   if(cross){
+    const received=cross.read({time:step}),fused=[];
+    crossDetails=[];
+    for(let i=0;i<n;i++){
+     try{
+      const reports=received[i].map(r=>projectCrossReport(
+       r,step,controlTape,p));
+      const result=fuseCrossCertificates(certified[i],reports,
+       p.plantByzantine,p);
+      fused.push(result.interval);crossDetails.push(result);
+     }catch(e){
+      if(e.code!=="CERTIFICATION_LOST")throw e;
+      certificateFailure={step,node:i,reason:e.reason,phase:"cross_fusion"};
+      break;
+     }
+    }
+    if(certificateFailure)break;
+    certified=fused;
    }
   }
   const telemetry=trueSensors.map((y,i)=>{
@@ -324,7 +362,11 @@ export function simulateLocalPlant(input={},runIndex=0){
     safetyOverride:inputControl.overridden,
     refused:inputControl.refused,disturbance,
     stateAfter:updated,V:updated*updated,
-    issOneStepBound:oneStepBound,issRecursiveBound:propagated};
+    issOneStepBound:oneStepBound,issRecursiveBound:propagated,
+    ...(cross?{crossReporters:crossDetails[i].reporters,
+     crossRequiredSupport:crossDetails[i].requiredSupport,
+     crossSupported:crossDetails[i].supported,
+     crossRefined:crossDetails[i].refined}: {})};
    current.push(row);next.push(updated);controls.push(inputControl.control);
   }
   if(certificateFailure)break; // No partly computed plant tick is recorded.
@@ -345,10 +387,20 @@ export function simulateLocalPlant(input={},runIndex=0){
    if(row.safetyOverride)overrides++;
    if(row.sensorStatus==="dropout")sensorDropoutUnits++;
    if(row.sensorStatus==="degraded")sensorDegradedUnits++;
+   if(cross){
+    if(row.crossSupported)crossSupported++;
+    if(row.crossRefined)crossRefined++;
+    crossReporterSum+=row.crossReporters;
+   }
   }
-  transport.afterEvidenceTransport({step,sharedCapacity:p.plantCapacity,
+  transport.afterEvidenceTransport({step,sharedCapacity:p.plantCapacity-crossBudget,
    e1Used:0,decisionUsed:0});
+  if(cross){
+   cross.emit({time:step,states:before,active,faulty,budget:crossBudget});
+   controlTape.push([...controls]);
+  }
   const history=transport.getDiagnostic().history.at(-1);
+  const crossHistory=cross?.getDiagnostic().history.at(-1);
   rows.push({step,partition,meanHonestV:mean(current.filter(x=>x.honest).map(x=>x.V)),
    maxAbsoluteState:Math.max(...next.map(Math.abs)),
    honestCoverage:current.filter(x=>x.honest&&x.accepted).length/
@@ -362,17 +414,29 @@ export function simulateLocalPlant(input={},runIndex=0){
     .map(x=>x.max-x.min)):null,
    overrideCount:current.filter(x=>x.honest&&x.safetyOverride).length,
    transmitted:history.localUsed,received:history.receivedThisStep,
-   slotsUsed:history.totalUsed,slotsAvailable:history.sharedCapacity});
+   slotsUsed:history.totalUsed+(crossHistory?.sent??0),
+   slotsAvailable:p.plantCapacity,
+   ...(cross?{crossSent:crossHistory.sent,
+    crossReceived:crossHistory.received,
+    crossBudget,localBudget:history.sharedCapacity}: {})});
   states=next;
  }
  const link=transport.getDiagnostic();
+ const crossLink=cross?.getDiagnostic()??null;
+ if(crossLink&&(crossLink.generated!==crossLink.delivered+
+   crossLink.lost+crossLink.blocked+crossLink.expired+
+   crossLink.superseded+crossLink.pending||
+   rows.some(r=>r.slotsUsed>r.slotsAvailable||
+    r.crossSent>r.crossBudget)))
+  throw Error("Локальный объект: неверный общий бюджет перекрёстных измерений");
  if(link.generated!==link.delivered+link.lost+link.blocked+
   link.expired+link.superseded+link.pending||
   link.history.some(h=>h.totalUsed>h.sharedCapacity))
   throw Error("Локальный объект: неверный баланс сетевых сообщений");
  const complete=!certificateFailure&&rows.length===p.plantSteps;
- return {version:LOCAL_PLANT_VERSION,observerVersion:faultEnabled?
+ return {version:LOCAL_PLANT_VERSION,observerVersion:observer?
    SENSOR_FAULT_OBSERVER_VERSION:null,
+  crossSensorVersion:cross?CROSS_SENSOR_VERSION:null,
   options:p,run:runIndex,status:complete?"completed":"certification_lost",
   completedSteps:rows.length,certificateFailure,
   observer:observer?.getDiagnostic()??null,
@@ -396,8 +460,15 @@ export function simulateLocalPlant(input={},runIndex=0){
    honestBarrierOverrideFraction:activeHonestUnits?overrides/activeHonestUnits:null,
    maxAbsoluteState:records.length?
     Math.max(...records.map(r=>Math.abs(r.stateAfter))):null,
+   ...(cross?{honestCrossSupportedFraction:activeHonestUnits?
+    crossSupported/activeHonestUnits:null,
+    honestCrossRefinementFraction:activeHonestUnits?
+     crossRefined/activeHonestUnits:null,
+    meanCrossReportersPerHonestStep:activeHonestUnits?
+     crossReporterSum/activeHonestUnits:null}:{}),
    safetyViolations:0,issViolations,
    nominalContractionFactor:q,nominalContractive:q<1},
   rows,records,transport:link,
-  methodology:"Standalone synthetic scalar plant. A missing authenticated sensor uses model-predicted state intervals, never a fictitious accurate measurement. The robust actuator filter fails closed when no safe command exists; incomplete runs receive an explicit fixed-horizon penalty. The sensor and its reported accuracy, system model, and actuator remain trusted. No Byzantine agreement, full-system ISS or external calibration guarantee."};
+  ...(cross?{crossTransport:crossLink}:{}),
+  methodology:"Standalone synthetic scalar plant. Missing own sensors use model-predicted certified intervals. Optional authenticated PHYSICAL remote sensors measure neighboring target states with certified individual error. Only delayed packets enter the conservative m-f support hull; intervals propagate via actual executed controls. Remote transmissions consume a reserved share of the SAME capacity. Authentication, honest remote instruments and published bounds, f and model are assumed. Unsafe certificates fail closed; incomplete episodes pay the full-horizon penalty. This is not Byzantine agreement or field-ready closed-loop control."};
 }
