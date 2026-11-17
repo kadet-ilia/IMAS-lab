@@ -100,6 +100,61 @@ export function auditCrossObservationGraph(communicationAdjacency,p,time=1){
  });
 }
 
+/**
+ * Optimistic necessary source-count condition in the TIME-EXPANDED graph.
+ * At current t, a message from j may be cached from ANY emission s with
+ * 1 <= t-s <= TTL and s+delay <= t. Its physical sample may have happened
+ * at any k in [max(1,s-L),s]. This is an UPPER bound on the number of
+ * independent obtainable reporters, NOT a guarantee of their delivery.
+ *
+ * A current-snapshot M_i(t)<=f does NOT forbid valid reports sent earlier:
+ * their source identities can accumulate across different visibility epochs.
+ *
+ * adjacencyHistory[s-1] is the publicly known data graph at emission s;
+ * historical network outages/partitions or earlier successful deliveries are
+ * not reinterpreted as new measurements at current time.
+ */
+export function auditCrossTemporalObservationGraph(p,time,adjacencyHistory){
+ const n=p?.plantAgents,ttl=p?.plantCrossTTL,delay=p?.plantCrossDelay,
+  lag=p?.plantCrossSampleLagMaxSteps??0;
+ if(!Number.isInteger(time)||time<1||
+  !Number.isInteger(n)||n<2||
+  !Number.isInteger(ttl)||ttl<1||
+  !Number.isInteger(delay)||delay<1||
+  !Number.isInteger(lag)||lag<0||
+  !Array.isArray(adjacencyHistory)||
+  adjacencyHistory.length<time-1)
+  throw invalid("некорректное окно причинной доступности");
+ const possible=Array.from({length:n},()=>new Set());
+ const firstEmission=Math.max(1,time-ttl);
+ const lastEmission=time-delay;
+ for(let s=firstEmission;s<=lastEmission;s++){
+  const g=adjacencyHistory[s-1];
+  // Validate graph topology before using its historical edges.
+  auditCrossObservationGraph(g,p,s);
+  for(let source=0;source<n;source++)
+   for(let target=0;target<n;target++)
+    if(g[source][target]){
+     for(let k=Math.max(1,s-lag);k<=s;k++){
+      if(crossSensorPhysicalPair(source,target,p,k).eligible){
+       possible[target].add(source);break;
+      }
+     }
+    }
+ }
+ const counts=possible.map(z=>z.size);
+ return Object.freeze({
+  time,firstEmission,lastEmission,
+  possibleReporterCounts:Object.freeze(counts),
+  potentiallyObservable:Object.freeze(
+   counts.map(count=>count>p.plantCrossFaultBudget)),
+  potentiallyObservableCount:counts.filter(
+   count=>count>p.plantCrossFaultBudget).length,
+  necessaryOnly:true,
+  note:"optimistic temporal source upper bound; actual receipt, expiry, loss, and shared capacity still matter"
+ });
+}
+
 /** Advance a timestamped, source-authenticated remote measurement to time t.
  * Every intervening control is the actual target actuator output, never a
  * neighbor decision. The true state is not used for propagation.
