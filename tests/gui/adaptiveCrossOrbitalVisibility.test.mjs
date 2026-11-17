@@ -142,11 +142,14 @@ test("undisclosed bounded sensing lag uses convex outer hull of all eligible sam
 });
 
 test("cached time-expanded observation can exist despite no single-epoch m>f",()=>{
+ // The period-4 analytic unit geometry above is deliberately different
+ // from the slower-moving time-diverse geometry used for this claim.
+ const dynamic={...p,plantCrossOrbitAngularRate:.23};
  const history=Array.from({length:44},()=>graph);
  let witnessed=false;
  for(let time=1;time<=44;time++){
-  const instantaneous=auditCrossObservationGraph(graph,p,time);
-  const temporal=auditCrossTemporalObservationGraph(p,time,history);
+  const instantaneous=auditCrossObservationGraph(graph,dynamic,time);
+  const temporal=auditCrossTemporalObservationGraph(dynamic,time,history);
   assert.ok(temporal.possibleReporterCounts.every(x=>x>=0&&x<=7));
   if(instantaneous.potentiallyObservableCount===0&&
    temporal.potentiallyObservableCount>0)
@@ -157,7 +160,7 @@ test("cached time-expanded observation can exist despite no single-epoch m>f",()
  const ring=Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>
   i!==j&&(Math.abs(i-j)===1||Math.abs(i-j)===7)));
  const ringTemporal=auditCrossTemporalObservationGraph(
-  {...p,plantCrossSampleLagMaxSteps:2},20,
+  {...dynamic,plantCrossSampleLagMaxSteps:2},20,
   Array.from({length:19},()=>ring));
  assert.equal(ringTemporal.potentiallyObservableCount,0);
  assert.ok(ringTemporal.possibleReporterCounts.every(x=>x<=2));
