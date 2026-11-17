@@ -34,7 +34,7 @@ test("local action feedback is opt-in and parameters and prerequisites fail clos
   comparisonMode:"network_routed",evidenceModel:"behavior_linked",
   localConsensusPilot:true,localTransportEnabled:true,
   localAutonomyActionFeedbackEnabled:true
- }),/Замкнутый локальный контур действий требует автономных/);
+ }),/Локальный контур действий требует автономного оценивателя/);
 });
 test("state update is bounded, causal, and distinguishes accepted action from refusal",()=>{
  const channel=createLocalAutonomy(2,-2,2,base);
