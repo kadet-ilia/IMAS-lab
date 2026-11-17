@@ -78,14 +78,28 @@ class TestCrossSensorIndependentOracle(unittest.TestCase):
                         self.assertLessEqual(packet["arrived"], t)
                         self.assertLessEqual(t - s, p["plantCrossTTL"])
                         self.assertLessEqual(abs(packet["value"]), S + EPS)
-                        # Simulator-only verification of the assumed honest
-                        # remote instrument; NEVER an input to Python fusion.
+                        # Physical admissibility and certified precision
+                        # are re-derived independently from public geometry.
+                        # The reporter does NOT choose its error tolerance.
+                        if p["plantCrossObservationMode"] == "range_geometry":
+                            gap = min(abs(src - i), n - abs(src - i))
+                            distance = (2 * p["plantCrossGeometryRadius"] *
+                                        math.sin(math.pi * gap / n))
+                            self.assertLessEqual(
+                                distance,p["plantCrossMaxRange"] + EPS)
+                            certified_error = (p["plantCrossBound"] +
+                                p["plantCrossDistanceErrorSlope"] * distance)
+                        else:
+                            certified_error = p["plantCrossBound"]
+                        self.assertLess(certified_error,S)
+                        # The simulator's actual honest noise is checked
+                        # POST HOC, not used in certificate fusion.
                         if src < n - p["plantByzantine"]:
                             past_true = case["records"][(s - 1) * n + i]["stateBefore"]
                             self.assertLessEqual(abs(packet["value"] - past_true),
-                                                 p["plantCrossBound"] + EPS)
-                        lo = packet["value"] - p["plantCrossBound"]
-                        hi = packet["value"] + p["plantCrossBound"]
+                                                 certified_error + EPS)
+                        lo = packet["value"] - certified_error
+                        hi = packet["value"] + certified_error
                         for k in range(s, t):
                             u = executed[k - 1][target]
                             lo = A * lo + B * u - W
@@ -139,6 +153,25 @@ class TestCrossSensorIndependentOracle(unittest.TestCase):
                            "Dense cross sensing should cause measurable refinement")
         self.assertGreater(found_uninformative, 0,
                            "m<=f must never invent certifying information")
+
+    def test_range_geometry_bounds_coverage_without_faking_observability(self):
+        geometric = [c for c in self.results if
+                     c["options"]["plantCrossObservationMode"] ==
+                     "range_geometry"]
+        self.assertTrue(geometric)
+        for case in geometric:
+            p, n = case["options"], case["options"]["plantAgents"]
+            minimum = 2 * p["plantCrossGeometryRadius"] * math.sin(math.pi / n)
+            if p["plantCrossMaxRange"] < minimum - EPS:
+                self.assertEqual(case["crossTransport"]["generated"],0)
+                self.assertTrue(all(
+                    not row["crossSupported"] and not row["crossRefined"]
+                    for row in case["records"]))
+            for row in case["records"]:
+                self.assertLessEqual(row["crossReporters"],
+                    n - 1)
+                self.assertLessEqual(row["crossRequiredSupport"],
+                    max(0,row["crossReporters"] - p["plantCrossFaultBudget"]))
 
     def test_shared_resource_and_full_horizon_censoring(self):
         for case in self.results:

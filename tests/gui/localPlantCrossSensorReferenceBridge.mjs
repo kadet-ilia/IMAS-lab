@@ -20,7 +20,19 @@ const configurations=[
  {...base,plantTopology:"complete",plantControlMode:"local_sensor",
   plantCrossLoss:1},
  {...base,plantTopology:"complete",plantControlMode:"local_sensor",
-  plantSensorFaultStart:8,plantSensorFaultEnd:11}
+  plantSensorFaultStart:8,plantSensorFaultEnd:11},
+ {...base,plantTopology:"complete",plantControlMode:"local_sensor",
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:.5,
+  plantCrossDistanceErrorSlope:.04},
+ {...base,plantTopology:"complete",plantControlMode:"local_sensor",
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:1.45,
+  plantCrossDistanceErrorSlope:.04},
+ {...base,plantTopology:"complete",plantControlMode:"local_action",
+  plantCrossObservationMode:"range_geometry",
+  plantCrossGeometryRadius:1,plantCrossMaxRange:2.05,
+  plantCrossDistanceErrorSlope:.04}
 ];
 const results=configurations.map((config,i)=>{
  const r=simulateLocalPlant(config,i%2);

@@ -33,7 +33,8 @@
     "adaptive:local:action:pilot": "node scripts/adaptiveLocalActionFeedbackPilot.mjs",
     "adaptive:local:plant:pilot": "node scripts/adaptiveLocalPlantPilot.mjs",
     "adaptive:local:sensor:pilot": "node scripts/adaptiveLocalPlantSensorFaultPilot.mjs",
-    "adaptive:local:cross:pilot": "node scripts/adaptiveLocalCrossSensorPilot.mjs"
+    "adaptive:local:cross:pilot": "node scripts/adaptiveLocalCrossSensorPilot.mjs",
+    "adaptive:local:geometry:pilot": "node scripts/adaptiveLocalCrossGeometryPilot.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
