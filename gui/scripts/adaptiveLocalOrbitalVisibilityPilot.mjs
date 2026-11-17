@@ -8,8 +8,8 @@ import {mkdirSync,writeFileSync} from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {simulateLocalPlant,localPlantAdjacency} from "../src/adaptiveLocalPlant.js";
-import {auditCrossObservationGraph,crossSensorPhysicalPair}
- from "../src/adaptiveLocalCrossSensing.js";
+import {auditCrossObservationGraph,auditCrossTemporalObservationGraph,
+ crossSensorPhysicalPair} from "../src/adaptiveLocalCrossSensing.js";
 
 const directory=path.resolve(path.dirname(fileURLToPath(import.meta.url)),
  "../adaptive-results");
@@ -62,6 +62,10 @@ for(const topology of topologies)
     const adjacency=localPlantAdjacency(options.plantAgents,topology).adjacency;
     const epochs=Array.from({length:T},(_,k)=>auditCrossObservationGraph(
      adjacency,options,k+1).potentiallyObservableCount);
+    const graphTape=Array.from({length:T},()=>adjacency);
+    const temporalEpochs=Array.from({length:T},(_,k)=>
+     auditCrossTemporalObservationGraph(options,k+1,graphTape)
+      .potentiallyObservableCount);
     const compared=[];
     for(const enabled of [false,true]){
      const r=simulateLocalPlant({...options,plantCrossEnabled:enabled},0);
@@ -96,6 +100,8 @@ for(const topology of topologies)
       refined:r.metrics.honestCrossRefinementFraction??0,
       possibleEpochs:epochs.filter(x=>x>0).length,
       possibleMeanNodes:round(mean(epochs)),
+      temporalPossibleEpochs:temporalEpochs.filter(x=>x>0).length,
+      temporalPossibleMeanNodes:round(mean(temporalEpochs)),
       crossTransmitted:ch?.transmitted??0
      });
     }
@@ -121,6 +127,8 @@ for(const topology of topologies)
    const row={topology,duration,profile:profile.name,
     possibleEpochs:on[0].possibleEpochs,
     possibleMeanNodes:on[0].possibleMeanNodes,
+    temporalPossibleEpochs:on[0].temporalPossibleEpochs,
+    temporalPossibleMeanNodes:on[0].temporalPossibleMeanNodes,
     completionOff:off.filter(x=>x.completed).length,
     completionOn:on.filter(x=>x.completed).length,
     lossOff:round(mean(off.map(x=>x.fixedHorizonLoss))),
@@ -132,7 +140,8 @@ for(const topology of topologies)
   }
 const columns=["topology","duration","profile","enabled","seed","run",
  "completed","completedSteps","fixedHorizonLoss","supported","refined",
- "possibleEpochs","possibleMeanNodes","crossTransmitted"];
+ "possibleEpochs","possibleMeanNodes",
+ "temporalPossibleEpochs","temporalPossibleMeanNodes","crossTransmitted"];
 writeFileSync(path.join(directory,"adaptive-local-orbital-visibility-pilot.csv"),
  [columns.join(";"),...episodes.map(r=>
   columns.map(k=>r[k]??"").join(";"))].join("\n")+"\n");

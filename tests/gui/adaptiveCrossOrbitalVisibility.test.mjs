@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {validateLocalPlantOptions} from "../../gui/src/adaptiveLocalPlant.js";
 import {syntheticOrbitState,syntheticOrbitVisibility} from "../../gui/src/adaptiveCrossOrbitalVisibility.js";
 import {crossSensorPhysicalPair,projectCrossReport,auditCrossObservationGraph,
- createCrossSensorTransport} from "../../gui/src/adaptiveLocalCrossSensing.js";
+ auditCrossTemporalObservationGraph,createCrossSensorTransport} from "../../gui/src/adaptiveLocalCrossSensing.js";
 const p=validateLocalPlantOptions({
  plantCrossEnabled:true,plantCrossObservationMode:"orbital_visibility",
  plantCrossOrbitRadius:2,plantCrossCentralBodyRadius:1.5,
@@ -139,4 +139,28 @@ test("undisclosed bounded sensing lag uses convex outer hull of all eligible sam
  assert.throws(()=>validateLocalPlantOptions({
   ...p,plantCrossSampleLagMaxSteps:6,plantCrossTTL:5}),
   /Локальный объект/);
+});
+
+test("cached time-expanded observation can exist despite no single-epoch m>f",()=>{
+ const history=Array.from({length:44},()=>graph);
+ let witnessed=false;
+ for(let time=1;time<=44;time++){
+  const instantaneous=auditCrossObservationGraph(graph,p,time);
+  const temporal=auditCrossTemporalObservationGraph(p,time,history);
+  assert.ok(temporal.possibleReporterCounts.every(x=>x>=0&&x<=7));
+  if(instantaneous.potentiallyObservableCount===0&&
+   temporal.potentiallyObservableCount>0)
+   witnessed=true;
+ }
+ assert.equal(witnessed,true,
+  "A temporal source union can be sufficient even when every instantaneous graph is insufficient");
+ const ring=Array.from({length:8},(_,i)=>Array.from({length:8},(_,j)=>
+  i!==j&&(Math.abs(i-j)===1||Math.abs(i-j)===7)));
+ const ringTemporal=auditCrossTemporalObservationGraph(
+  {...p,plantCrossSampleLagMaxSteps:2},20,
+  Array.from({length:19},()=>ring));
+ assert.equal(ringTemporal.potentiallyObservableCount,0);
+ assert.ok(ringTemporal.possibleReporterCounts.every(x=>x<=2));
+ assert.throws(()=>auditCrossTemporalObservationGraph(p,5,[]),
+  /окно причинной доступности/);
 });
