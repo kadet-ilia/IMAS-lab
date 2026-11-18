@@ -307,6 +307,28 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <NumberOption label="Регуляризация риска" title="Положительная регуляризация знаменателя разности исторических ошибок." value={options.riskFloor} min={0.000001} max={100} step={0.01} disabled={running} onChange={v=>set("riskFloor",v)}/>
      <NumberOption label="Априорный вес" title="Доля взвешенной оценки до накопления достаточной предиктивной истории." value={options.riskPrior} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("riskPrior",v)}/>
     </React.Fragment>:null}
+    {options.alphaMode==="regime_aware"?<React.Fragment>
+     <div className="adaptive-group-title">Диагностика изменений и политика выбора оценивателя</div>
+     <label className="adaptive-wide-field">Правило выбора
+      <select aria-label="Правило выбора оценивателя" disabled={running} value={options.regimeSelectionMode}
+       onChange={e=>set("regimeSelectionMode",e.target.value)}>
+       <option value="discrete">Дискретный выбор с гистерезисом</option>
+       <option value="blend">Причинное смешивание трёх оценивателей</option>
+      </select>
+     </label>
+     <NumberOption label="Минимум пар для выбора" title="Только завершённые прогнозные пары; до накопления истории используется комбинированный контроль E1." value={options.regimeMinimumPairs} min={1} max={5000} step={1} disabled={running} onChange={v=>set("regimeMinimumPairs",v)}/>
+     <NumberOption label="Подготовка детектора, тактов" value={options.regimeMinHistory} min={2} max={1000} step={1} disabled={running} onChange={v=>set("regimeMinHistory",v)}/>
+     <NumberOption label="Порог изменения режима" title="Нормированное изменение наблюдений, а не идентификатор типа атаки." value={options.regimeChangeThreshold} min={0.05} max={100} step={0.05} disabled={running} onChange={v=>set("regimeChangeThreshold",v)}/>
+     <NumberOption label="Память детектора EWMA" value={options.regimeDecay} min={0} max={0.9999} step={0.05} disabled={running} onChange={v=>set("regimeDecay",v)}/>
+     <NumberOption label="Интервал между изменениями, шагов" value={options.regimeCooldown} min={0} max={1000} step={1} disabled={running} onChange={v=>set("regimeCooldown",v)}/>
+     <NumberOption label="Минимальная пригодность свидетельств" title="Эвристика полноты, концентрации и модельной задержки. Не является вероятностью честности." value={options.regimeMinimumQuality} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("regimeMinimumQuality",v)}/>
+     <NumberOption label="Минимум между переключениями" value={options.regimeHoldSteps} min={0} max={1000} step={1} disabled={running||options.regimeSelectionMode!=="discrete"} onChange={v=>set("regimeHoldSteps",v)}/>
+     <NumberOption label="Преимущество для переключения" value={options.regimeSwitchMargin} min={0} max={100} step={0.01} disabled={running||options.regimeSelectionMode!=="discrete"} onChange={v=>set("regimeSwitchMargin",v)}/>
+     <NumberOption label="Память оценки экспертов" value={options.regimeLossDecay} min={0} max={0.9999} step={0.05} disabled={running} onChange={v=>set("regimeLossDecay",v)}/>
+     <NumberOption label="Ограничение невязки" value={options.regimeLossCap} min={0.1} max={1000} step={0.5} disabled={running} onChange={v=>set("regimeLossCap",v)}/>
+     <NumberOption label="Температура смешивания" value={options.regimeTemperature} min={0.000001} max={100} step={0.05} disabled={running||options.regimeSelectionMode!=="blend"} onChange={v=>set("regimeTemperature",v)}/>
+     <p className="r27-note">Исследовательская политика без доступа к эталону и меткам нарушителей. Сравнивается согласованность прошлых решений с текущей наблюдаемой медианой, которая сама может подвергаться атаке. Выводы о превосходстве не установлены.</p>
+    </React.Fragment>:null}
     <div className="adaptive-group-title">Робастное усечение и весовые коэффициенты</div>
     <label className="adaptive-wide-field">Порядок обработки оценок
      <select aria-label="Порядок усечения" disabled={running} value={options.trimMode} onChange={e=>set("trimMode",e.target.value)}>
@@ -325,9 +347,10 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <NumberOption label="Окно подготовки доверия" title="Количество завершённых шагов для достижения полной эвристической готовности. НЕ является статистической калибровкой доверия." value={options.warmupSteps} min={1} max={50000} step={1} disabled={running} onChange={v=>set("warmupSteps",v)}/>
     <div className="adaptive-group-title">Параметры эксперимента</div>
     <NumberOption label="Повторения R" title="Число независимых прогонов с одинаковой общей экзогенной реализацией для всех сравниваемых оценивателей." value={options.runs} min={1} max={200} step={1} disabled={running} onChange={v=>set("runs",v)}/>
+    <NumberOption label="Штраф за отказ (квадрат ошибки)" title="Заранее заданная потеря при отсутствии решения на такте. Не включается в условный RMSE." value={options.decisionRefusalPenalty} min={0} max={10000} step={0.1} disabled={running} onChange={v=>set("decisionRefusalPenalty",v)}/>
     <NumberOption label="Коэффициент обратной связи" title="Только для вспомогательной скалярной модели, не является параметром основной ИМАС." value={options.feedbackGain} min={0.01} max={1.99} step={0.05} disabled={running} onChange={v=>set("feedbackGain",v)}/>
    </div>
-   <p className="r27-note">В исходном режиме α — эвристика готовности истории, размера эффективной выборки и расхождения решений. В рискоориентированном режиме на такте t сравниваются решения такта t−1 с медианой доступных сообщений такта t; этот показатель прогнозного согласия не использует эталонную истину и не является калиброванным риском ошибки или вероятностью честности. Оба правила требуют независимой проверки.</p>
+   <p className="r27-note">В исходном режиме α — эвристика готовности истории, размера эффективной выборки и расхождения решений. В рискоориентированном режиме на такте t сравниваются решения такта t−1 с медианой доступных сообщений такта t; этот показатель прогнозного согласия не использует эталонную истину и не является калиброванным риском ошибки или вероятностью честности. Оба правила требуют независимой проверки. Новый режим выбора оценивателей также использует только причинную историю и остаётся экспериментальным. Отсутствие решения учитывается отдельным штрафом в безусловной потере.</p>
   </Panel>
   <Panel title="Временной сценарий атаки и фазовое расписание" className="adaptive-phases-panel">
    <label className="adaptive-scenario-field">Временной сценарий воздействия
