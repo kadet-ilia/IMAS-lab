@@ -6,6 +6,7 @@ import {validateAdaptiveStudy} from "./adaptiveExperiment.js";
 import {runAdaptiveBrowser,stopAdaptiveBrowser,loadAdaptiveCheckpoint} from "./adaptiveBrowserClient.js";
 import {ATTACK_SHAPES,defaultAttackPhases,attackIntensityAt} from "./attackProfiles.js";
 import {ADAPTIVE_ATTACK_STRATEGIES,ADAPTIVE_EVIDENCE_MODELS} from "./adaptiveScenario.js";
+import AdaptiveFklResultsPanel from "./AdaptiveFklResultsPanel.jsx";
 
 const num=(x,places=4)=>Number.isFinite(x)?x.toFixed(places):"—";
 const percent=x=>Number.isFinite(x)?(100*x).toFixed(1)+"%":"—";
@@ -644,6 +645,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    </Panel>
    <p className="r27-note">Результаты относятся к модельной скалярной задаче. Режим сравнения: estimator_only, decision_feedback без сети, network_feedback с компонентной публикацией либо network_routed с многопереходной маршрутизацией и резервированием общего бюджета. Наличие малых p-значений не подтверждает состоятельность модели угроз и требует независимой подтверждающей серии. Функция V=e² не доказывает устойчивость полной ИМАС.</p>
   </React.Fragment>:<div className="empty">Настройте адаптивный алгоритм, фазы атак и выполните исследование. Результаты исходного E1 сохраняются без изменений.</div>}
+  <AdaptiveFklResultsPanel/>
  </div>;
 });
 export default AdaptiveDecisionPanel;
