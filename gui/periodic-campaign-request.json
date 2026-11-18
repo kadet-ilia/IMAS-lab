@@ -1,7 +1,8 @@
 {
   "protocol": "e1a-periodic-correlation-factorial-1.0.0",
-  "stage": "smoke",
+  "stage": "exploratory",
   "date": "2026-11-18",
-  "reason": "Validate frozen 80+16 conditions, strict common-exogenous pairing and Python audit before exploratory launch",
-  "revisionNote": "No estimator tuning or data-dependent design changes; original E1 controls frozen"
+  "smokeRun": "https://github.com/kadet-ilia/IMAS-lab/actions/runs/44377679700",
+  "intent": "Execute all 80 preregistered distinct scenarios with 20 paired runs and three policies (4800 full model simulations).",
+  "scientificRestriction": "Exploratory only. No parameter tuning from archived FKL confirmation or future periodic holdout. Avoid generalizing synthetic correlations to real attacks."
 }
