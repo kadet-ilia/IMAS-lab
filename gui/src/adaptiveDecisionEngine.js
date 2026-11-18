@@ -6,10 +6,11 @@
 import {aggregateProposals} from "./trustEngine.js";
 import {ADAPTIVE_SCENARIO_DEFAULTS,validateAdaptiveScenarioOptions} from "./adaptiveScenario.js";
 import {ADAPTIVE_RISK_DEFAULTS,validateAdaptiveRiskOptions} from "./adaptiveRiskController.js";
+import {ADAPTIVE_POLICY_DEFAULTS,validateAdaptivePolicyOptions} from "./adaptivePolicySelector.js";
 import {E1A_DECISION_CHANNEL_DEFAULTS,validateDecisionChannelOptions} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_DEFAULTS,validateRoutedChannelOptions} from "./adaptiveRoutedDecisionChannel.js";
 
-export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.5.0";
+export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.6.0-regime-aware-opt-in";
 export const ADAPTIVE_METHODS=Object.freeze([
  Object.freeze({id:"trimmed_unweighted",label:"Усечённое среднее E1",color:"#d18a31"}),
  Object.freeze({id:"proposed_robust",label:"Комбинированное среднее E1",color:"#123a63"}),
@@ -21,6 +22,7 @@ export const ADAPTIVE_METHOD_IDS=Object.freeze(ADAPTIVE_METHODS.map(m=>m.id));
 export const ADAPTIVE_DEFAULTS=Object.freeze({
  alphaMode:"adaptive",fixedAlpha:0.5,trimMode:"source_first",
  ...ADAPTIVE_RISK_DEFAULTS,
+ ...ADAPTIVE_POLICY_DEFAULTS,
  ...E1A_DECISION_CHANNEL_DEFAULTS,
  ...E1A_ROUTED_DEFAULTS,
  comparisonMode:"estimator_only",
@@ -48,7 +50,7 @@ function assertNumber(name,v,min,max,integer=false){
 export function validateAdaptiveOptions(input={}){
  if(input===null||typeof input!=="object"||Array.isArray(input))throw Error("Параметры адаптации должны быть объектом");
  const o={...ADAPTIVE_DEFAULTS,...input};
- if(!["adaptive","off","fixed","risk_aware"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
+ if(!["adaptive","off","fixed","risk_aware","regime_aware"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
  if(!["estimator_only","decision_feedback","network_feedback","network_routed"].includes(o.comparisonMode))
   throw Error("Неизвестный режим сравнения E1-А");
  if(!["legacy_clip_first","source_first"].includes(o.trimMode))throw Error("Неизвестный порядок усечения");
@@ -67,6 +69,7 @@ export function validateAdaptiveOptions(input={}){
  if(o.phases!==null&&!Array.isArray(o.phases))throw Error("Фазы атаки должны быть массивом");
  validateAdaptiveScenarioOptions(o);
  validateAdaptiveRiskOptions(o);
+ validateAdaptivePolicyOptions(o);
  validateDecisionChannelOptions(o);
  validateRoutedChannelOptions(o);
  return o;
@@ -85,7 +88,7 @@ function fractionalRetained(values,trim){
  }
  return fractions;
 }
-export function estimateAdaptiveDecision(observation,options={},coreConfig={},riskController=null){
+export function estimateAdaptiveDecision(observation,options={},coreConfig={},riskController=null,policySelector=null){
  const o=validateAdaptiveOptions(options),x=observation?.values,w=observation?.reputation,a=observation?.available;
  if(!Array.isArray(x)||!Array.isArray(w)||!Array.isArray(a)||x.length!==w.length||x.length!==a.length)
   throw Error("Требуются равной длины массивы предложений, репутаций и доступности");
@@ -112,10 +115,18 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
     throw Error("E1-А риск: для пропуска такта требуется контроллер со счётчиком");
    riskController.skip(observation.step);
   }
+  if(o.alphaMode==="regime_aware"){
+   if(!policySelector||typeof policySelector.skip!=="function"||
+    !Number.isInteger(observation.step)||observation.step<1)
+    throw Error("E1-А режим: для пропуска такта требуется причинная политика");
+   policySelector.skip(observation.step);
+  }
   return {decisions:{trimmed_unweighted:null,proposed_robust:null,adaptive_unweighted:null,
    adaptive_weighted:null,adaptive_robust:null},
    diagnostics:{alpha:null,k:null,nEffective:null,readiness:null,disagreement:null,outlierCount:null,
-    available:0,retained:0,weightConcentration:null,riskContrast:null,riskPairs:0,riskWeightVote:null}};
+    available:0,retained:0,weightConcentration:null,riskContrast:null,riskPairs:0,riskWeightVote:null,
+    regimeSelected:null,regimeState:"insufficient_data",evidenceQualityScore:null,
+    regimeInnovation:null,regimeCusum:null,policySwitches:0,policyPairs:0,policyWeights:null}};
  }
  const raw=used.map(p=>p.value),med=median(raw);
  const absDeviation=raw.map(v=>Math.abs(v-med)),scale=Math.max(o.scaleFloor,1.4826*median(absDeviation));
@@ -154,10 +165,26 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
    step:observation.step,plain,weighted,reference:med,scale,support,readiness
   });
  }
- const alpha=o.alphaMode==="risk_aware"?riskInfo.alpha:
-  o.alphaMode==="off"?0:o.alphaMode==="fixed"?o.fixedAlpha:
-  clamp(readiness*support*Math.exp(-o.disagreementPenalty*disparity),0,1);
- const decision=clamp((1-alpha)*plain+alpha*weighted,core.safe_action_min,core.safe_action_max);
+ const oldAlpha=clamp(readiness*support*Math.exp(-o.disagreementPenalty*disparity),0,1);
+ let selectedPolicy=null;
+ if(o.alphaMode==="regime_aware"){
+  if(!policySelector||typeof policySelector.choose!=="function")
+   throw Error("E1-А режим: требуется причинный контроллер выбора оценивателя");
+  if(!Number.isInteger(observation.step)||observation.step<1)
+   throw Error("E1-А режим: требуется монотонный номер такта");
+  selectedPolicy=policySelector.choose({
+   step:observation.step,reference:med,scale,plain,weighted,
+   baseline:legacy.proposed_robust,oldAlpha,readiness,support,disparity,
+   nEffective:neff,values:x,available:a,
+   low:core.safe_action_min,high:core.safe_action_max
+  });
+  riskInfo=selectedPolicy.riskInfo;
+ }
+ const alpha=selectedPolicy?selectedPolicy.alpha:
+  o.alphaMode==="risk_aware"?riskInfo.alpha:
+  o.alphaMode==="off"?0:o.alphaMode==="fixed"?o.fixedAlpha:oldAlpha;
+ const decision=selectedPolicy?selectedPolicy.value:
+  clamp((1-alpha)*plain+alpha*weighted,core.safe_action_min,core.safe_action_max);
  return {
   decisions:{trimmed_unweighted:legacy.trimmed_unweighted,proposed_robust:legacy.proposed_robust,
    adaptive_unweighted:plain,adaptive_weighted:weighted,adaptive_robust:decision},
@@ -166,6 +193,12 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
     Math.max(...weightedFractions)/weightedDen:null,
    riskContrast:riskInfo?.contrast??null,riskPairs:riskInfo?.pairs??0,
    riskWeightVote:riskInfo?.weightVote??null,
-   riskLossPlain:riskInfo?.lossPlain??null,riskLossWeighted:riskInfo?.lossWeighted??null}
+   riskLossPlain:riskInfo?.lossPlain??null,riskLossWeighted:riskInfo?.lossWeighted??null,
+   regimeSelected:selectedPolicy?.selected??null,regimeState:selectedPolicy?.regime.state??null,
+   evidenceQualityScore:selectedPolicy?.evidenceQuality.score??null,
+   regimeInnovation:selectedPolicy?.regime.innovation??null,
+   regimeCusum:selectedPolicy?.regime.cusum??null,
+   policySwitches:selectedPolicy?.switches??null,policyPairs:selectedPolicy?.pairs??null,
+   policyWeights:selectedPolicy?.weights??null}
  };
 }
