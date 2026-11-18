@@ -1,0 +1,34 @@
+{
+  "protocol": "e1a-fkl-regime-factorial-1.0.0",
+  "stage": "smoke",
+  "requestedOn": "2026-11-18",
+  "factors": {
+    "f": [
+      3,
+      6,
+      9,
+      12
+    ],
+    "k": [
+      0,
+      3,
+      6,
+      9,
+      12
+    ],
+    "lag": [
+      0,
+      1,
+      2,
+      4
+    ]
+  },
+  "policies": [
+    "adaptive",
+    "risk_aware",
+    "regime_aware_discrete",
+    "regime_aware_blend"
+  ],
+  "plan": "Locked 80-cell, 30-run exploratory study; 16-cell 100-run OOD follow-up. Execute preflight smoke first.",
+  "statisticalUnit": "Complete independent run inside a seed block; shared f+runIndex streams across k and lag, so cells are paired and not independent."
+}
