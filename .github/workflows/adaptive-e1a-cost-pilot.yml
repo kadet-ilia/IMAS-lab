@@ -1,0 +1,60 @@
+name: E1-A M7 end-to-end computational cost benchmark
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        required: true
+        type: choice
+        default: smoke
+        description: "Immutable diagnostic workload, not alpha hyperparameter tuning"
+        options: [smoke, reference]
+  push:
+    branches: [IMAS_Lab_test]
+    paths: ['gui/cost-campaign-request.json']
+permissions:
+  contents: read
+concurrency:
+  group: e1a-cost-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  cost-pilot:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install pinned JavaScript environment
+        working-directory: gui
+        run: npm ci
+      - name: Check M7 scientific contract and historical E1 invariants
+        run: |
+          node --test tests/gui/adaptiveCostProtocol.test.mjs tests/gui/adaptiveStudyDiagnostics.test.mjs
+          node gui/scripts/adaptiveCostBenchmark.mjs --stage=design
+      - name: Collect end-to-end wall and CPU metrics
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          else
+            STAGE="$(node -p "JSON.parse(require('fs').readFileSync('gui/cost-campaign-request.json','utf8')).stage")"
+          fi
+          case "$STAGE" in
+            smoke|reference) ;;
+            *) echo "Invalid frozen performance stage: $STAGE"; exit 1 ;;
+          esac
+          node gui/scripts/adaptiveCostBenchmark.mjs --stage="$STAGE"
+      - name: Independent arithmetic check with Python
+        run: python gui/scripts/auditCostBenchmark.py gui/adaptive-results/cost
+      - name: Preserve hardware metadata and raw timing records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-cost-${{ github.run_id }}
+          path: gui/adaptive-results/cost/
+          if-no-files-found: error
+          retention-days: 60
