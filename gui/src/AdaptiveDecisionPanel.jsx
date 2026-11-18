@@ -8,6 +8,7 @@ import {ATTACK_SHAPES,defaultAttackPhases,attackIntensityAt} from "./attackProfi
 import {ADAPTIVE_ATTACK_STRATEGIES,ADAPTIVE_EVIDENCE_MODELS} from "./adaptiveScenario.js";
 import AdaptiveFklResultsPanel from "./AdaptiveFklResultsPanel.jsx";
 import AdaptivePeriodicResultsPanel from "./AdaptivePeriodicResultsPanel.jsx";
+import AdaptiveStudyAnalyticsPanel from "./AdaptiveStudyAnalyticsPanel.jsx";
 import {projectAdaptiveAttackExposure} from "./adaptiveExposureDiagnostics.js";
 
 const num=(x,places=4)=>Number.isFinite(x)?x.toFixed(places):"—";
@@ -440,6 +441,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <Kpi label="Парный эффект ΔRMSE" value={num(comparable?.mean,5)} note="E1-А − комбинированный E1; отрицательное лучше"/>
     <Kpi label="Победы / проигрыши" value={(comparable?.wins??0)+" / "+(comparable?.losses??0)} note={"По "+(comparable?.n??0)+" парным прогонам"}/>
    </div>
+   <AdaptiveStudyAnalyticsPanel study={result}/>
    <Panel title="Коллективные решения" subtitle="Первая случайная реализация; истина отображается только для научной диагностики.">
     <ResponsiveContainer width="100%" height={350}><LineChart data={trace}>
      <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
