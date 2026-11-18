@@ -4,5 +4,7 @@
   "date": "2026-11-18",
   "sourceExploratoryRun": "https://github.com/kadet-ilia/IMAS-lab/actions/runs/44377834451",
   "intendedInference": "Execute preselected independent new-seed 16-cell OOD linear/sustained condition, 80 paired runs each, without changes to numerical core or hyperparameters.",
-  "scientificRestriction": "This is an already frozen independent model-based confirmation; not empirical field evidence and not a new tuning dataset."
+  "scientificRestriction": "This is an already frozen independent model-based confirmation; not empirical field evidence and not a new tuning dataset.",
+  "auditRevision": "v1.0.1-Python-annotation-and-Holm-crosscheck",
+  "auditStatus": "Rerun unchanged frozen numerical protocol; first confirmation completed but export auditor failed on expected p annotations, now correctly accounted for."
 }
