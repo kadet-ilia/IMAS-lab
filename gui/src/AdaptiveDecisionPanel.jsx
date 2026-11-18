@@ -113,7 +113,13 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
  })):[];
  const adaptive=summary.find(x=>x.method==="adaptive_robust");
  const baseline=summary.find(x=>x.method==="trimmed_unweighted");
- const comparable=paired.find(x=>x.baseline==="trimmed_unweighted");
+ const combined=summary.find(x=>x.method==="proposed_robust");
+ const comparable=paired.find(x=>x.baseline==="proposed_robust");
+ const comparableTrimmed=paired.find(x=>x.baseline==="trimmed_unweighted");
+ const regimeTrace=trace.map(row=>({...row,
+  expertCombined:row.policyWeights?.proposed_robust??null,
+  expertAdaptive:row.policyWeights?.adaptive??null,
+  expertRisk:row.policyWeights?.risk_aware??null}));
  const currentPhase=options.phases||[];
  const addPhase=()=>{
   const last=currentPhase.at(-1),next=(last?.start??0)+Math.max(1,config.attack_start_step);
@@ -123,8 +129,11 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
  const prepareCsv=()=>{
   const keys=["step","attack_intensity","truth","trimmed_unweighted","proposed_robust",
    "adaptive_unweighted","adaptive_weighted","adaptive_robust",
-   "alpha","k","nEffective","readiness","disagreement","outlierCount","available","retained","weightConcentration","riskContrast","riskPairs","riskWeightVote","riskLossPlain","riskLossWeighted"];
-  const rows=[keys.join(";"),...trace.map(row=>keys.map(k=>row[k]??"").join(";"))];
+   "alpha","k","nEffective","readiness","disagreement","outlierCount","available","retained","weightConcentration","riskContrast","riskPairs","riskWeightVote","riskLossPlain","riskLossWeighted",
+   "regimeSelected","regimeState","evidenceQualityScore","regimeInnovation",
+   "regimeCusum","policySwitches","policyPairs",
+   "expertCombined","expertAdaptive","expertRisk"];
+  const rows=[keys.join(";"),...regimeTrace.map(row=>keys.map(k=>row[k]??"").join(";"))];
   download("imas-adaptive-trajectory.csv",rows.join("\n"),"text/csv;charset=utf-8");
  };
  return <div className="tab-stack adaptive-study">
@@ -287,10 +296,10 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <label className="adaptive-wide-field">Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
       onChange={e=>set("alphaMode",e.target.value)}>
-      <option value="adaptive">Адаптивный (исходная эвристика)</option><option value="risk_aware">Рискоориентированный (историческая проверка)</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
+      <option value="adaptive">Адаптивный (исходная эвристика)</option><option value="risk_aware">Рискоориентированный (историческая проверка)</option><option value="regime_aware">По наблюдаемому режиму (экспериментальный)</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
      </select></label>
     <NumberOption label="Постоянное α" title="Используется только в режиме постоянного коэффициента." value={options.fixedAlpha} min={0} max={1} step={0.05} onChange={v=>set("fixedAlpha",v)} disabled={running||options.alphaMode!=="fixed"}/>
-    {options.alphaMode==="risk_aware"?<React.Fragment>
+    {["risk_aware","regime_aware"].includes(options.alphaMode)?<React.Fragment>
      <NumberOption label="Память риска β" title="Экспоненциальная память прошлых относительных ошибок двух агрегаторов при прогнозе следующей наблюдаемой медианы." value={options.riskDecay} min={0} max={0.9999} step={0.05} disabled={running} onChange={v=>set("riskDecay",v)}/>
      <NumberOption label="Чувствительность к риску" title="Величина воздействия разности прошлых безоракульных оценок риска на коэффициент α." value={options.riskSensitivity} min={0} max={40} step={0.5} disabled={running} onChange={v=>set("riskSensitivity",v)}/>
      <NumberOption label="Минимум пар наблюдений" title="Не менее указанного числа пар соседних тактов перед включением исторически обученного веса." value={options.riskMinimumPairs} min={1} max={5000} step={1} disabled={running} onChange={v=>set("riskMinimumPairs",v)}/>
@@ -389,8 +398,9 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   {result?<React.Fragment>
    <div className="kpi-grid">
     <Kpi label="RMSE адаптивного метода" value={num(adaptive?.rmse.mean,5)} note="Среднее RMSE по независимым прогонам"/>
-    <Kpi label="RMSE обычного усечения" value={num(baseline?.rmse.mean,5)} note="Исторический контроль E1"/>
-    <Kpi label="Парный эффект ΔRMSE" value={num(comparable?.mean,5)} note="Адаптивный − исходный, отрицательное лучше"/>
+    <Kpi label="RMSE комбинированного E1" value={num(combined?.rmse.mean,5)} note="Основной контроль новых методов"/>
+     <Kpi label="RMSE усечённого E1" value={num(baseline?.rmse.mean,5)} note={"Дополнительный контроль; ΔRMSE "+num(comparableTrimmed?.mean,5)}/>
+    <Kpi label="Парный эффект ΔRMSE" value={num(comparable?.mean,5)} note="E1-А − комбинированный E1; отрицательное лучше"/>
     <Kpi label="Победы / проигрыши" value={(comparable?.wins??0)+" / "+(comparable?.losses??0)} note={"По "+(comparable?.n??0)+" парным прогонам"}/>
    </div>
    <Panel title="Коллективные решения" subtitle="Первая случайная реализация; истина отображается только для научной диагностики.">
@@ -454,16 +464,16 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Line dataKey="riskContrast" name="Нормированная разность прогнозных ошибок" stroke="#8c56a5" dot={false} isAnimationActive={false}/>
     </LineChart></ResponsiveContainer>:null}
    </Panel>
-   <Panel title="Итоговые показатели по методам" subtitle="RMSE и MAE рассчитаны условно по принятым решениям, P(прав.) — по всем тактам, включая отказы.">
-    <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>P(прав.)</th><th>Покрытие</th><th>P95 |ошибки|</th><th>RMSE состояния</th></tr></thead>
+   <Panel title="Итоговые показатели по методам" subtitle="RMSE и MAE — по принятым решениям. Безусловная потеря включает заданный штраф отказа; P(прав.) — по всем тактам.">
+    <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>P(прав.)</th><th>Покрытие</th><th>Безусловная потеря</th><th>Отказы</th><th>P95 |ошибки|</th><th>RMSE состояния</th></tr></thead>
      <tbody>{summary.map(s=><tr key={s.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===s.method)?.label||s.method}</td>
       <td>{num(s.rmse.mean,5)}</td><td>{num(s.mae.mean,5)}</td><td>{percent(s.probability_correct.mean)}</td>
-      <td>{percent(s.decision_coverage.mean)}</td><td>{num(s.p95_abs_error.mean,5)}</td><td>{num(s.state_rmse.mean,5)}</td>
+      <td>{percent(s.decision_coverage.mean)}</td><td>{num(s.unconditional_decision_loss?.mean,5)}</td><td>{num(s.refusals?.mean,1)}</td><td>{num(s.p95_abs_error.mean,5)}</td><td>{num(s.state_rmse.mean,5)}</td>
      </tr>)}</tbody></table></div>
    </Panel>
    <Panel title="Парные сравнения RMSE" subtitle="Интервалы — нормальная аппроксимация 95%, не скорректированная на множественность. Двусторонний sign-flip p скорректирован Холмом для четырёх контрастов при R≥2. Выводы остаются исследовательскими.">
     <div className="table-wrap"><table><thead><tr><th>Контрольный метод</th><th>ΔRMSE</th><th>95%-й интервал</th><th>p (sign-flip)</th><th>p (Холм)</th><th>Выигрыши</th><th>Проигрыши</th></tr></thead>
-     <tbody>{paired.map(p=><tr key={p.baseline}><td>{ADAPTIVE_METHODS.find(m=>m.id===p.baseline)?.label}</td>
+     <tbody>{[...paired].sort((a,b)=>Number(b.baseline==="proposed_robust")-Number(a.baseline==="proposed_robust")).map(p=><tr key={p.baseline}><td>{ADAPTIVE_METHODS.find(m=>m.id===p.baseline)?.label}</td>
       <td>{num(p.mean,5)}</td><td>{p.ci95_half_width===null?"—":num(p.mean-p.ci95_half_width,5)+" … "+num(p.mean+p.ci95_half_width,5)}</td>
       <td>{num(p.p_value,5)}</td><td>{num(p.p_holm,5)}</td><td>{p.wins}</td><td>{p.losses}</td></tr>)}</tbody></table></div>
    </Panel>
