@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * E1-A expanded exploratory factorial: 128 distinct parameter configurations.
- * 4 attacker strategies x 4 evidence models x 4 Byzantine counts x 2 alpha modes.
- * 64 paired scenarios, 20 independent run indices per scenario.
+ * E1-A expanded exploratory factorial: 120 distinct parameter configurations.
+ * 5 attacker strategies x 3 behavioral evidence models x 4 Byzantine counts x 2 alpha modes.
+ * 60 paired scenarios, 20 independent run indices per scenario.
  * All compared rules see exactly the same exogenous realization per run.
  * No tuning, no network or Sybil, synthetic estimator-only comparison.
  */
@@ -16,8 +16,8 @@ import {campaignAttackSchedule} from "../src/adaptiveCampaignProtocol.js";
 import {riskCampaignAssertPair} from "../src/adaptiveRiskCampaign.js";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
-const strategies=["coordinated","stealth","pulsed","reputation_boost"];
-const evidences=["legacy","behavior_linked","correlated_witnesses","lagged_observation"];
+const strategies=["legacy","coordinated","stealth","pulsed","reputation_boost"];
+const evidences=["behavior_linked","correlated_witnesses","lagged_observation"];
 const fractions=[3,6,9,12];
 const alphaModes=["adaptive","risk_aware"];
 const R=20, N=30,T=48, k=6;
@@ -78,9 +78,9 @@ for(const strategy of strategies)for(const evidence of evidences)for(const f of 
   meanAlphaRisk:mean(pairs.map(x=>x.alphaRisk)),
   coverageAdaptive:mean(pairs.map(x=>x.coverageAdaptive)),
   coverageRisk:mean(pairs.map(x=>x.coverageRisk))});
- console.log("BEHAVIOR ["+cells.length+"/64] "+id+" risk-minus-adaptive="+mean(d).toFixed(6));
+ console.log("BEHAVIOR ["+cells.length+"/60] "+id+" risk-minus-adaptive="+mean(d).toFixed(6));
 }
-if(cells.length!==64||runs.length!==64*R||new Set(cells.map(x=>x.seed)).size!==64)
+if(cells.length!==60||runs.length!==60*R||new Set(cells.map(x=>x.seed)).size!==60)
  throw Error("Experiment set not complete");
 const group=key=>Object.fromEntries([...new Set(cells.map(x=>x[key]))].map(value=>{
  const c=cells.filter(x=>x[key]===value);
@@ -93,8 +93,8 @@ const group=key=>Object.fromEntries([...new Set(cells.map(x=>x[key]))].map(value
 const summary={
  status:"COMPLETED_EXPLORATORY",model:"E1-A",sourceSha256:sha,sourceFiles:files,
  branch:"IMAS_Lab_test",runSha:process.env.GITHUB_SHA??null,
- protocol:"e1a-behavior-128-configs-1.0.0",baseFactorialCells:64,
- distinctParameterConfigurations:128,alphaModes,independentRunsPerCell:R,
+ protocol:"e1a-behavior-120-configs-1.0.1",baseFactorialCells:60,
+ distinctParameterConfigurations:120,alphaModes,independentRunsPerCell:R,
  pairedRunComparisons:runs.length,individualMethodSimulations:runs.length*2,
  methodology:"Same seed/run index and identical non-alpha parameters; synthetic oracle used only to evaluate error.",
  factors:{strategies,evidences,byzantine:fractions,alphaModes,
@@ -117,6 +117,6 @@ function csv(rows){const keys=Object.keys(rows[0]);return keys.join(";")+"\n"+
 writeFileSync(path.join(output,"protocol-and-summary.json"),json(summary));
 writeFileSync(path.join(output,"cells.csv"),csv(cells));
 writeFileSync(path.join(output,"run-metrics.csv"),csv(runs));
-console.log("BEHAVIOR RESULT "+JSON.stringify({baseCells:64,configurations:128,
+console.log("BEHAVIOR RESULT "+JSON.stringify({baseCells:60,configurations:120,
  independentRunPairs:runs.length,methodRuns:runs.length*2,
  overall:summary.overall,byStrategy:summary.byStrategy,byEvidence:summary.byEvidence,byF:summary.byF}));
