@@ -1,0 +1,35 @@
+name: E1-A expanded attack and evidence factorial (128 parameter configurations)
+on:
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/behavior-campaign-request.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: e1a-behavior-campaign-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  behavior:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify numerical core and pairing contracts
+        run: |
+          node --test tests/gui/adaptiveDecisionEngine.test.mjs tests/gui/adaptiveRiskCampaign.test.mjs
+      - name: Execute 128 distinct alpha / attack / evidence / f configurations
+        run: node gui/scripts/adaptiveBehaviorCampaign.mjs
+      - name: Upload raw per-run metrics and complete fixed protocol
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-behavior-128-${{ github.run_id }}
+          path: gui/adaptive-results/behavior/
+          if-no-files-found: error
+          retention-days: 90
