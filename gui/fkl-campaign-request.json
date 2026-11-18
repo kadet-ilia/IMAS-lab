@@ -1,6 +1,6 @@
 {
   "protocol": "e1a-fkl-regime-factorial-1.0.0",
-  "stage": "exploratory",
+  "stage": "confirmatory",
   "requestedOn": "2026-11-18",
   "factors": {
     "f": [
@@ -32,5 +32,8 @@
   "plan": "Locked 80-cell, 30-run exploratory study; 16-cell 100-run OOD follow-up. Execute preflight smoke first.",
   "statisticalUnit": "Complete independent run inside a seed block; shared f+runIndex streams across k and lag, so cells are paired and not independent.",
   "smokeRun": "44350217861",
-  "smokeVerification": "All 4 stage-design tests and regime tests passed, 3 smoke cells x 2 paired random blocks x 4 policies completed. No parameter tuning on smoke output."
+  "smokeVerification": "All 4 stage-design tests and regime tests passed, 3 smoke cells x 2 paired random blocks x 4 policies completed. No parameter tuning on smoke output.",
+  "exploratoryRun": "44350372581",
+  "exploratoryVerified": "80/80 factorial cells, 2400 paired run records, 9600 method simulations and 124 paired factor contrasts independently checked; no regime hyperparameters modified.",
+  "confirmatoryCaveat": "Prespecified 16 OOD cells x 100 seeds x 4 policies; both new seeds and joint attack strategy/law/schedule differ. This is internal synthetic validation, not real-world external calibration."
 }
