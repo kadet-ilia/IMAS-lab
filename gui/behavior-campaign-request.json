@@ -1,0 +1,11 @@
+{
+  "protocol": "e1a-behavior-128-configs-1.0.0",
+  "date": "2026-11-18",
+  "plan": "4 attacker strategies x 4 evidence models x 4 Byzantine agent counts x 2 alpha rules",
+  "configurations": 128,
+  "fullPairedRunsPerBaseScenario": 20,
+  "baseScenarios": 64,
+  "independentRunPairs": 1280,
+  "individualSimulations": 2560,
+  "analysis": "exploratory; fixed before run; avoid universal conclusions"
+}
