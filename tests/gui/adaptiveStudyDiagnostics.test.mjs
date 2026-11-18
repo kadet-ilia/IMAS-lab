@@ -141,3 +141,44 @@ test("M6 diagnostic validator refuses corrupted run identity, truth and broken m
  missing.runs[0].metrics.pop();
  assert.throws(()=>adaptivePhaseRows(missing),/duplicated estimator metrics/);
 });
+
+test("M6 rejects manipulated reported losses and handles a legitimate missed decision",()=>{
+ const bad=structuredClone(study);
+ bad.runs[0].metrics.find(x=>x.method==="adaptive_robust").unconditional_decision_loss+=0.1;
+ assert.throws(()=>adaptiveRunComparisonRows(bad),/disagree/);
+ const partial=structuredClone(study);
+ const first=partial.runs[0],target="adaptive_robust";
+ first.trajectory[0][target]=null;
+ const accepted=first.trajectory.filter(x=>Number.isFinite(x[target]));
+ const squared=accepted.reduce((sum,t)=>sum+(t[target]-t.truth)**2,0);
+ const m=first.metrics.find(x=>x.method===target);
+ m.refusals=1;
+ m.decision_coverage=accepted.length/first.trajectory.length;
+ m.rmse=Math.sqrt(squared/accepted.length);
+ m.unconditional_decision_loss=(squared+partial.options.decisionRefusalPenalty)/
+  first.trajectory.length;
+ const pairs=adaptiveRunComparisonRows(partial);
+ assert.equal(pairs[0].refusalsAdaptive,1);
+ assert.equal(pairs[0].coverageAdaptive,47/48);
+ const phases=adaptivePhaseRows(partial);
+ const row=phases.find(x=>x.run===0&&x.method===target&&x.phase==="attack_inactive");
+ assert.equal(row.refusals,1);
+ assert.equal(row.coverage,47/48);
+ near(row.unconditionalLoss,m.unconditional_decision_loss);
+});
+
+test("M6 postprocessing supports independent decision-feedback paths without assuming identical observations",()=>{
+ const feedback=runAdaptiveStudy({
+  ...config,n_agents:16,n_byzantine:3,n_steps:18,trim_each_side:3,
+  seed:20261119,attack_start_step:6
+ },{runs:2,scenario:"static_bias",alphaMode:"regime_aware",
+  comparisonMode:"decision_feedback",attackStrategy:"coordinated",
+  evidenceModel:"behavior_linked",trimEachSide:3});
+ const rows=adaptiveRunComparisonRows(feedback);
+ assert.equal(rows.length,2);
+ assert.ok(rows.every(x=>Number.isFinite(x.deltaLoss)));
+ assert.equal(adaptivePhaseRows(feedback).length,2*5*2);
+ assert.equal(adaptivePolicyEventRows(feedback).length,2*18);
+ const manifest=adaptiveReproductionManifest(feedback,rows);
+ assert.equal(manifest.comparisonMode,"decision_feedback");
+});
