@@ -142,7 +142,7 @@ def validate_archive(archive_path, stage="exploratory"):
             low = number(record["ci" + mode + "Low"], "bootstrap lower")
             high = number(record["ci" + mode + "High"], "bootstrap upper")
             ensure(low <= high, "reversed bootstrap endpoints")
-    ensure(len(blocks) == 4, "missing Byzantine count blocks")
+    ensure(len(blocks) == (3 if stage == "smoke" else 4), "missing Byzantine count blocks")
     effects = {}
     for mode in MODES:
         key = "meanDelta" + mode + "Combined"
