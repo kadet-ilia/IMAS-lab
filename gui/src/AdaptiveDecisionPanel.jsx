@@ -8,6 +8,7 @@ import {ATTACK_SHAPES,defaultAttackPhases,attackIntensityAt} from "./attackProfi
 import {ADAPTIVE_ATTACK_STRATEGIES,ADAPTIVE_EVIDENCE_MODELS} from "./adaptiveScenario.js";
 import AdaptiveFklResultsPanel from "./AdaptiveFklResultsPanel.jsx";
 import AdaptivePeriodicResultsPanel from "./AdaptivePeriodicResultsPanel.jsx";
+import {projectAdaptiveAttackExposure} from "./adaptiveExposureDiagnostics.js";
 
 const num=(x,places=4)=>Number.isFinite(x)?x.toFixed(places):"—";
 const percent=x=>Number.isFinite(x)?(100*x).toFixed(1)+"%":"—";
@@ -123,6 +124,11 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   expertAdaptive:row.policyWeights?.adaptive??null,
   expertRisk:row.policyWeights?.risk_aware??null}));
  const currentPhase=options.phases||[];
+ let attackExposure=null;
+ if(!validationError&&options.scenario==="dynamic"){
+  try{attackExposure=projectAdaptiveAttackExposure(options,config.n_steps);}
+  catch{attackExposure=null;}
+ }
  const addPhase=()=>{
   const last=currentPhase.at(-1),next=(last?.start??0)+Math.max(1,config.attack_start_step);
   if(next>config.n_steps){setWarning("Нет места для следующей фазы. Увеличьте горизонт T.");return;}
@@ -378,10 +384,16 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <button type="button" className="secondary-button" disabled={running} onClick={addPhase}>Добавить фазу</button>
      <button type="button" className="secondary-button" disabled={running} onClick={()=>set("phases",defaultAttackPhases(config.n_steps,config.attack_start_step))}>Сбросить расписание</button>
     </div>
-    <ResponsiveContainer width="100%" height={160}><LineChart data={Array.from({length:config.n_steps},(_,i)=>({
-     step:i+1,intensity:validationError?null:attackIntensityAt(i+1,currentPhase,config.n_steps)
-    }))}><CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,5]}/>
-     <Tooltip/><Line name="Интенсивность атаки" type="stepAfter" dataKey="intensity" dot={false} stroke="#c13f62" isAnimationActive={false}/></LineChart></ResponsiveContainer>
+    <ResponsiveContainer width="100%" height={160}><LineChart data={attackExposure?.points??[]}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,5]}/><Tooltip/><Legend/>
+     <Line name="Номинальная интенсивность" type="stepAfter" dataKey="intensity" dot={false} stroke="#c13f62" isAnimationActive={false}/>
+     <Line name="Фактическая активность стратегии" type="stepAfter" dataKey="actualIntensity" dot={false} stroke="#079b91" isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>
+    {attackExposure?<p className={attackExposure.zeroEffectiveExposure?"imas-validation-error":"r27-note"} role={attackExposure.zeroEffectiveExposure?"alert":"status"}>
+     Активных тактов по расписанию: {attackExposure.effectiveActiveSteps} из {config.n_steps}; номинально интенсивность была положительной на {attackExposure.nominalActiveSteps} тактах.
+     {attackExposure.zeroEffectiveExposure?" Предупреждение: выбранные временные фазы и период поведения не пересекаются; эксперимент не содержит активного воздействия нарушителей.":""}
+     {" "}Показана расчётная активность генератора, а не успешность кибератаки или доставка сообщений.
+    </p>:null}
    </>:<p className="r27-note">Используется базовая генерация указанного сценария E1; фазовый редактор доступен в режиме динамического воздействия.</p>}
   </Panel>
   <Panel title="Модель поведения нарушителей и доверительных свидетельств" subtitle="Стратегия поведения задаётся независимо от временного профиля активности. Скрытые метки доступны только генератору событий.">
