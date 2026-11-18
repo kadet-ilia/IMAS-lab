@@ -33,7 +33,7 @@ test("browser summary validates complete 80-cell exploratory protocol",()=>{
  const effects=fklModeOverview(data,"discrete");
  assert.equal(effects.better,80);
  assert.equal(effects.worse,0);
- assert.equal(effects.meanCellWeightedDelta,-0.002);
+ assert.ok(Math.abs(effects.meanCellWeightedDelta+0.002)<1e-12);
  const point=fklEffectAt(data,12,12,4,"discrete");
  assert.equal(point.value,-0.002);
  assert.equal(point.cell.id,"f12__k12__lag4");
@@ -58,7 +58,7 @@ test("browser summary refuses incomplete or tampered/corrupt metadata",()=>{
  assert.throws(()=>validateImportedFklSummary(copy),/Противоречивые/);
  const nums=structuredClone(d);
  nums.conditions[4].meanDeltaRiskCombined=Infinity;
- assert.throws(()=>validateImportedFklSummary(nums),/конечной/);
+ assert.throws(()=>validateImportedFklSummary(nums),/конечн/);
  const metadata=structuredClone(d);
  metadata.fingerprint="";
  assert.throws(()=>validateImportedFklSummary(metadata),/идентификаторы/);
