@@ -48,6 +48,24 @@ function assertStudy(result){
     if(tick[method]!==null&&!finite(tick[method]))
      throw Error("E1-A M6: nonfinite decision "+method);
   }
+  // Independently reconstruct reported metrics from complete observed traces.
+  // This detects accidental suppression of refusals or numerical inconsistencies.
+  for(const method of ADAPTIVE_METHOD_IDS){
+   const saved=run.metrics.find(item=>item.method===method);
+   const accepted=run.trajectory.filter(t=>finite(t[method]));
+   const squared=accepted.reduce((s,t)=>s+(t[method]-t.truth)**2,0);
+   const missing=n-accepted.length;
+   const expectedRmse=accepted.length?Math.sqrt(squared/accepted.length):null;
+   const expectedLoss=(squared+missing*result.options.decisionRefusalPenalty)/n;
+   if(!finite(saved.decision_coverage)||
+     !approx(saved.decision_coverage,accepted.length/n)||
+     saved.refusals!==missing||
+     !finite(saved.unconditional_decision_loss)||
+     !approx(saved.unconditional_decision_loss,expectedLoss)||
+     !(saved.rmse===null&&expectedRmse===null||
+       expectedRmse!==null&&finite(saved.rmse)&&approx(saved.rmse,expectedRmse)))
+    throw Error("E1-A M6: run metrics disagree with trajectory for "+method);
+  }
  }
  return result;
 }
