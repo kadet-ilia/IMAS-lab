@@ -54,6 +54,23 @@ jobs:
             *) echo "Invalid or absent frozen stage: $STAGE"; exit 1;;
           esac
           node gui/scripts/adaptiveFklCampaign.mjs --stage="$STAGE"
+      - name: Audit paired metrics and fixed factorial contrasts independently in Python
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          root=Path("gui/adaptive-results/fkl")
+          with zipfile.ZipFile("/tmp/e1a-fkl-audit.zip","w",zipfile.ZIP_DEFLATED) as archive:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file,arcname=str(file.relative_to(root)))
+          PY
+          for summary in gui/adaptive-results/fkl/*/*-summary.json; do
+            STAGE="$(basename "$summary" -summary.json)"
+            echo "Cross-checking FKL stage $STAGE"
+            python gui/scripts/auditFklResults.py /tmp/e1a-fkl-audit.zip --stage="$STAGE"
+          done
       - name: Preserve complete primary paired evidence
         if: always()
         uses: actions/upload-artifact@v4
