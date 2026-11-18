@@ -1,6 +1,8 @@
 {
-  "stage": "all",
+  "stage": "exploratory",
   "protocol": "e1a-campaign-1.0.0",
-  "intent": "Execute the frozen 72x30 exploratory and 12x100 independent-seed confirmation research protocol on the test branch only.",
-  "note": "No code or parameter tuning between discovery and held-out evaluation; computational evidence is synthetic and not proof of whole-system IMAS stability."
+  "intent": "72 unique attack-law × schedule × byzantine-count parameter configurations, 30 independent run seeds each",
+  "study": "fixed adaptive E1-A vs trimmed E1 baseline",
+  "requestedOn": "2026-11-18",
+  "scientificRestriction": "Synthetic paired-seed exploration; no external data or universal cyber-resilience claim."
 }
