@@ -1,0 +1,66 @@
+name: E1-A M5-B periodic behavior and witness correlation factorial
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Frozen protocol stage; confirmation must not be used for tuning"
+        type: choice
+        required: true
+        default: smoke
+        options:
+          - smoke
+          - exploratory
+          - confirmatory
+          - all
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/periodic-campaign-request.json'
+permissions:
+  contents: read
+concurrency:
+  group: e1a-periodic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  periodic:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install locked runtime
+        working-directory: gui
+        run: npm ci
+      - name: Validate preregistration, policies and exogenous pairing
+        run: |
+          node --test tests/gui/adaptivePeriodicCampaign.test.mjs tests/gui/adaptiveRegimePolicy.test.mjs tests/gui/adaptiveFklCampaign.test.mjs
+          node gui/scripts/adaptivePeriodicCampaign.mjs --stage=design
+      - name: Execute fixed periodic-correlation scientific protocol
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          else
+            STAGE="$(node -p "JSON.parse(require('fs').readFileSync('gui/periodic-campaign-request.json','utf8')).stage")"
+          fi
+          case "$STAGE" in
+            smoke|exploratory|confirmatory|all) ;;
+            *) echo "Invalid research stage $STAGE"; exit 1 ;;
+          esac
+          node gui/scripts/adaptivePeriodicCampaign.mjs --stage="$STAGE"
+      - name: Independently cross-check stored arithmetic and pairing
+        run: python gui/scripts/auditPeriodicCampaign.py gui/adaptive-results/periodic/
+      - name: Archive complete per-run scientific evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-periodic-${{ github.run_id }}
+          path: gui/adaptive-results/periodic/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 6
