@@ -30,7 +30,7 @@ export const ADAPTIVE_DEFAULTS=Object.freeze({
  outlierThreshold:2.5,scaleFloor:0.15,
  gamma:1,minWeight:0.05,maxWeight:1,
  warmupSteps:8,minimumEffectiveFraction:0.75,disagreementPenalty:1.5,
- feedbackGain:0.5,feedbackInitialError:1,
+ feedbackGain:0.5,feedbackInitialError:1,decisionRefusalPenalty:1,
  runs:30,scenario:"dynamic",phases:null,
  ...ADAPTIVE_SCENARIO_DEFAULTS
 });
@@ -63,7 +63,7 @@ export function validateAdaptiveOptions(input={}){
   ["gamma",0,5,false],["minWeight",0,1,false],["maxWeight",0,5,false],
   ["warmupSteps",1,50000,true],["minimumEffectiveFraction",1e-6,1,false],
   ["disagreementPenalty",0,100,false],["feedbackGain",1e-6,1.999999,false],
-  ["feedbackInitialError",-100,100,false],["runs",1,200,true]
+  ["feedbackInitialError",-100,100,false],["decisionRefusalPenalty",0,10000,false],["runs",1,200,true]
  ])assertNumber(key,o[key],lo,hi,Boolean(int));
  if(o.minWeight>o.maxWeight||o.maxWeight===0)throw Error("Ограничения весов несовместимы");
  if(o.phases!==null&&!Array.isArray(o.phases))throw Error("Фазы атаки должны быть массивом");
