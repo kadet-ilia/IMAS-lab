@@ -139,3 +139,36 @@ test("regime-aware experiment integrates into summary and supplies policy traces
  assert.equal(r.methodology.comparisonMode,"estimator_only");
  assert.equal(r.methodology.riskMode.includes("Experimental causal expert policy"),true);
 });
+
+
+test("decision-feedback uses a separate regime controller per method path",()=>{
+ const options={comparisonMode:"decision_feedback",attackStrategy:"coordinated",
+  evidenceModel:"behavior_linked",alphaMode:"regime_aware",scenario:"static_bias"};
+ const data=runAdaptiveSingle(core,options,0);
+ assert.equal(data.metrics.length,5);
+ assert.equal(data.trajectory.length,core.n_steps);
+ for(const row of data.trajectory){
+  assert.ok(row.diagnostics.regimeSelected!==undefined);
+  assert.ok(row.diagnostics.evidenceQualityScore===null||
+   row.diagnostics.evidenceQualityScore>=0);
+ }
+ for(const method of ADAPTIVE_METHOD_IDS)
+  assert.equal(data.methodStates[method].length,core.n_steps);
+});
+
+test("unconditional loss is derived per tick and must not silently discard refusals",()=>{
+ const options={alphaMode:"regime_aware",scenario:"static_bias",
+  decisionRefusalPenalty:3};
+ const run=runAdaptiveSingle(core,options,0);
+ for(const metric of run.metrics){
+  const rows=run.trajectory,valid=rows.filter(r=>Number.isFinite(r[metric.method]));
+  const truth=rows[0].truth;
+  const expected=rows.reduce((total,row)=>
+   total+(Number.isFinite(row[metric.method])?
+    (row[metric.method]-truth)**2:3),0)/rows.length;
+  near(metric.unconditional_decision_loss,expected,1e-10);
+  assert.equal(metric.refusals,rows.length-valid.length);
+  if(metric.refusals===0)near(metric.unconditional_decision_loss,metric.rmse**2,1e-10);
+ }
+ assert.throws(()=>validateAdaptiveOptions({decisionRefusalPenalty:-1}),/decisionRefusalPenalty/);
+});
