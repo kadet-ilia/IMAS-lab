@@ -132,6 +132,19 @@ def audit(directory):
                       mean([r["meanDelta" + suffix + "Combined"]
                             for r in summary["conditions"]]),
                       f"{stage}:mean {mode}")
+            if stage == "confirmatory":
+                # Independently reconstruct Holm step-down adjustment from
+                # published per-cell raw p values (without importing JS).
+                raw = [c["signFlipP"] for c in summary["conditions"]]
+                indexed = sorted(enumerate(raw), key=lambda pair: pair[1])
+                corrected = [None] * len(raw)
+                largest = 0.0
+                for rank, (cell_index, p_value) in enumerate(indexed):
+                    largest = max(largest, min(1.0, (len(raw)-rank) * p_value))
+                    corrected[cell_index] = largest
+                for cell_index, value in enumerate(corrected):
+                    close(summary["conditions"][cell_index]["holmP"],
+                          value, f"Holm correction cell {cell_index}")
             reports.append({
                 "stage": stage, "cells": count,
                 "paired_runs": count * runs,
