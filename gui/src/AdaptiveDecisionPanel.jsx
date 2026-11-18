@@ -487,6 +487,34 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Line dataKey="riskContrast" name="Нормированная разность прогнозных ошибок" stroke="#8c56a5" dot={false} isAnimationActive={false}/>
     </LineChart></ResponsiveContainer>:null}
    </Panel>
+   {options.alphaMode==="regime_aware"&&regimeTrace.length?<Panel title="Диагностика выбора оценивателя"
+    subtitle="Вес и выбор экспертов по причинной истории наблюдаемых сообщений; не классификация атак и не калиброванная вероятность риска.">
+    <div className="kpi-grid">
+     <Kpi label="Последний выбранный метод" value={regimeTrace.at(-1)?.regimeSelected??"—"} note="Дискретный выбор либо смешивание"/>
+     <Kpi label="Переключений" value={regimeTrace.at(-1)?.policySwitches??0} note="По первому прогону"/>
+     <Kpi label="Зарегистрировано смен режима" value={regimeTrace.filter(x=>x.regimeState==="change_detected").length} note="Статистические события, не метки нарушителей"/>
+     <Kpi label="Пригодность свидетельств" value={num(regimeTrace.at(-1)?.evidenceQualityScore,3)} note="Синтетическая эвристика, не вероятность честности"/>
+    </div>
+    <ResponsiveContainer width="100%" height={250}><LineChart data={regimeTrace}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,1]}/>
+     <Tooltip formatter={v=>num(v,4)}/><Legend/>
+     <Line dataKey="expertCombined" name="Вес комбинированного E1" stroke="#123a63" dot={false} isAnimationActive={false}/>
+     <Line dataKey="expertAdaptive" name="Вес исходного E1-А" stroke="#c13f62" dot={false} isAnimationActive={false}/>
+     <Line dataKey="expertRisk" name="Вес рискоориентированного E1-А" stroke="#079b91" dot={false} isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>
+    <ResponsiveContainer width="100%" height={185}><LineChart data={regimeTrace}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,1]}/>
+     <Tooltip formatter={v=>num(v,4)}/><Legend/>
+     <Line dataKey="evidenceQualityScore" name="Пригодность свидетельств" stroke="#8c56a5" dot={false} isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>
+    <div className="table-wrap"><table><thead><tr>
+     <th>Шаг</th><th>Режим</th><th>Оцениватель</th><th>Пригодность</th><th>Инновация</th>
+    </tr></thead><tbody>{regimeTrace.slice(-12).map(x=><tr key={x.step}>
+     <td>{x.step}</td><td>{x.regimeState??"—"}</td><td>{x.regimeSelected??"—"}</td>
+     <td>{num(x.evidenceQualityScore,4)}</td><td>{num(x.regimeInnovation,4)}</td>
+    </tr>)}</tbody></table></div>
+    <p className="r27-note">Режим экспериментальный. При недостатке информации, смене наблюдаемого режима или низкой пригодности свидетельств применяется контрольное комбинированное E1. Оценки экспертов сопоставляются с последующей наблюдаемой медианой, которая уязвима к согласованному смещению. Универсальное превосходство не установлено.</p>
+   </Panel>:null}
    <Panel title="Итоговые показатели по методам" subtitle="RMSE и MAE — по принятым решениям. Безусловная потеря включает заданный штраф отказа; P(прав.) — по всем тактам.">
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>P(прав.)</th><th>Покрытие</th><th>Безусловная потеря</th><th>Отказы</th><th>P95 |ошибки|</th><th>RMSE состояния</th></tr></thead>
      <tbody>{summary.map(s=><tr key={s.method}><td>{ADAPTIVE_METHODS.find(m=>m.id===s.method)?.label||s.method}</td>
