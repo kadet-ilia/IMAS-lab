@@ -43,12 +43,10 @@ export function validateImportedPeriodicSummary(x){
    const suffix=mode.id==="risk"?"Risk":mode.id==="adaptive"?"Adaptive":"Discrete";
    const value=c[mode.field],lo=c["ci"+suffix+"Low"],
     hi=c["ci"+suffix+"High"];
-   if(![value,lo,hi].every(finite)||lo>hi||
-      value<lo-1e-8||value>hi+1e-8)
-    // Point estimates need not lie inside bootstrap percentile intervals
-    // for skewed data: reject only missing, reversed or non-finite intervals.
-    if(![value,lo,hi].every(finite)||lo>hi)
-     throw Error("Некорректные значения RMSE / bootstrap-интервала "+c.id);
+   // Percentile bootstrap intervals need not contain the sample mean
+   // under skewness; validate finiteness and interval order, not inclusion.
+   if(![value,lo,hi].every(finite)||lo>hi)
+    throw Error("Некорректные значения RMSE / bootstrap-интервала "+c.id);
   }
  }
  for(const mode of PERIODIC_RESULT_MODES){
