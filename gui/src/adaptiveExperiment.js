@@ -121,6 +121,9 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
   const feedback=feedbackMetrics(trajectory,method,o.feedbackGain,o.feedbackInitialError);
   return {method,run:runIndex,
    decision_coverage:accepted.length/core.n_steps,
+   refusals:core.n_steps-accepted.length,
+   unconditional_decision_loss:(sum(squared)+
+    (core.n_steps-accepted.length)*o.decisionRefusalPenalty)/core.n_steps,
    probability_correct:errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/core.n_steps,
    accuracy_accepted:accepted.length?errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/accepted.length:null,
    rmse:errors.length?Math.sqrt(average(squared)):null,
@@ -256,6 +259,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
   const honestApplied=localRows.flatMap(h=>(h.autonomousActions??[])
    .filter((v,i)=>h.autonomousHonestMask?.[i]&&finite(v)));
   return {method,run:runIndex,decision_coverage:accepted.length/core.n_steps,
+   refusals:core.n_steps-accepted.length,
+   unconditional_decision_loss:(sum(errors.map(e=>e*e))+
+    (core.n_steps-accepted.length)*o.decisionRefusalPenalty)/core.n_steps,
    probability_correct:errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/core.n_steps,
    accuracy_accepted:accepted.length?
     errors.filter(e=>Math.abs(e)<=core.correctness_tolerance).length/accepted.length:null,
@@ -320,7 +326,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
  const ordered=[...runs].sort((a,b)=>a.run-b.run);
  if(new Set(ordered.map(r=>r.run)).size!==ordered.length||ordered.some((r,i)=>r.run!==i||r.trajectory?.length!==core.n_steps))
   throw Error("Нарушен состав или порядок прогонов");
- const metrics=["decision_coverage","probability_correct","accuracy_accepted","rmse","mae",
+ const metrics=["decision_coverage","refusals","unconditional_decision_loss","probability_correct","accuracy_accepted","rmse","mae",
   "p95_abs_error","max_abs_error","attack_rmse","state_rmse","final_abs_error","positive_delta_v_fraction",
   "mean_isolated_agents","max_isolated_agents","mean_reputation","mean_decision_reference_coverage",
   "mean_decision_hops_routed","mean_shared_utilization",
@@ -402,7 +408,7 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":
     o.alphaMode==="regime_aware"?"Experimental causal expert policy: prior-tick expert decisions scored against current observable median with model-configured evidence quality and EWMA/CUSUM changes; fallback to historical combined E1 after shifts. No oracle truth or attacker labels":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
-   rejection:"refusal counts as incorrect for unconditional probability_correct",
+   rejection:"refusal counts as incorrect for unconditional probability_correct; unconditional_decision_loss uses the configured squared-error penalty for every missing decision",
    confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests; two-sided paired sign-flip p values Holm-adjusted across four planned RMSE contrasts",
    inference:"Sign-flip requires pairwise sign-exchangeability under the null; paired seeds alone do not establish validity. This study is exploratory; independent confirmatory series required.",
    stability:"auxiliary scalar feedback only, not a proof of full IMAS stability",
