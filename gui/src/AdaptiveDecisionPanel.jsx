@@ -127,7 +127,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   const rows=[keys.join(";"),...trace.map(row=>keys.map(k=>row[k]??"").join(";"))];
   download("imas-adaptive-trajectory.csv",rows.join("\n"),"text/csv;charset=utf-8");
  };
- return <div className="tab-stack">
+ return <div className="tab-stack adaptive-study">
   <div className="tab-action">
    <div className="tab-action-description">
     <h2>Адаптивное формирование коллективных решений (E1-А)</h2>
@@ -140,8 +140,9 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    </div>
   </div>
   <Panel title="Адаптивное правило и робастное усечение" subtitle="Новый метод рассчитывается отдельно от четырёх неизменённых методов E1.">
-   <div className="lyapunov-inputs">
-    <label>Режим сравнительного исследования
+   <div className="lyapunov-inputs adaptive-inputs">
+    <div className="adaptive-group-title">Режим исследования и сетевое взаимодействие</div>
+    <label className="adaptive-wide-field">Режим сравнительного исследования
      <select aria-label="Режим сравнительного исследования" disabled={running}
       value={options.comparisonMode}
       onChange={e=>setOptions(o=>({...o,comparisonMode:e.target.value,
@@ -161,7 +162,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <NumberOption label="Срок актуальности решения, шагов" title="Не может быть меньше задержки; устаревшее или сетево недоступное решение не влияет на свидетельства." value={options.decisionMaxStalenessSteps} min={1} max={500} step={1} disabled={running} onChange={v=>set("decisionMaxStalenessSteps",v)}/>
      {options.comparisonMode==="network_routed"?<React.Fragment>
       <NumberOption label="Доля пропускной способности для решений" title="Целевая гарантированная квота floor(C·f) пересылок/шаг. В статическом варианте фиксирована, в заимствующем — динамически уменьшается до числа уже ожидающих маршрутизируемых пакетов." value={options.decisionBandwidthFraction} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("decisionBandwidthFraction",v)}/>
-      <label>Политика использования общей полосы
+      <label className="adaptive-wide-field">Политика использования общей полосы
        <select aria-label="Политика использования общей полосы" disabled={running} value={options.decisionBandwidthPolicy}
         onChange={e=>set("decisionBandwidthPolicy",e.target.value)}>
         <option value="static">Статическое резервирование (исходная модель)</option>
@@ -173,7 +174,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      </React.Fragment>:null}
     </React.Fragment>:null}
     {["network_feedback","network_routed"].includes(options.comparisonMode)?<React.Fragment>
-     <label><input type="checkbox" checked={options.localConsensusPilot} disabled={running}
+     <label className="adaptive-checkbox"><input type="checkbox" checked={options.localConsensusPilot} disabled={running}
       onChange={e=>setOptions(o=>({...o,
        localConsensusPilot:e.target.checked,
        localTransportEnabled:e.target.checked?o.localTransportEnabled:false,
@@ -190,7 +191,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <NumberOption label="Коэффициент локального обновления" value={options.localConsensusRelaxation}
        min={0} max={1} step={0.05} disabled={running} onChange={v=>set("localConsensusRelaxation",v)}/>
       <p className="r27-note">Исходная диагностическая модель выполняет мгновенные идеальные раунды соседского обмена без сетевых затрат. Она сохранена как контрольное приближение.</p>
-      <label><input type="checkbox" checked={options.localTransportEnabled} disabled={running}
+      <label className="adaptive-checkbox"><input type="checkbox" checked={options.localTransportEnabled} disabled={running}
        onChange={e=>setOptions(o=>({...o,localTransportEnabled:e.target.checked,
         localAutonomyEnabled:e.target.checked?o.localAutonomyEnabled:false,
         localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false,
@@ -198,7 +199,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
        Причинные соседские сообщения (остаточная полоса или гарантированная квота)
       </label>
       {options.localTransportEnabled?<React.Fragment>
-       <label><input type="checkbox" checked={options.localAutonomyEnabled} disabled={running}
+       <label className="adaptive-checkbox"><input type="checkbox" checked={options.localAutonomyEnabled} disabled={running}
         onChange={e=>setOptions(o=>({...o,
          localAutonomyEnabled:e.target.checked,
          localAutonomyGuardEnabled:e.target.checked?o.localAutonomyGuardEnabled:false,
@@ -218,7 +219,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
          title="При меньшем числе своевременных доставленных оценок агент отказывается от коллективного решения, но для запуска обмена может передать собственное исходное предложение."
          value={options.localAutonomyMinNeighbors} min={0} max={159} step={1}
          disabled={running} onChange={v=>set("localAutonomyMinNeighbors",v)}/>
-        <label><input type="checkbox" checked={options.localAutonomyGuardEnabled} disabled={running}
+        <label className="adaptive-checkbox"><input type="checkbox" checked={options.localAutonomyGuardEnabled} disabled={running}
          onChange={e=>set("localAutonomyGuardEnabled",e.target.checked)}/>
          Локальная защитная фильтрация недостоверных соседских оценок (пилот)
         </label>
@@ -237,7 +238,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
           disabled={running} onChange={v=>set("localAutonomyGuardMinEvidence",v)}/>
          <p className="r27-note">Локальное исключение действует только в оценивателе данного агента. При изменении доверия повторный допуск возможен по новым пакетам. Физические соединения и глобальная изоляция E1 не изменяются; возможны ложные исключения честных соседей.</p>
         </React.Fragment>:null}
-        <label><input type="checkbox" checked={options.localAutonomyActionFeedbackEnabled} disabled={running}
+        <label className="adaptive-checkbox"><input type="checkbox" checked={options.localAutonomyActionFeedbackEnabled} disabled={running}
          onChange={e=>set("localAutonomyActionFeedbackEnabled",e.target.checked)}/>
          Замкнутый контур локальных действий и соседских сообщений (пилот)
         </label>
@@ -282,7 +283,8 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
       <p className="r27-note">Оба диагностических расчёта не изменяют центральное решение E1-А, свидетельства, изоляцию и маршрутизацию и не доказывают византийский консенсус.</p>
      </React.Fragment>:null}
     </React.Fragment>:null}
-    <label>Режим коэффициента α
+    <div className="adaptive-group-title">Коэффициент смешивания и историческая оценка риска</div>
+    <label className="adaptive-wide-field">Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
       onChange={e=>set("alphaMode",e.target.value)}>
       <option value="adaptive">Адаптивный (исходная эвристика)</option><option value="risk_aware">Рискоориентированный (историческая проверка)</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
@@ -296,12 +298,13 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <NumberOption label="Регуляризация риска" title="Положительная регуляризация знаменателя разности исторических ошибок." value={options.riskFloor} min={0.000001} max={100} step={0.01} disabled={running} onChange={v=>set("riskFloor",v)}/>
      <NumberOption label="Априорный вес" title="Доля взвешенной оценки до накопления достаточной предиктивной истории." value={options.riskPrior} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("riskPrior",v)}/>
     </React.Fragment>:null}
-    <label>Порядок обработки оценок
+    <div className="adaptive-group-title">Робастное усечение и весовые коэффициенты</div>
+    <label className="adaptive-wide-field">Порядок обработки оценок
      <select aria-label="Порядок усечения" disabled={running} value={options.trimMode} onChange={e=>set("trimMode",e.target.value)}>
       <option value="source_first">Сначала усечение исходных значений</option>
       <option value="legacy_clip_first">Сначала медианное ограничение</option>
      </select></label>
-    <label className="lyapunov-field-label"><input type="checkbox" disabled={running} checked={options.adaptiveTrim}
+    <label className="lyapunov-field-label adaptive-checkbox"><input type="checkbox" disabled={running} checked={options.adaptiveTrim}
      onChange={e=>set("adaptiveTrim",e.target.checked)}/> Адаптивное число усечений k</label>
     <NumberOption label="Постоянное k" title="Для нового агрегатора; оставляем исходный k неизменным при сравнении с E1." value={options.trimEachSide??config.trim_each_side} min={0} max={159} step={1} disabled={running||options.adaptiveTrim} onChange={v=>set("trimEachSide",v)}/>
     <NumberOption label="Максимальное адаптивное k" title="Верхняя граница симметричного усечения при выявленных экстремальных предложениях." value={options.maxAdaptiveTrim} min={0} max={159} step={1} disabled={running||!options.adaptiveTrim} onChange={v=>set("maxAdaptiveTrim",v)}/>
@@ -311,13 +314,14 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <NumberOption label="Минимальная эффективная доля" title="Нормированный эффективный размер выборки управляет степенью доверительного смешивания." value={options.minimumEffectiveFraction} min={0.01} max={1} step={0.05} disabled={running} onChange={v=>set("minimumEffectiveFraction",v)}/>
     <NumberOption label="Штраф за расхождение" title="Экспоненциальное уменьшение α при расхождении взвешенного и невзвешенного решений." value={options.disagreementPenalty} min={0} max={100} step={0.25} disabled={running} onChange={v=>set("disagreementPenalty",v)}/>
     <NumberOption label="Окно подготовки доверия" title="Количество завершённых шагов для достижения полной эвристической готовности. НЕ является статистической калибровкой доверия." value={options.warmupSteps} min={1} max={50000} step={1} disabled={running} onChange={v=>set("warmupSteps",v)}/>
+    <div className="adaptive-group-title">Параметры эксперимента</div>
     <NumberOption label="Повторения R" title="Число независимых прогонов с одинаковой общей экзогенной реализацией для всех сравниваемых оценивателей." value={options.runs} min={1} max={200} step={1} disabled={running} onChange={v=>set("runs",v)}/>
     <NumberOption label="Коэффициент обратной связи" title="Только для вспомогательной скалярной модели, не является параметром основной ИМАС." value={options.feedbackGain} min={0.01} max={1.99} step={0.05} disabled={running} onChange={v=>set("feedbackGain",v)}/>
    </div>
    <p className="r27-note">В исходном режиме α — эвристика готовности истории, размера эффективной выборки и расхождения решений. В рискоориентированном режиме на такте t сравниваются решения такта t−1 с медианой доступных сообщений такта t; этот показатель прогнозного согласия не использует эталонную истину и не является калиброванным риском ошибки или вероятностью честности. Оба правила требуют независимой проверки.</p>
   </Panel>
-  <Panel title="Временной сценарий атаки и фазовое расписание">
-   <label>Временной сценарий воздействия
+  <Panel title="Временной сценарий атаки и фазовое расписание" className="adaptive-phases-panel">
+   <label className="adaptive-scenario-field">Временной сценарий воздействия
     <select aria-label="Сценарий адаптивного исследования" disabled={running} value={options.scenario} onChange={e=>set("scenario",e.target.value)}>
      <option value="dynamic">Динамическое смещение с фазами</option>
      <option value="static_bias">Постоянное смещение</option>
@@ -326,7 +330,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <option value="collusion">Согласованное смещение</option>
     </select></label>
    {options.scenario==="dynamic"?<>
-    <div className="lyapunov-phase-grid">{currentPhase.map((p,i)=><div className="lyapunov-phase" key={i}>
+    <div className="lyapunov-phase-grid adaptive-phase-grid" aria-label="Фазы динамической атаки">{currentPhase.map((p,i)=><div className="lyapunov-phase adaptive-phase" key={i}>
      <div className="lyapunov-phase-heading"><strong>Фаза {i+1}</strong>
       {i>0?<button type="button" className="inline-action" disabled={running} onClick={()=>set("phases",currentPhase.filter((_,j)=>j!==i))}>Удалить</button>:null}</div>
      <label>Начало, шаг <input type="number" aria-label={"Начало фазы E1-А "+(i+1)} min={1} max={config.n_steps} disabled={running||i===0} value={p.start} onChange={e=>updatePhase(i,"start",Number(e.target.value))}/></label>
@@ -336,7 +340,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <label>Начальная интенсивность <input type="number" min={0} max={5} step={0.1} disabled={running} value={p.intensity} onChange={e=>updatePhase(i,"intensity",Number(e.target.value))}/></label>
      {(p.profile??"constant")!=="constant"?<label>Конечная интенсивность <input type="number" min={0} max={5} step={0.1} disabled={running} value={p.endIntensity??p.intensity} onChange={e=>updatePhase(i,"endIntensity",Number(e.target.value))}/></label>:null}
     </div>)}</div>
-    <div className="action-controls">
+    <div className="action-controls adaptive-phase-actions">
      <button type="button" className="secondary-button" disabled={running} onClick={addPhase}>Добавить фазу</button>
      <button type="button" className="secondary-button" disabled={running} onClick={()=>set("phases",defaultAttackPhases(config.n_steps,config.attack_start_step))}>Сбросить расписание</button>
     </div>
@@ -347,26 +351,29 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    </>:<p className="r27-note">Используется базовая генерация указанного сценария E1; фазовый редактор доступен в режиме динамического воздействия.</p>}
   </Panel>
   <Panel title="Модель поведения нарушителей и доверительных свидетельств" subtitle="Стратегия поведения задаётся независимо от временного профиля активности. Скрытые метки доступны только генератору событий.">
-   <div className="lyapunov-inputs">
-    <label>Стратегия поведения нарушителей
+   <div className="lyapunov-inputs adaptive-inputs">
+    <div className="adaptive-group-title">Параметры стратегии нападения</div>
+    <label className="adaptive-wide-field">Стратегия поведения нарушителей
      <select aria-label="Стратегия поведения нарушителей" disabled={running} value={options.attackStrategy}
       onChange={e=>setOptions(o=>({...o,attackStrategy:e.target.value,
        evidenceModel:e.target.value==="reputation_boost"&&o.evidenceModel==="legacy"?"behavior_linked":o.evidenceModel}))}>
       {ADAPTIVE_ATTACK_STRATEGIES.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
      </select>
     </label>
-    <label>Модель доверительных свидетельств
+    <label className="adaptive-wide-field">Модель доверительных свидетельств
      <select aria-label="Модель доверительных свидетельств" disabled={running} value={options.evidenceModel}
       onChange={e=>set("evidenceModel",e.target.value)}>
       {ADAPTIVE_EVIDENCE_MODELS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
      </select>
     </label>
+    <div className="adaptive-group-title">Параметры атакующего воздействия</div>
     <NumberOption label="Смещение согласованной атаки" title="Модуль общего смещения предложений нарушителей относительно модельного эталона. Истина применяется генератором событий, а не оценивателем." value={options.coordinatedBias} min={0} max={100} step={0.1} disabled={running||!["coordinated","pulsed","reputation_boost"].includes(options.attackStrategy)} onChange={v=>set("coordinatedBias",v)}/>
     <NumberOption label="Малозаметное смещение" title="Модуль искажения предложения нарушителя в малозаметном режиме." value={options.stealthBias} min={0} max={100} step={0.05} disabled={running||options.attackStrategy!=="stealth"} onChange={v=>set("stealthBias",v)}/>
     <NumberOption label="Шум атакующих предложений" title="СКО дополнительного случайного отклонения при формировании атакующих предложений." value={options.attackNoiseSigma} min={0} max={10} step={0.005} disabled={running||options.attackStrategy==="legacy"} onChange={v=>set("attackNoiseSigma",v)}/>
     <NumberOption label="Период атаки" title="Продолжительность полного цикла периодического поведения." value={options.attackPeriod} min={1} max={500} step={1} disabled={running||options.attackStrategy!=="pulsed"} onChange={v=>set("attackPeriod",v)}/>
     <NumberOption label="Активных шагов в периоде" title="Первые d тактов из каждого периода заняты воздействием." value={options.attackDuty} min={1} max={500} step={1} disabled={running||options.attackStrategy!=="pulsed"} onChange={v=>set("attackDuty",v)}/>
     <NumberOption label="Длительность накопления репутации" title="Число начальных шагов, когда скомпрометированные агенты отправляют корректные предложения перед переходом к атаке." value={options.reputationWarmup} min={0} max={50000} step={1} disabled={running||options.attackStrategy!=="reputation_boost"} onChange={v=>set("reputationWarmup",v)}/>
+    <div className="adaptive-group-title">Параметры свидетельств и наблюдений</div>
     <NumberOption label="Порог согласованности свидетельств" title="Масштаб отклонения наблюдения от медианы остальных доступных предложений; не используется эталонная истина." value={options.evidenceTolerance} min={0.000001} max={100} step={0.05} disabled={running||options.evidenceModel==="legacy"} onChange={v=>set("evidenceTolerance",v)}/>
     <NumberOption label="Шум свидетельства" title="СКО дополнительного шума оценки поведения." value={options.evidenceNoiseSigma} min={0} max={1} step={0.005} disabled={running||options.evidenceModel==="legacy"} onChange={v=>set("evidenceNoiseSigma",v)}/>
     <NumberOption label="Искажение свидетельств нарушителем" title="Степень подмены оценок наблюдателя: 0 — без подмены, 1 — полностью согласованная ложная оценка." value={options.witnessCorruption} min={0} max={1} step={0.05} disabled={running||options.evidenceModel==="legacy"} onChange={v=>set("witnessCorruption",v)}/>
