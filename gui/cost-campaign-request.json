@@ -1,8 +1,8 @@
 {
   "protocol": "e1a-cost-pilot-1.0.0",
-  "stage": "smoke",
+  "stage": "reference",
   "date": "2026-11-18",
-  "intent": "Verify end-to-end runtime pilot and independent arithmetic audit on GitHub-hosted Node 22 with no changes to E1 algorithms",
-  "scope": "Two work loads estimator_only and decision_feedback; four alpha policies; two measured whole runs per workload/method; two warmups",
-  "limitations": "One CI host, simulated workload; no isolated controller cost or spacecraft real-time guarantee"
+  "smokeRun": "https://github.com/kadet-ilia/IMAS-lab/actions/runs/44383136407",
+  "intent": "Run preregistered 128 full-run computational-cost observations across four policies and two workloads, 16 measured runs plus three warmups each, independently audited.",
+  "scientificRestriction": "CI machine-specific end-to-end cost only; not isolated alpha overhead or real-time certification. No algorithm parameters are fitted."
 }
