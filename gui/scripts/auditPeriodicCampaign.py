@@ -101,7 +101,19 @@ def audit(directory):
                     close(saved["summary"]["meanDelta" + suffix + "Combined"],
                           mean([x["delta" + suffix + "Combined"] for x in rows]),
                           f"{cell['id']} mean {mode}")
-                assert saved["summary"] == summary["conditions"][index]
+                # Confirmatory aggregation appends inferential annotations
+                # only to the stage summary. Check scientific cell fields
+                # exactly; do not require the checkpoint to retroactively
+                # contain appended sign-flip / Holm p-values.
+                stage_cell = summary["conditions"][index]
+                base_cell = saved["summary"]
+                assert set(stage_cell) == set(base_cell) | (
+                    {"signFlipP", "holmP"} if stage == "confirmatory" else set())
+                assert all(stage_cell[k] == v for k, v in base_cell.items())
+                if stage == "confirmatory":
+                    p, adjusted = stage_cell["signFlipP"], stage_cell["holmP"]
+                    assert math.isfinite(p) and 0 <= p <= 1
+                    assert math.isfinite(adjusted) and p <= adjusted <= 1
             condition_rows = list(csv.DictReader(
                 (folder / (stage + "-conditions.csv")).open(
                     encoding="utf-8", newline=""), delimiter=";"))
