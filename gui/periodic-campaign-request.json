@@ -1,0 +1,7 @@
+{
+  "protocol": "e1a-periodic-correlation-factorial-1.0.0",
+  "stage": "smoke",
+  "date": "2026-11-18",
+  "reason": "Validate frozen 80+16 conditions, strict common-exogenous pairing and Python audit before exploratory launch",
+  "revisionNote": "No estimator tuning or data-dependent design changes; original E1 controls frozen"
+}
