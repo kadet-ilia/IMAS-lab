@@ -1,0 +1,65 @@
+name: E1-A fixed f-k-lag regime factorial (test branch only)
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Pre-registered frozen study stage; no data-driven tuning"
+        required: true
+        type: choice
+        default: smoke
+        options:
+          - smoke
+          - exploratory
+          - confirmatory
+          - all
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/fkl-campaign-request.json'
+permissions:
+  contents: read
+concurrency:
+  group: e1a-fkl-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  fkl-factorial:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install locked dependencies
+        working-directory: gui
+        run: npm ci
+      - name: Verify fixed factorial, original baselines, causal policy
+        shell: bash
+        run: |
+          node --test tests/gui/adaptiveFklCampaign.test.mjs tests/gui/adaptiveRegimePolicy.test.mjs
+          node gui/scripts/adaptiveFklCampaign.mjs --stage=design
+      - name: Execute experimental factorial
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          else
+            STAGE="$(node -p "JSON.parse(require('fs').readFileSync('gui/fkl-campaign-request.json','utf8')).stage")"
+          fi
+          case "$STAGE" in
+            smoke|exploratory|confirmatory|all) ;;
+            *) echo "Invalid or absent frozen stage: $STAGE"; exit 1;;
+          esac
+          node gui/scripts/adaptiveFklCampaign.mjs --stage="$STAGE"
+      - name: Preserve complete primary paired evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-fkl-${{ github.run_id }}
+          path: gui/adaptive-results/fkl/
+          if-no-files-found: warn
+          retention-days: 90
+          compression-level: 6
