@@ -823,3 +823,91 @@ th, td { padding: 7px 7px; border-bottom: 1px solid #edf0f3; white-space: nowrap
  .adaptive-study .adaptive-inputs > .adaptive-checkbox{grid-column:1 / -1}
  .adaptive-study .adaptive-inputs{padding:10px}
 }
+
+/* E1-A: container-aware compact scientific form layout.
+   Presentation only: no changes to parameter values or calculation bindings. */
+.adaptive-study{container-type:inline-size}
+.adaptive-study .adaptive-inputs{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  column-gap:12px;
+  row-gap:9px;
+  padding:12px;
+}
+.adaptive-study .adaptive-group-title{
+  margin:8px 0 1px;
+  padding:7px 9px;
+  border:0;
+  border-left:3px solid #527fa9;
+  border-radius:3px;
+  background:#eaf1f8;
+  letter-spacing:.01em;
+}
+.adaptive-study .adaptive-group-title:first-child{margin-top:0}
+.adaptive-study .adaptive-inputs > label{
+  justify-content:flex-end;
+  gap:5px;
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.adaptive-study .adaptive-inputs .lyapunov-field-label{
+  align-items:flex-start;
+  min-height:0;
+  line-height:1.35;
+}
+.adaptive-study .adaptive-inputs > .adaptive-checkbox{
+  grid-column:span 2;
+  justify-content:flex-start;
+  align-self:stretch;
+  min-height:36px;
+  line-height:1.4;
+}
+.adaptive-study .adaptive-inputs > .r27-note{
+  border-radius:3px;
+  padding:8px 10px;
+}
+.adaptive-study .adaptive-phase-grid{
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(218px,1fr);
+  grid-template-columns:none;
+  align-items:stretch;
+  overflow-x:auto;
+  overscroll-behavior-inline:contain;
+  scroll-snap-type:x proximity;
+}
+.adaptive-study .adaptive-phase{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:9px;
+  min-width:218px;
+  height:100%;
+  scroll-snap-align:start;
+  border-top:3px solid #527fa9;
+}
+.adaptive-study .adaptive-phase-heading{
+  padding-bottom:7px;
+  border-bottom:1px solid #dce5ed;
+}
+.adaptive-study .adaptive-phase label{
+  display:flex;
+  flex-direction:column;
+  width:100%;
+  align-items:stretch;
+  margin:0;
+}
+.adaptive-study .adaptive-phase label input,
+.adaptive-study .adaptive-phase label select{width:100%}
+@container (max-width:1179px){
+  .adaptive-study .adaptive-inputs{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@container (max-width:899px){
+  .adaptive-study .adaptive-inputs{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@container (max-width:579px){
+  .adaptive-study .adaptive-inputs{grid-template-columns:minmax(0,1fr)}
+  .adaptive-study .adaptive-inputs > .adaptive-wide-field,
+  .adaptive-study .adaptive-inputs > .adaptive-checkbox{grid-column:1 / -1}
+  .adaptive-study .adaptive-inputs{padding:9px}
+  .adaptive-study .adaptive-phase-grid{grid-auto-columns:minmax(205px,85%)}
+  .adaptive-study .adaptive-phase{min-width:205px}
+}
