@@ -8,6 +8,9 @@ import {validateAttackPhases,defaultAttackPhases,attackIntensityAt} from "./atta
 import {validateAdaptiveOptions,estimateAdaptiveDecision,ADAPTIVE_METHODS,ADAPTIVE_METHOD_IDS,ADAPTIVE_MODEL_VERSION} from "./adaptiveDecisionEngine.js";
 import {createAdaptiveScenarioAdapter,ADAPTIVE_SCENARIO_VERSION} from "./adaptiveScenario.js";
 import {createAdaptiveRiskController,ADAPTIVE_RISK_MODEL_VERSION} from "./adaptiveRiskController.js";
+import {createAdaptivePolicySelector,ADAPTIVE_POLICY_SELECTOR_VERSION} from "./adaptivePolicySelector.js";
+import {ADAPTIVE_EVIDENCE_QUALITY_VERSION} from "./adaptiveEvidenceQuality.js";
+import {ADAPTIVE_REGIME_DETECTOR_VERSION} from "./adaptiveRegimeDetector.js";
 import {E1A_DECISION_CHANNEL_VERSION} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_CHANNEL_VERSION} from "./adaptiveRoutedDecisionChannel.js";
 import {E1A_LOCAL_CONSENSUS_VERSION} from "./adaptiveLocalConsensus.js";
@@ -15,7 +18,7 @@ import {E1A_LOCAL_TRANSPORT_VERSION} from "./adaptiveLocalTransport.js";
 import {E1A_LOCAL_AUTONOMY_VERSION} from "./adaptiveLocalAutonomy.js";
 import {pairedSignFlipP,holmAdjusted} from "./statistics2027.js";
 
-export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.3.0-local-action-loop-and-unconditional-loss";
+export const ADAPTIVE_STUDY_VERSION="adaptive-study-2.4.0-experimental-regime-aware-opt-in";
 const finite=Number.isFinite;
 const sum=a=>a.reduce((s,x)=>s+x,0);
 const average=a=>a.length?sum(a)/a.length:null;
@@ -88,9 +91,10 @@ export function runAdaptiveSingle(config={},options={},runIndex=0){
   return runAdaptiveSingleDecisionFeedback(core,o,runIndex);
  const adaptive=[];
  const risk=o.alphaMode==="risk_aware"?createAdaptiveRiskController(o):null;
+ const policy=o.alphaMode==="regime_aware"?createAdaptivePolicySelector(o):null;
  const generator=createAdaptiveScenarioAdapter(core,o,runIndex);
  const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
-  const result=estimateAdaptiveDecision(observable,o,core,risk);
+  const result=estimateAdaptiveDecision(observable,o,core,risk,policy);
   adaptive.push({step:observable.step,...result.decisions,diagnostics:result.diagnostics});
  },generator);
  if(simulation.trajectory.length!==adaptive.length||adaptive.length!==core.n_steps)
@@ -146,8 +150,9 @@ function runAdaptiveSingleDecisionFeedback(core,o,runIndex){
   if(!generator?.evidenceValue)throw Error("Для раздельного контура требуется модель наблюдаемых свидетельств");
   const observed=[];
   const methodRisk=o.alphaMode==="risk_aware"?createAdaptiveRiskController(o):null;
+  const methodPolicy=o.alphaMode==="regime_aware"?createAdaptivePolicySelector(o):null;
   const simulation=simulateRun(core,o.scenario,runIndex,0,false,null,observable=>{
-   const data=estimateAdaptiveDecision(observable,o,core,methodRisk);
+   const data=estimateAdaptiveDecision(observable,o,core,methodRisk,methodPolicy);
    const value=data.decisions[method];
    generator.onFeedbackDecision({step:observable.step,value});
    observed.push({step:observable.step,value,diagnostics:data.diagnostics,
@@ -364,6 +369,9 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
   archiveFormat:"imas-adaptive-collective-decisions",archiveVersion:1,
   models:{base:TRUST_MODEL_VERSION,adaptive:ADAPTIVE_MODEL_VERSION,study:ADAPTIVE_STUDY_VERSION,
    scenario:ADAPTIVE_SCENARIO_VERSION,risk:ADAPTIVE_RISK_MODEL_VERSION,
+   policy:ADAPTIVE_POLICY_SELECTOR_VERSION,
+   regimeDetector:ADAPTIVE_REGIME_DETECTOR_VERSION,
+   evidenceQuality:ADAPTIVE_EVIDENCE_QUALITY_VERSION,
    decisionChannel:E1A_DECISION_CHANNEL_VERSION,
    routedDecisionChannel:E1A_ROUTED_CHANNEL_VERSION,
    localConsensus:E1A_LOCAL_CONSENSUS_VERSION,
@@ -391,7 +399,8 @@ export function summarizeAdaptiveRuns(runs,config={},options={}){
    localAutonomy:o.localAutonomyEnabled
     ?"SHADOW research: independent directed soft-Beta local trust from causal delivered observations. Opt-in two-threshold local guard, with post-hoc honest false exclusion counts. Optional BOUNDED local action-state loop z(t) feeds the NEXT neighbor message but NOT physical plant state, E1 evidence, global topology, isolation or E1 central decision. All honest active (node,tick) units enter predeclared unconditional loss: squared error if accepted, configured refusal penalty if absent. Truth and labels enter only offline evaluation, never local estimation, action or trust. Distinct local and central evaluation units preclude direct paired RMSE claims; NOT Byzantine consensus or full cyberdefence closed-loop control."
     :"disabled",
-   riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":"disabled",
+   riskMode:o.alphaMode==="risk_aware"?"Prequential proxy loss: evaluate prior-tick plain/weighted decisions against currently observed median, then choose current alpha. No oracle truth, hidden labels, or future observations":
+    o.alphaMode==="regime_aware"?"Experimental causal expert policy: prior-tick expert decisions scored against current observable median with model-configured evidence quality and EWMA/CUSUM changes; fallback to historical combined E1 after shifts. No oracle truth or attacker labels":"disabled",
    rmse:"each run: sqrt(mean of squared errors on accepted decisions); summary: mean across runs",
    rejection:"refusal counts as incorrect for unconditional probability_correct",
    confidence:"normal-approximation 95% CI for independent run means, not adjusted for multiple tests; two-sided paired sign-flip p values Holm-adjusted across four planned RMSE contrasts",
