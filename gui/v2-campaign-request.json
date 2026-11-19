@@ -1,0 +1,7 @@
+{
+  "protocol": "e1a-v2-huber-regret-factorial-1.0.0",
+  "stage": "smoke",
+  "date": "2026-11-19",
+  "intent": "Run the frozen 3-cell/2-repeat/five-method smoke without inspecting reserved OOD holdout",
+  "restriction": "No oracle, no historical M5 holdout tuning, no automatic v2 activation, no invented superiority claims"
+}
