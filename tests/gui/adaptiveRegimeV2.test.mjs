@@ -128,3 +128,33 @@ test("v2 skipped ticks and extra inaccessible oracle properties",()=>{
  assert.equal(q.noOracle,true);
  assert.equal(q.completePairs,0);
 });
+
+
+test("v2 observable cross-section is permutation invariant and bounded under an extreme compromised report",()=>{
+ const opts={v2MinimumPairs:2,v2MinEvidence:0,regimeChangeThreshold:100};
+ const x=createAdaptivePolicySelectorV2(opts),y=createAdaptivePolicySelectorV2(opts);
+ const reference={...entry(1),values:[-0.1,0,0.1,0.05,1000000000],
+  available:[true,true,true,true,true]};
+ for(let t=1;t<=8;t++){
+  const first={...reference,step:t};
+  const second={...first,values:[first.values[4],first.values[2],
+   first.values[0],first.values[3],first.values[1]]};
+  const a=x.choose(first),b=y.choose(second);
+  close(a.value,b.value);
+  close(a.regret.adaptive,b.regret.adaptive);
+  close(a.regret.risk_aware,b.regret.risk_aware);
+  assert.equal(a.selected,b.selected);
+  assert.ok(Number.isFinite(a.value));
+  assert.ok(a.value>=-2&&a.value<=2);
+ }
+});
+
+test("v2 low-quality evidence requires explicit historical E1 fallback",()=>{
+ const p=createAdaptivePolicySelectorV2({v2MinimumPairs:2,v2MinEvidence:0.9,
+  regimeChangeThreshold:100});
+ for(let t=1;t<=8;t++){
+  const out=p.choose({...entry(t),available:[true,false,false,false]});
+  assert.equal(out.selected,"proposed_robust");
+  assert.equal(out.reason,"insufficient_or_low_quality_evidence");
+ }
+});
