@@ -8,6 +8,7 @@ import {ATTACK_SHAPES,defaultAttackPhases,attackIntensityAt} from "./attackProfi
 import {ADAPTIVE_ATTACK_STRATEGIES,ADAPTIVE_EVIDENCE_MODELS} from "./adaptiveScenario.js";
 import AdaptiveFklResultsPanel from "./AdaptiveFklResultsPanel.jsx";
 import AdaptivePeriodicResultsPanel from "./AdaptivePeriodicResultsPanel.jsx";
+import AdaptiveV2ResultsPanel from "./AdaptiveV2ResultsPanel.jsx";
 import AdaptiveStudyAnalyticsPanel from "./AdaptiveStudyAnalyticsPanel.jsx";
 import {projectAdaptiveAttackExposure} from "./adaptiveExposureDiagnostics.js";
 
@@ -694,6 +695,7 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
   </React.Fragment>:<div className="empty">Настройте адаптивный алгоритм, фазы атак и выполните исследование. Результаты исходного E1 сохраняются без изменений.</div>}
   <AdaptiveFklResultsPanel/>
   <AdaptivePeriodicResultsPanel/>
+  <AdaptiveV2ResultsPanel/>
  </div>;
 });
 export default AdaptiveDecisionPanel;
