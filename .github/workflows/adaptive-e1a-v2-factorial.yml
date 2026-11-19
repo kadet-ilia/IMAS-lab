@@ -1,0 +1,57 @@
+name: E1-A regime-aware v2 preregistered research
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        type: choice
+        required: true
+        default: smoke
+        description: "Experimental v2: smoke, new train/diagnostic series or OOD holdout (no tuning)"
+        options: [smoke, train, holdout]
+  push:
+    branches: [IMAS_Lab_test]
+    paths: ['gui/v2-campaign-request.json']
+permissions:
+  contents: read
+concurrency:
+  group: e1a-v2-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  v2:
+    if: github.ref == 'refs/heads/IMAS_Lab_test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Reproducible runtime
+        working-directory: gui
+        run: npm ci
+      - name: Unit, model invariants and frozen study design
+        run: |
+          node --test tests/gui/adaptiveRegimeV2.test.mjs tests/gui/adaptiveV2Campaign.test.mjs tests/gui/adaptiveRegimePolicy.test.mjs
+          node gui/scripts/adaptiveV2Campaign.mjs --stage=design
+      - name: Execute new unretuned simulation campaign
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            STAGE="${{ inputs.stage }}"
+          else
+            STAGE="$(node -p "JSON.parse(require('fs').readFileSync('gui/v2-campaign-request.json','utf8')).stage")"
+          fi
+          case "$STAGE" in smoke|train|holdout) ;; *) echo "Invalid v2 stage"; exit 1 ;; esac
+          node gui/scripts/adaptiveV2Campaign.mjs --stage="$STAGE"
+      - name: Independently re-check every paired full run and archive
+        run: python gui/scripts/auditV2Campaign.py gui/adaptive-results/v2
+      - name: Archive all scientific inputs and outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: imas-e1a-v2-${{ github.run_id }}
+          path: gui/adaptive-results/v2/
+          if-no-files-found: error
+          retention-days: 90
