@@ -1,8 +1,9 @@
 {
   "protocol": "e1a-v2-huber-regret-factorial-1.0.0",
-  "stage": "train",
+  "stage": "holdout",
   "date": "2026-11-19",
-  "smokeRun": "https://github.com/kadet-ilia/IMAS-lab/actions/runs/44504285503",
-  "intent": "Explore 48 fixed previously unused synthetic conditions with 12 paired whole runs per cell and five policies, expected 2880 model executions.",
-  "restriction": "Do not change v2 parameters on old M5 holdout; independent 12-cell linear/double v2 holdout reserved, do not run until numerical code frozen."
+  "trainRun": "https://github.com/kadet-ilia/IMAS-lab/actions/runs/44504426592",
+  "trainSourceHash": "b57807228ce54dc42284e8f83858c62db620e28f5d4bde86c7615ee8aaae78a6",
+  "intent": "Execute frozen independent 12 OOD linear/double conditions with 60 new paired runs per cell and five methods, 3600 full model simulations.",
+  "inference": "Confirm or reject the unchanged first-version v2 hypothesis; no hyperparameter changes after seeing train, no reuse of M5 holdout."
 }
