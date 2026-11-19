@@ -192,7 +192,13 @@ export function adaptivePolicyEventRows(result){
    innovation:finite(d.regimeInnovation)?d.regimeInnovation:null,
    combinedWeight:finite(w.proposed_robust)?w.proposed_robust:null,
    adaptiveWeight:finite(w.adaptive)?w.adaptive:null,
-   riskWeight:finite(w.risk_aware)?w.risk_aware:null};
+   riskWeight:finite(w.risk_aware)?w.risk_aware:null,
+   v2RegretAdaptive:finite(d.v2RegretAdaptive)?d.v2RegretAdaptive:null,
+   v2RegretRisk:finite(d.v2RegretRisk)?d.v2RegretRisk:null,
+   v2EffectivePairs:finite(d.v2EffectivePairs)?d.v2EffectivePairs:null,
+   v2UncertaintyAdaptive:finite(d.v2UncertaintyAdaptive)?d.v2UncertaintyAdaptive:null,
+   v2UncertaintyRisk:finite(d.v2UncertaintyRisk)?d.v2UncertaintyRisk:null,
+   v2Reason:typeof d.v2Reason==="string"?d.v2Reason:null};
  }));
 }
 
@@ -209,7 +215,9 @@ export const ADAPTIVE_PHASE_EXPORT_FIELDS=Object.freeze([
 export const ADAPTIVE_EVENT_EXPORT_FIELDS=Object.freeze([
  "run","step","attackIntensity","selected","regimeState","switchCount",
  "alpha","k","nEffective","quality","innovation",
- "combinedWeight","adaptiveWeight","riskWeight"
+ "combinedWeight","adaptiveWeight","riskWeight",
+ "v2RegretAdaptive","v2RegretRisk","v2EffectivePairs",
+ "v2UncertaintyAdaptive","v2UncertaintyRisk","v2Reason"
 ]);
 export function adaptiveRecordsCsv(rows,fields){
  if(!Array.isArray(rows)||!Array.isArray(fields)||!fields.length||
