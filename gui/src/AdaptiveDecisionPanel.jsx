@@ -141,7 +141,9 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
    "alpha","k","nEffective","readiness","disagreement","outlierCount","available","retained","weightConcentration","riskContrast","riskPairs","riskWeightVote","riskLossPlain","riskLossWeighted",
    "regimeSelected","regimeState","evidenceQualityScore","regimeInnovation",
    "regimeCusum","policySwitches","policyPairs",
-   "expertCombined","expertAdaptive","expertRisk"];
+   "expertCombined","expertAdaptive","expertRisk",
+    "v2RegretAdaptive","v2RegretRisk","v2EffectivePairs","v2Reason",
+    "v2UncertaintyAdaptive","v2UncertaintyRisk"];
   const rows=[keys.join(";"),...regimeTrace.map(row=>keys.map(k=>row[k]??"").join(";"))];
   download("imas-adaptive-trajectory.csv",rows.join("\n"),"text/csv;charset=utf-8");
  };
@@ -305,10 +307,10 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
     <label className="adaptive-wide-field">Режим коэффициента α
      <select aria-label="Режим коэффициента alpha" disabled={running} value={options.alphaMode}
       onChange={e=>set("alphaMode",e.target.value)}>
-      <option value="adaptive">Адаптивный (исходная эвристика)</option><option value="risk_aware">Рискоориентированный (историческая проверка)</option><option value="regime_aware">По наблюдаемому режиму (экспериментальный)</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
+      <option value="adaptive">Адаптивный (исходная эвристика)</option><option value="risk_aware">Рискоориентированный (историческая проверка)</option><option value="regime_aware">По наблюдаемому режиму v1 (экспериментальный)</option><option value="regime_aware_v2">Регрет–Хьюбер v2 (исследовательский)</option><option value="fixed">Постоянный</option><option value="off">Без доверительного взвешивания</option>
      </select></label>
     <NumberOption label="Постоянное α" title="Используется только в режиме постоянного коэффициента." value={options.fixedAlpha} min={0} max={1} step={0.05} onChange={v=>set("fixedAlpha",v)} disabled={running||options.alphaMode!=="fixed"}/>
-    {["risk_aware","regime_aware"].includes(options.alphaMode)?<React.Fragment>
+    {["risk_aware","regime_aware","regime_aware_v2"].includes(options.alphaMode)?<React.Fragment>
      <NumberOption label="Память риска β" title="Экспоненциальная память прошлых относительных ошибок двух агрегаторов при прогнозе следующей наблюдаемой медианы." value={options.riskDecay} min={0} max={0.9999} step={0.05} disabled={running} onChange={v=>set("riskDecay",v)}/>
      <NumberOption label="Чувствительность к риску" title="Величина воздействия разности прошлых безоракульных оценок риска на коэффициент α." value={options.riskSensitivity} min={0} max={40} step={0.5} disabled={running} onChange={v=>set("riskSensitivity",v)}/>
      <NumberOption label="Минимум пар наблюдений" title="Не менее указанного числа пар соседних тактов перед включением исторически обученного веса." value={options.riskMinimumPairs} min={1} max={5000} step={1} disabled={running} onChange={v=>set("riskMinimumPairs",v)}/>
@@ -337,6 +339,29 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <NumberOption label="Ограничение невязки" value={options.regimeLossCap} min={0.1} max={1000} step={0.5} disabled={running} onChange={v=>set("regimeLossCap",v)}/>
      <NumberOption label="Температура смешивания" value={options.regimeTemperature} min={0.000001} max={100} step={0.05} disabled={running||options.regimeSelectionMode!=="blend"} onChange={v=>set("regimeTemperature",v)}/>
      <p className="r27-note">Исследовательская политика без доступа к эталону и меткам нарушителей. Сравнивается согласованность прошлых решений с текущей наблюдаемой медианой, которая сама может подвергаться атаке. Выводы о превосходстве не установлены.</p>
+    </React.Fragment>:null}
+    {options.alphaMode==="regime_aware_v2"?<React.Fragment>
+     <div className="adaptive-group-title">Причинная политика v2: робастный регрет и стоимость переключений</div>
+     <label className="adaptive-wide-field">Правило выбора v2
+      <select aria-label="Правило выбора v2" value={options.v2ChoiceMode} disabled={running}
+       onChange={e=>set("v2ChoiceMode",e.target.value)}>
+       <option value="discrete">Дискретный выбор с платой за смену</option>
+       <option value="blend">Ограниченное смешивание с контролем E1</option>
+      </select>
+     </label>
+     <NumberOption label="Минимум прогнозных пар v2" value={options.v2MinimumPairs} min={1} max={5000} step={1} disabled={running} onChange={v=>set("v2MinimumPairs",v)}/>
+     <NumberOption label="Минимальная пригодность свидетельств v2" value={options.v2MinEvidence} min={0} max={1} step={0.02} disabled={running} onChange={v=>set("v2MinEvidence",v)}/>
+     <NumberOption label="Память регрета v2" value={options.v2LossDecay} min={0} max={0.9999} step={0.05} disabled={running} onChange={v=>set("v2LossDecay",v)}/>
+     <NumberOption label="Порог потери Хьюбера" value={options.v2HuberThreshold} min={0.001} max={100} step={0.1} disabled={running} onChange={v=>set("v2HuberThreshold",v)}/>
+     <NumberOption label="Предел отклонения наблюдений" value={options.v2ReferenceClip} min={0.001} max={100} step={0.1} disabled={running} onChange={v=>set("v2ReferenceClip",v)}/>
+     <NumberOption label="Поправка на неопределённость" title="Эвристическая мера неопределённости, НЕ доверительный интервал." value={options.v2Confidence} min={0} max={10} step={0.05} disabled={running} onChange={v=>set("v2Confidence",v)}/>
+     <NumberOption label="Порог преимущества v2" value={options.v2ImprovementMargin} min={0} max={100} step={0.001} disabled={running||options.v2ChoiceMode!=="discrete"} onChange={v=>set("v2ImprovementMargin",v)}/>
+     <NumberOption label="Стоимость смены эксперта" value={options.v2SwitchCost} min={0} max={100} step={0.001} disabled={running||options.v2ChoiceMode!=="discrete"} onChange={v=>set("v2SwitchCost",v)}/>
+     <NumberOption label="Выдержка между сменами" value={options.v2HoldSteps} min={0} max={1000} step={1} disabled={running||options.v2ChoiceMode!=="discrete"} onChange={v=>set("v2HoldSteps",v)}/>
+     <NumberOption label="Минимальный вес E1 при смешивании" value={options.v2BaselineFloor} min={0} max={1} step={0.05} disabled={running||options.v2ChoiceMode!=="blend"} onChange={v=>set("v2BaselineFloor",v)}/>
+     <NumberOption label="Температура смешивания v2" value={options.v2Temperature} min={0.000001} max={100} step={0.01} disabled={running||options.v2ChoiceMode!=="blend"} onChange={v=>set("v2Temperature",v)}/>
+     <NumberOption label="Сохранение истории при смене режима" value={options.v2ResetRetention} min={0} max={1} step={0.05} disabled={running} onChange={v=>set("v2ResetRetention",v)}/>
+     <p className="r27-note">V2 сопоставляет предыдущие решения с новыми доступными свидетельствами посредством робастной функции Хьюбера, учитывает пригодность источников, вариацию ошибок и стоимость переключения. Эталон и метки нарушителей не используются. Это некалиброванная исследовательская эвристика; превосходство не доказано.</p>
     </React.Fragment>:null}
     <div className="adaptive-group-title">Робастное усечение и весовые коэффициенты</div>
     <label className="adaptive-wide-field">Порядок обработки оценок
@@ -503,13 +528,14 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <Line dataKey="riskContrast" name="Нормированная разность прогнозных ошибок" stroke="#8c56a5" dot={false} isAnimationActive={false}/>
     </LineChart></ResponsiveContainer>:null}
    </Panel>
-   {options.alphaMode==="regime_aware"&&regimeTrace.length?<Panel title="Диагностика выбора оценивателя"
+   {["regime_aware","regime_aware_v2"].includes(options.alphaMode)&&regimeTrace.length?<Panel title="Диагностика выбора оценивателя"
     subtitle="Вес и выбор экспертов по причинной истории наблюдаемых сообщений; не классификация атак и не калиброванная вероятность риска.">
     <div className="kpi-grid">
      <Kpi label="Последний выбранный метод" value={regimeTrace.at(-1)?.regimeSelected??"—"} note="Дискретный выбор либо смешивание"/>
      <Kpi label="Переключений" value={regimeTrace.at(-1)?.policySwitches??0} note="По первому прогону"/>
      <Kpi label="Зарегистрировано смен режима" value={regimeTrace.filter(x=>x.regimeState==="change_detected").length} note="Статистические события, не метки нарушителей"/>
      <Kpi label="Пригодность свидетельств" value={num(regimeTrace.at(-1)?.evidenceQualityScore,3)} note="Синтетическая эвристика, не вероятность честности"/>
+     {options.alphaMode==="regime_aware_v2"?<Kpi label="Эффективные пары v2" value={num(regimeTrace.at(-1)?.v2EffectivePairs,2)} note="Эвристическая величина, не независимые наблюдения"/>:null}
     </div>
     <ResponsiveContainer width="100%" height={250}><LineChart data={regimeTrace}>
      <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis domain={[0,1]}/>
@@ -529,7 +555,13 @@ const AdaptiveDecisionPanel=forwardRef(function AdaptiveDecisionPanel({config,on
      <td>{x.step}</td><td>{x.regimeState??"—"}</td><td>{x.regimeSelected??"—"}</td>
      <td>{num(x.evidenceQualityScore,4)}</td><td>{num(x.regimeInnovation,4)}</td>
     </tr>)}</tbody></table></div>
-    <p className="r27-note">Режим экспериментальный. При недостатке информации, смене наблюдаемого режима или низкой пригодности свидетельств применяется контрольное комбинированное E1. Оценки экспертов сопоставляются с последующей наблюдаемой медианой, которая уязвима к согласованному смещению. Универсальное превосходство не установлено.</p>
+    {options.alphaMode==="regime_aware_v2"?<ResponsiveContainer width="100%" height={210}><LineChart data={regimeTrace}>
+     <CartesianGrid stroke="#e6eaef" strokeDasharray="3 3"/><XAxis dataKey="step"/><YAxis/>
+     <Tooltip formatter={v=>num(v,5)}/><Legend/>
+     <Line dataKey="v2RegretAdaptive" name="Хьюбер-регрет адаптивного E1-А" stroke="#c13f62" dot={false} isAnimationActive={false}/>
+     <Line dataKey="v2RegretRisk" name="Хьюбер-регрет рискоориентированного E1-А" stroke="#079b91" dot={false} isAnimationActive={false}/>
+    </LineChart></ResponsiveContainer>:null}
+    <p className="r27-note">Синтетическая причинная диагностика. V1 использует медиану, v2 — робастно ограниченные доступные предложения следующего такта. Оба прокси могут искажаться сговором. Универсального преимущества над комбинированным E1 не установлено.</p>
    </Panel>:null}
    <Panel title="Итоговые показатели по методам" subtitle="RMSE и MAE — по принятым решениям. Безусловная потеря включает заданный штраф отказа; P(прав.) — по всем тактам.">
     <div className="table-wrap"><table><thead><tr><th>Метод</th><th>RMSE</th><th>MAE</th><th>P(прав.)</th><th>Покрытие</th><th>Безусловная потеря</th><th>Отказы</th><th>P95 |ошибки|</th><th>RMSE состояния</th></tr></thead>
