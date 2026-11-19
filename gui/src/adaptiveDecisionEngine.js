@@ -7,10 +7,11 @@ import {aggregateProposals} from "./trustEngine.js";
 import {ADAPTIVE_SCENARIO_DEFAULTS,validateAdaptiveScenarioOptions} from "./adaptiveScenario.js";
 import {ADAPTIVE_RISK_DEFAULTS,validateAdaptiveRiskOptions} from "./adaptiveRiskController.js";
 import {ADAPTIVE_POLICY_DEFAULTS,validateAdaptivePolicyOptions} from "./adaptivePolicySelector.js";
+import {ADAPTIVE_V2_DEFAULTS,validateAdaptiveV2Options} from "./adaptivePolicySelectorV2.js";
 import {E1A_DECISION_CHANNEL_DEFAULTS,validateDecisionChannelOptions} from "./adaptiveDecisionChannel.js";
 import {E1A_ROUTED_DEFAULTS,validateRoutedChannelOptions} from "./adaptiveRoutedDecisionChannel.js";
 
-export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.6.0-regime-aware-opt-in";
+export const ADAPTIVE_MODEL_VERSION="adaptive-collective-1.7.0-v2-experimental-opt-in";
 export const ADAPTIVE_METHODS=Object.freeze([
  Object.freeze({id:"trimmed_unweighted",label:"Усечённое среднее E1",color:"#d18a31"}),
  Object.freeze({id:"proposed_robust",label:"Комбинированное среднее E1",color:"#123a63"}),
@@ -23,6 +24,7 @@ export const ADAPTIVE_DEFAULTS=Object.freeze({
  alphaMode:"adaptive",fixedAlpha:0.5,trimMode:"source_first",
  ...ADAPTIVE_RISK_DEFAULTS,
  ...ADAPTIVE_POLICY_DEFAULTS,
+ ...ADAPTIVE_V2_DEFAULTS,
  ...E1A_DECISION_CHANNEL_DEFAULTS,
  ...E1A_ROUTED_DEFAULTS,
  comparisonMode:"estimator_only",
@@ -50,7 +52,7 @@ function assertNumber(name,v,min,max,integer=false){
 export function validateAdaptiveOptions(input={}){
  if(input===null||typeof input!=="object"||Array.isArray(input))throw Error("Параметры адаптации должны быть объектом");
  const o={...ADAPTIVE_DEFAULTS,...input};
- if(!["adaptive","off","fixed","risk_aware","regime_aware"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
+ if(!["adaptive","off","fixed","risk_aware","regime_aware","regime_aware_v2"].includes(o.alphaMode))throw Error("Неизвестный режим alpha");
  if(!["estimator_only","decision_feedback","network_feedback","network_routed"].includes(o.comparisonMode))
   throw Error("Неизвестный режим сравнения E1-А");
  if(!["legacy_clip_first","source_first"].includes(o.trimMode))throw Error("Неизвестный порядок усечения");
@@ -70,6 +72,7 @@ export function validateAdaptiveOptions(input={}){
  validateAdaptiveScenarioOptions(o);
  validateAdaptiveRiskOptions(o);
  validateAdaptivePolicyOptions(o);
+ validateAdaptiveV2Options(o);
  validateDecisionChannelOptions(o);
  validateRoutedChannelOptions(o);
  return o;
@@ -115,7 +118,7 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
     throw Error("E1-А риск: для пропуска такта требуется контроллер со счётчиком");
    riskController.skip(observation.step);
   }
-  if(o.alphaMode==="regime_aware"){
+  if(["regime_aware","regime_aware_v2"].includes(o.alphaMode)){
    if(!policySelector||typeof policySelector.skip!=="function"||
     !Number.isInteger(observation.step)||observation.step<1)
     throw Error("E1-А режим: для пропуска такта требуется причинная политика");
@@ -167,7 +170,7 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
  }
  const oldAlpha=clamp(readiness*support*Math.exp(-o.disagreementPenalty*disparity),0,1);
  let selectedPolicy=null;
- if(o.alphaMode==="regime_aware"){
+ if(["regime_aware","regime_aware_v2"].includes(o.alphaMode)){
   if(!policySelector||typeof policySelector.choose!=="function")
    throw Error("E1-А режим: требуется причинный контроллер выбора оценивателя");
   if(!Number.isInteger(observation.step)||observation.step<1)
@@ -199,6 +202,12 @@ export function estimateAdaptiveDecision(observation,options={},coreConfig={},ri
    regimeInnovation:selectedPolicy?.regime.innovation??null,
    regimeCusum:selectedPolicy?.regime.cusum??null,
    policySwitches:selectedPolicy?.switches??null,policyPairs:selectedPolicy?.pairs??null,
-   policyWeights:selectedPolicy?.weights??null}
+   policyWeights:selectedPolicy?.weights??null,
+   v2RegretAdaptive:selectedPolicy?.regret?.adaptive??null,
+   v2RegretRisk:selectedPolicy?.regret?.risk_aware??null,
+   v2EffectivePairs:selectedPolicy?.effectivePairs??null,
+   v2Reason:selectedPolicy?.reason??null,
+   v2UncertaintyAdaptive:selectedPolicy?.uncertainty?.adaptive??null,
+   v2UncertaintyRisk:selectedPolicy?.uncertainty?.risk_aware??null}
  };
 }
