@@ -1,3 +1,4 @@
+import {evaluatePartial} from "./partialCalibration.js";
 import {discoverGrouping,remapRows} from "./groupDiscovery.js";
 // All imported data remain in the browser. No automatic upload.
 import {BASE,validateExt,tables,point,select,loss,seedFor,lawsExt,draw} from "./extendedModel.js";
@@ -6,7 +7,7 @@ const seq=n=>Array.from({length:n},(_,i)=>i),sum=a=>a.reduce((s,v)=>s+v,0),mean=
 export const DATA_SCHEMA="imas-e2-observations-v1";
 export function parseDataset(raw){
  const f=typeof raw==="string"?JSON.parse(raw):raw;
- if(!f||f.schema!==DATA_SCHEMA||!Array.isArray(f.groups)||f.groups.length<1||f.groups.length>20||f.groups.some(n=>!Number.isInteger(n)||n<2||n>50)||!Array.isArray(f.rows)||f.rows.length<20||f.rows.length>50000)throw Error("Ожидается imas-e2-observations-v1: 20–50 000 строк, 1–20 групп по 2–50 агентов");
+ if(!f||f.schema!==DATA_SCHEMA||!Array.isArray(f.groups)||f.groups.length<1||f.groups.length>20||f.groups.some(n=>!Number.isInteger(n)||n<1||n>50)||!Array.isArray(f.rows)||f.rows.length<20||f.rows.length>50000)throw Error("Ожидается imas-e2-observations-v1: 20–50 000 строк, 1–20 групп по 1–50 агентов");
  if(f.rows.length*sum(f.groups)>10000000)throw Error("Лимит импорта — 10 млн агентных наблюдений");
  let prev=-Infinity;const ids=new Set();
  for(const row of f.rows){if(!row||!Number.isFinite(row.time)||row.time<=prev||![0,1].includes(row.x)||!Array.isArray(row.agents)||row.agents.length!==f.groups.length||row.agents.some((a,g)=>!Array.isArray(a)||a.length!==f.groups[g]||a.some(v=>v!==0&&v!==1&&v!==null)))throw Error("Строки должны иметь строго возрастающее числовое time, x=0/1 и массивы agents заданных размеров (0,1,null)");prev=row.time;if(row.id!==undefined){if(typeof row.id!=="string"||ids.has(row.id))throw Error("Повтор или неверный id");ids.add(row.id);}}
@@ -36,9 +37,13 @@ function diagnostics(train,test,groups){
 }
 function evaluateSplit(f,config,cut){
  const train=f.rows.slice(0,cut),test=f.rows.slice(cut);
- if(train.some(r=>r.agents.some(a=>a.includes(null))))throw Error("Калибровочная часть должна содержать полные наблюдения; неполные строки не исключаются молча. Измените долю или предоставьте отдельные полные данные.");
+ if(config.calibrationMode!=="partial"&&train.some(r=>r.agents.some(a=>a.includes(null))))throw Error("Калибровочная часть должна содержать полные наблюдения; неполные строки не исключаются молча. Измените долю или предоставьте отдельные полные данные.");
  const M=[0,1].map(x=>train.filter(r=>r.x===x).length);if(M.some(n=>n<2))throw Error("В калибровке нужны минимум две полные строки каждого класса");
  const c=validateExt({...BASE,...config,groups:f.groups,u:[0,1].map(()=>f.groups.map(()=>.5)),rho:f.groups.map(()=>0),m:Math.max(...M),prior:M[1]/cut,stress:"none",eta:0});
+ if(config.calibrationMode==="partial"){
+  const r=evaluatePartial(c,train,test,config);
+  return {version:"E2-data-partial-v1",source:f.source,synthetic:f.synthetic,config:c,split:{cut,trainN:cut,testN:test.length,trainLast:train.at(-1).time,testFirst:test[0].time,M},...r,iidTest:!!config.iidTest,certified:false,warning:"EM — условное правдоподобие при игнорируемой маске; отсутствие полной доставки может делать закон неидентифицируемым. Границы завершения не требуют MCAR в калибровке, но апостериорная модель требует предпосылок тестовой доставки, независимости групп и известного приора. Здесь приор оценён по обучению, полевой сертификат не заявляется. "+r.partial.assumptions};
+ }
  const counts=[0,1].map(x=>f.groups.map(n=>seq(n+1).map(()=>0)));
  for(const r of train)r.agents.forEach((a,g)=>counts[r.x][g][sum(a)]++);
  const T=tables(c,counts,M),hist=[[0,0,0],[0,0,0]],predictions=[];
@@ -52,6 +57,7 @@ export function validateObservations(raw,config){
  const f=parseDataset(raw),fraction=config.trainFraction??.6;if(!Number.isFinite(fraction)||fraction<.1||fraction>.9)throw Error("Доля калибровки 0,1–0,9");
  const cut=Math.floor(f.rows.length*fraction);
  if(!config.discoverGroups)return evaluateSplit(f,config,cut);
+ if(config.calibrationMode==="partial")throw Error("Поиск структуры требует полных данных; для неполной калибровки задайте группы заранее.");
  const discoveryN=Math.floor(cut*(config.discoveryFraction??.5));
  if(discoveryN<4||cut-discoveryN<4)throw Error("Недостаточно наблюдений для независимого выявления и калибровки групп");
  const discovery=f.rows.slice(0,discoveryN),fit=f.rows.slice(discoveryN,cut),test=f.rows.slice(cut),grouping=discoverGrouping(discovery,fit,f.groups,config);
@@ -62,4 +68,8 @@ export function validateObservations(raw,config){
  const grouped=evaluateSplit({...f,groups:grouping.groups.map(g=>g.length),rows:remapRows([...fit,...test],grouping.groups)},config,fit.length);
  base.summary.push(...grouped.summary.map(v=>({...v,policy:"Выявленные группы"})));base.trace.push(...grouped.trace.map(v=>({...v,policy:"Выявленные группы"})));
  base.grouped={config:grouped.config,counts:grouped.counts,hist:grouped.hist,diagnostics:grouped.diagnostics};return base;
+}
+
+export function partialExampleDataset(N=1000,seed=20261126){
+ const f=exampleDataset(N,seed),r=random(seedFor(seed,170001));return {...f,source:"Синтетический пример неполной калибровки MCAR",rows:f.rows.map((v,i)=>i<Math.floor(N*.6)?{...v,agents:v.agents.map(a=>a.map(y=>r()<.4?null:y))}:v)};
 }
