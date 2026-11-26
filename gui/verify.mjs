@@ -524,7 +524,7 @@ for (let i=0; i<researchTabs.length; i++) {
   await page.locator("main.r27-experiment-content > .imas-experiment-heading > h2.r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
   if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error(researchTabs[i]+": different experiment navigation markup");
-  if(i===0){const modes=page.getByRole("group",{name:"Режим эксперимента"});if(await modes.getByRole("button",{name:"Общее",exact:true}).getAttribute("aria-pressed")!=="true"||await modes.getByRole("button").count()!==8)throw Error("E2 navigation mismatch");}else {if((await page.getByRole("group",{name:"Режим эксперимента"}).getByText("Основной режим").count())!==1)throw Error("Research mode placeholder must preserve the shared navigation");if((await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button").count())!==0)throw Error("Trust-only modes displayed in unrelated experiment");}
+  if(i===0){const modes=page.getByRole("group",{name:"Режим эксперимента"});if(await modes.getByRole("button",{name:"Общее",exact:true}).getAttribute("aria-pressed")!=="true"||await modes.getByRole("button").count()!==9)throw Error("E2 navigation mismatch");}else {if((await page.getByRole("group",{name:"Режим эксперимента"}).getByText("Основной режим").count())!==1)throw Error("Research mode placeholder must preserve the shared navigation");if((await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button").count())!==0)throw Error("Trust-only modes displayed in unrelated experiment");}
   if(JSON.stringify(await toolbarSignature())!==JSON.stringify(trustToolbar))throw Error(researchTabs[i]+": different toolbar markup");
 
 
@@ -836,6 +836,35 @@ const partialE2=await downloadE2();
 if(partialE2.tables.rows.length!==2||!partialE2.dataResult.partial||partialE2.dataResult.certified||partialE2.dataResult.split.testN!==400)throw Error("E2.18 partial calibration missing");
 await page.getByRole("heading",{name:"Оценки условных законов и границы завершения",exact:true}).waitFor();
 extensionEvidence["Неполная калибровка"]={policies:2,test:400};
+
+// E2.20: the finite differences use exactly four points per complete cell.
+await modesE2.getByRole("button",{name:"Чувствительность",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид анализа"}).selectOption("interaction");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+await page.getByRole("spinbutton",{name:"Уровней по каждой оси"}).fill("3");
+await runE2();
+const interE2=await downloadE2();
+if(interE2.records.length!==9||interE2.tables.rows.length!==9||interE2.tables.aux.length!==4||interE2.records.some(r=>r.lossOracle>r.lossM6+1e-9))throw Error("E2.20 interaction incomplete");
+await page.getByRole("heading",{name:"Карта локального взаимодействия",exact:true}).waitFor();
+extensionEvidence["Взаимодействие факторов"]={points:9,pairedCells:4};
+
+await modesE2.getByRole("button",{name:"Серии экспериментов",exact:true}).click();
+await page.getByRole("combobox",{name:"План конфигураций"}).selectOption("lhs");
+await page.getByRole("spinbutton",{name:"Число различных конфигураций"}).fill("4");
+await page.getByRole("spinbutton",{name:"Параллельных потоков"}).fill("2");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("2");
+await runE2();
+const batchE2=await downloadE2();
+if(batchE2.mode!=="batch"||batchE2.records.length!==8||batchE2.tables.aux.length!==4||new Set(batchE2.records.map(r=>r.unit.seed)).size!==8)throw Error("E2.31 batch incomplete");
+await runE2();
+const restoredBatchE2=await downloadE2();
+if(JSON.stringify(restoredBatchE2.records)!==JSON.stringify(batchE2.records))throw Error("E2.31 checkpoint not restored identically");
+extensionEvidence["Серии экспериментов"]={configurations:4,runs:8,workers:2,restored:true};
+
 
 
 

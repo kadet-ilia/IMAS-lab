@@ -9,3 +9,10 @@ test("Count laws reproduce mean and feasible correlations",()=>{for(const [famil
 test("Exact Bayes risk matches analytical three-agent expression",()=>{for(const e of [.1,.2,.4])for(const rho of [0,.3,1])for(const drop of [0,.4,1]){const raw={...c,u:[[e],[1-e]],interactionLaw:"shock"};const r=interactionPoint(raw,{kind:"interaction",rho,drop,rep:0,i:0,j:0});close(r.lossOracle,symmetricThreeRisk(e,rho,drop));assert.ok(r.lossOracle<=r.lossM6+1e-10);}});
 test("Exact robust results match existing core for common shock",()=>{const r=interactionPoint(c,{kind:"interaction",rho:.3,drop:.4,rep:0,i:0,j:0});const a=exactExt({...c,rho:[.3],rhoScale:1,drop:.4,stress:"none",eta:0},r.counts);close(r.lossM6,a.loss);close(r.coverageM6,a.coverage);});
 test("Paired local contrasts only after all four points",()=>{const p=studyPlan("sensitivity",c);assert.equal(p.length,18);const a=p.map(u=>evaluateUnit("sensitivity",c,u,p.length));const summary=summarizeStudy("sensitivity",c,a);assert.equal(summary.rows.length,9);assert.equal(summary.aux.length,8);assert.ok(summary.aux.every(r=>r.lossOracle<0));assert.equal(summarizeStudy("sensitivity",c,a.slice(0,3)).aux.length,0);});
+
+test("Positive oracle contrast disproves universal negative interaction",()=>{
+ const c0={...c,groups:[9],u:[[.18],[.50]],rho:[.4],prior:.60,b:2.3,f:6.9,d:1.83,c:1.01,interactionLaw:"shock"},risks=[];
+ for(const rho of [.56,.67])for(const drop of [.25,.39])risks.push(interactionPoint(c0,{kind:"interaction",rho,drop,rep:0,i:0,j:0}).lossOracle);
+ const expected=[.9508641982261425,.9628456825685004,.9740058945965674,.9861477747186447];risks.forEach((v,i)=>close(v,expected[i]));
+ const I=risks[3]-risks[2]-risks[1]+risks[0];close(I,.00016039577971938002);assert.ok(I>0);
+});
