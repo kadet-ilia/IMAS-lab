@@ -1,3 +1,4 @@
+import {discoverGrouping,remapRows} from "./groupDiscovery.js";
 // All imported data remain in the browser. No automatic upload.
 import {BASE,validateExt,tables,point,select,loss,seedFor,lawsExt,draw} from "./extendedModel.js";
 import {random} from "./kernel.js";
@@ -33,9 +34,8 @@ function diagnostics(train,test,groups){
  }
  return out;
 }
-export function validateObservations(raw,config){
- const f=parseDataset(raw),fraction=config.trainFraction??.6;if(!Number.isFinite(fraction)||fraction<.1||fraction>.9)throw Error("Доля калибровки 0,1–0,9");
- const cut=Math.floor(f.rows.length*fraction),train=f.rows.slice(0,cut),test=f.rows.slice(cut);
+function evaluateSplit(f,config,cut){
+ const train=f.rows.slice(0,cut),test=f.rows.slice(cut);
  if(train.some(r=>r.agents.some(a=>a.includes(null))))throw Error("Калибровочная часть должна содержать полные наблюдения; неполные строки не исключаются молча. Измените долю или предоставьте отдельные полные данные.");
  const M=[0,1].map(x=>train.filter(r=>r.x===x).length);if(M.some(n=>n<2))throw Error("В калибровке нужны минимум две полные строки каждого класса");
  const c=validateExt({...BASE,...config,groups:f.groups,u:[0,1].map(()=>f.groups.map(()=>.5)),rho:f.groups.map(()=>0),m:Math.max(...M),prior:M[1]/cut,stress:"none",eta:0});
@@ -46,4 +46,20 @@ export function validateObservations(raw,config){
  const N=test.length,coverage=1-(hist[0][2]+hist[1][2])/N,L=mean(predictions.map(v=>v.loss)),miss=hist[1][0]/N,fp=hist[0][1]/N,h=Math.sqrt(Math.log(8/c.alpha)/(2*N)),maxLoss=Math.max(c.b,c.f,c.d,c.c);
  const intervals=config.iidTest?{coverageLow:clamp(coverage-h,0,1),coverageHigh:clamp(coverage+h,0,1),lossLow:clamp(L-maxLoss*h,0,maxLoss),lossHigh:clamp(L+maxLoss*h,0,maxLoss),missLow:clamp(miss-h,0,1),missHigh:clamp(miss+h,0,1),falseLow:clamp(fp-h,0,1),falseHigh:clamp(fp+h,0,1)}:null;
  return {version:"E2-data-v1",source:f.source,synthetic:f.synthetic,config:c,split:{cut,trainN:cut,testN:N,trainLast:train.at(-1).time,testFirst:test[0].time,M},counts,hist,summary:[{coverage,loss:L,miss,false:fp,N,...intervals}],trace:predictions,diagnostics:diagnostics(train,test,f.groups),iidTest:!!config.iidTest,certified:false,warning:"Эмпирическая априорная вероятность оценена только по калибровке; интервалы модели не являются сертификатами без проверки предпосылок. Корреляции и разброс маргиналей — диагностика, не доказательство независимости; MNAR по неполным наблюдениям не идентифицируется."};
+}
+
+export function validateObservations(raw,config){
+ const f=parseDataset(raw),fraction=config.trainFraction??.6;if(!Number.isFinite(fraction)||fraction<.1||fraction>.9)throw Error("Доля калибровки 0,1–0,9");
+ const cut=Math.floor(f.rows.length*fraction);
+ if(!config.discoverGroups)return evaluateSplit(f,config,cut);
+ const discoveryN=Math.floor(cut*(config.discoveryFraction??.5));
+ if(discoveryN<4||cut-discoveryN<4)throw Error("Недостаточно наблюдений для независимого выявления и калибровки групп");
+ const discovery=f.rows.slice(0,discoveryN),fit=f.rows.slice(discoveryN,cut),test=f.rows.slice(cut),grouping=discoverGrouping(discovery,fit,f.groups,config);
+ const base=evaluateSplit({...f,rows:[...fit,...test]},config,fit.length);
+ base.grouping={...grouping,discoveryN,discoveryLast:discovery.at(-1).time,calibrationFirst:fit[0].time};
+ base.summary=base.summary.map(v=>({...v,policy:"Исходные группы"}));base.trace=base.trace.map(v=>({...v,policy:"Исходные группы"}));
+ if(!grouping.valid){base.warning+=" Выявленная структура превышает ограничения ядра (20 групп по 50 агентов); граф сохранён, рекомендации не рассчитаны.";return base;}
+ const grouped=evaluateSplit({...f,groups:grouping.groups.map(g=>g.length),rows:remapRows([...fit,...test],grouping.groups)},config,fit.length);
+ base.summary.push(...grouped.summary.map(v=>({...v,policy:"Выявленные группы"})));base.trace.push(...grouped.trace.map(v=>({...v,policy:"Выявленные группы"})));
+ base.grouped={config:grouped.config,counts:grouped.counts,hist:grouped.hist,diagnostics:grouped.diagnostics};return base;
 }

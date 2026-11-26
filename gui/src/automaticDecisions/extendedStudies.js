@@ -5,10 +5,10 @@ import {studentCritical} from "./statistics.js";
 const seq=n=>Array.from({length:n},(_,i)=>i),sum=a=>a.reduce((s,v)=>s+v,0),mean=a=>sum(a)/a.length,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const integer=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b,real=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b;
 const fail=()=>{throw Error("Некорректные параметры серии");};
-export const STUDY_VERSION="E2.10-experimental-v1";
+export const STUDY_VERSION="E2.11-experimental-v1";
 export const FACTORS={prior:{label:"π",min:.01,max:.8},c:{label:"c",min:0,max:3},m:{label:"M",min:100,max:100000},rhoScale:{label:"Множитель ρ",min:0,max:1},drop:{label:"Пропуски",min:0,max:.9}};
 const METRICS=["coverage","loss","lower","tight","upperRisk","posteriorMass","violation","width","identityGap"];
-export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false};
+export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false,discoverGroups:false,discoveryFraction:.5,groupThreshold:.05,groupMethod:"complete",groupMaxSize:50};
 function grid(a,b,n,round=false){return [...new Set(seq(n).map(i=>{const v=a+(b-a)*i/(n-1);return round?Math.round(v):v;}))];}
 function range(a,b,n,f){if(!FACTORS[f]||!integer(n,2,15)||!real(a,FACTORS[f].min,FACTORS[f].max)||!real(b,a,FACTORS[f].max)||(f==="m"&&(!Number.isInteger(a)||!Number.isInteger(b))))fail();return grid(a,b,n,f==="m");}
 function baseFor(raw){return validateExt({...raw,stress:"none",eta:0});}
@@ -27,7 +27,7 @@ export function validateStudy(mode,raw){
  if(mode==="optimization"&&(!["grid","multiclass"].includes(c.experiment)||!real(c.requiredCoverage,0,1)||!real(c.riskLimit,0,1000)||!real(c.agentCost,0,1000)||!real(c.groupCost,0,1000)||!integer(c.groupsMin,1,8)||!integer(c.groupsMax,c.groupsMin,8)||!integer(c.agentsMin,2,20)||!integer(c.agentsMax,c.agentsMin,20)||!integer(c.mcN,1000,50000)))fail();
  if(mode==="dynamics"&&(!["adaptive","sequential"].includes(c.experiment)||!integer(c.steps,100,20000)||!integer(c.window,20,2000)||!integer(c.delay,0,2000)||!integer(c.updateEvery,1,1000)||!real(c.changeAt,.1,.9)||!real(c.shift,0,1)||!integer(c.rounds,2,20)||!real(c.waitCost,0,1000)))fail();
  if(mode==="queue"&&(!real(c.arrival,.01,100000)||!real(c.service,.01,100000)||!integer(c.operators,1,100)||!["model","lower","manual"].includes(c.gammaSource)||!real(c.gamma,0,1)||!real(c.deadline,0,10000)||!integer(c.arrivals,100,100000)||!integer(c.warmup,0,c.arrivals-2)||!integer(c.queueReps,1,30)))fail();
- if(mode==="data"&&(!real(c.trainFraction,.1,.9)||typeof c.iidTest!=="boolean"))fail();
+ if(mode==="data"&&(!real(c.trainFraction,.1,.9)||typeof c.iidTest!=="boolean"||typeof c.discoverGroups!=="boolean"||!real(c.discoveryFraction,.1,.9)||!real(c.groupThreshold,1e-8,1)||!["complete","components"].includes(c.groupMethod)||!integer(c.groupMaxSize,1,50)))fail();
  return {...c,...base,stress:c.stress,experiment:c.experiment};
 }
 export function studyPlan(mode,raw){

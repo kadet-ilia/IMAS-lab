@@ -8,7 +8,7 @@ const sum=a=>a.reduce((s,v)=>s+v,0),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),seq
 export const seedFor=(s,i)=>((s+Math.imul(i+1,0x9e3779b9))>>>0)||1;
 export function validateExt(raw={}){
  const c={...BASE,...raw},B=c.groups?.length,real=(v,l,h)=>Number.isFinite(v)&&v>=l&&v<=h,int=(v,l,h)=>Number.isInteger(v)&&v>=l&&v<=h;
- if(!int(B,1,20)||c.groups.some(n=>!int(n,2,50)))throw Error("1–20 групп по 2–50 агентов");
+ if(!int(B,1,20)||c.groups.some(n=>!int(n,1,50)))throw Error("1–20 групп по 1–50 агентов");
  if(!Array.isArray(c.u)||c.u.length!==2||c.u.some(a=>!Array.isArray(a)||a.length!==B||a.some(v=>!real(v,0,1)))||!Array.isArray(c.rho)||c.rho.length!==B||c.rho.some(v=>!real(v,0,1)))throw Error("Неверные групповые параметры");
  if(!int(c.m,1,100000)||!int(c.reps,1,30)||!int(c.seed,1,4294967295)||!real(c.prior,1e-8,1-1e-8)||!real(c.alpha,1e-8,1-1e-8)||!real(c.drop,0,1)||!real(c.eta,0,1)||!real(c.rhoScale,0,1)||!real(c.b,1e-8,1000)||!real(c.f,1e-8,1000)||!real(c.d,0,c.f)||c.d>=c.f||c.d>=c.b||!real(c.c,0,1000)||!STRESS.includes(c.stress)||!FAMILIES.includes(c.family))throw Error("Некорректные параметры расширенной модели");
  return c;
