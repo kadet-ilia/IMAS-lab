@@ -808,6 +808,29 @@ const jointE2=await downloadE2();
 if(jointE2.tables.rows.length!==2||jointE2.records.length!==2||jointE2.tables.rows.some(r=>r.unsafe!==0))throw Error("E2.16 joint design missing");
 extensionEvidence["Совместная оптимизация"]={candidates:2};
 
+// E2.17–E2.18: evaluate Bayesian/CRC policies and incomplete observations in the real UI.
+await modesE2.getByRole("button",{name:"Чувствительность",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид анализа"}).selectOption("alternatives");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+await page.getByRole("spinbutton",{name:"Объём отдельной калибровки риска"}).fill("100");
+await page.getByRole("spinbutton",{name:"Объём независимого теста"}).fill("1000");
+await runE2();
+const alternativeE2=await downloadE2();
+if(alternativeE2.tables.rows.length!==5||alternativeE2.records[0].riskRows.length!==100||new Set(alternativeE2.tables.rows.map(r=>r.guarantee)).size!==5)throw Error("E2.17 alternatives missing");
+extensionEvidence["Байес и конформный риск"]={policies:5,calibration:100,test:1000};
+await modesE2.getByRole("button",{name:"Данные",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид калибровочных наблюдений"}).selectOption("partial");
+await page.getByRole("button",{name:"Загрузить синтетический пример",exact:true}).click();
+await page.locator(".sidebar").getByText(/Синтетический пример неполной калибровки/).waitFor();
+await runE2();
+const partialE2=await downloadE2();
+if(partialE2.tables.rows.length!==2||!partialE2.dataResult.partial||partialE2.dataResult.certified||partialE2.dataResult.split.testN!==400)throw Error("E2.18 partial calibration missing");
+await page.getByRole("heading",{name:"Оценки условных законов и границы завершения",exact:true}).waitFor();
+extensionEvidence["Неполная калибровка"]={policies:2,test:400};
+
+
 
 
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Общее",exact:true}).click();
