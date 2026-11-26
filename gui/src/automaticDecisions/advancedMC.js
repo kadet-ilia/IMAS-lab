@@ -1,4 +1,4 @@
-// E2.10: arbitrary groups, stratified importance sampling by true class,
+// E2.10: arbitrary groups, importance sampling by true class,
 // predeclared sequential looks and simultaneous finite-sample bounds.
 import {validateExt,lawsExt,calibration,tables,point,select,loss,seedFor,sampler,spaceSize,exactExt} from "./extendedModel.js";
 import {random} from "./kernel.js";
@@ -10,7 +10,7 @@ export function validateAdvancedMC(c){
  if(c.mcExact&&spaceSize(b)>300000)throw Error("Отключите точное сравнение при размере пространства >300000");
  return {...c,...b};
 }
-// Exact binomial bounds via Chernoff inversion, including zero observed events.
+// Conservative binomial bounds via Chernoff inversion, including zero observed events.
 // KL inversion produces conservative two-sided intervals, not a normal approximation.
 export function bernoulliBounds(k,n,alpha){
  if(!Number.isInteger(k)||!Number.isInteger(n)||k<0||k>n||n<1||!(alpha>0&&alpha<1))throw Error("Некорректный биномиальный интервал");
@@ -32,7 +32,7 @@ export function advancedMC(raw,rep){
   for(;n<end;n++){const {x,ix}=next(),[lo,hi]=point(c,T,ix);methods.forEach((m,i)=>hist[i][x][select(c,lo,hi,m)]++);}
   const h=Math.sqrt(Math.log(2/alpha)/(2*n));
   const rows=methods.map((method,i)=>{
-   const H=hist[i],cov=sum(H.map((a,x)=>w[x]*(a[0]+a[1])))/n,L=sum(H.map((a,x)=>w[x]*sum(a.map((v,j)=>v*loss(c,j,x))))/n,miss=w[1]*H[1][0]/n,fp=w[0]*H[0][1]/n;
+   const H=hist[i],cov=sum(H.map((a,x)=>w[x]*(a[0]+a[1])))/n,L=sum(H.map((a,x)=>w[x]*sum(a.map((v,j)=>v*loss(c,j,x)))))/n,miss=w[1]*H[1][0]/n,fp=w[0]*H[0][1]/n;
    const [ml,mh]=bernoulliBounds(H[1][0],n,alpha).map(v=>clamp(v*w[1],0,c.prior)),[fl,fh]=bernoulliBounds(H[0][1],n,alpha).map(v=>clamp(v*w[0],0,1-c.prior));
    return {n,method,coverage:cov,coverageLow:clamp(cov-wmax*h,0,1),coverageHigh:clamp(cov+wmax*h,0,1),loss:L,lossLow:clamp(L-wmax*Lmax*h,0,Lmax),lossHigh:clamp(L+wmax*Lmax*h,0,Lmax),miss,missLow:ml,missHigh:mh,false:fp,falseLow:fl,falseHigh:fh,missEvents:H[1][0],falseEvents:H[0][1],exactCoverage:method===6?exact?.coverage??null:null,exactLoss:method===6?exact?.loss??null:null};
   });
