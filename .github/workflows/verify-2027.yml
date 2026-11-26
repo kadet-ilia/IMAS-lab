@@ -102,6 +102,12 @@ jobs:
       - name: Independent extended model reference (SciPy LP)
         working-directory: gui
         run: node scripts/check-e2-extended.mjs
+      - name: Independent E2 dynamic, Bayesian and partial-data reference
+        working-directory: gui
+        run: node scripts/check-e2-next.mjs e2-next-verification.json
+      - name: Measure isolated process memory
+        working-directory: gui
+        run: node scripts/measure-e2-memory.mjs e2-memory.json
       - uses: actions/upload-artifact@v4
         with:
           name: imas-e2-reproducibility
@@ -109,6 +115,8 @@ jobs:
             gui/public/e2-fixtures.json
             research/automatic-decisions/reference/*.csv
             research/automatic-decisions/reference/checks.txt
+            gui/e2-next-verification.json
+            gui/e2-memory.json
   existing-python:
     runs-on: ubuntu-latest
     steps:
