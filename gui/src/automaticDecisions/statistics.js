@@ -14,3 +14,14 @@ export function summarize(records,alpha=.05){const raw={};for(const r of records
  const keys={fixed:["scenario","method"],matched:["scenario","method"],validity:["scenario"],sensitivity:["n"],cost:["cost","method"],validation:["scenario","method"],monte_carlo:["scenario"],certificate_checks:["scenario"]};
  const tables=Object.fromEntries(Object.entries(raw).map(([key,rows])=>[key,aggregate(rows,keys[key]||[])]));if(raw.matched)tables.paired=paired(raw.matched,alpha);
  return {raw,tables};}
+
+ // Conservative numerical bracket for a beta quantile. The returned endpoints
+ // bracket the root of the computed CDF; independent SciPy tests check accuracy.
+export function betaQuantileBracket(a,b,p){
+ if(!(a>0&&b>0&&p>=0&&p<=1))throw Error("Некорректные параметры beta");
+ if(p===0)return [0,0];if(p===1)return [1,1];
+ // Work in the smaller tail to avoid catastrophic cancellation at p near one.
+ if(p>.5){const [l,h]=betaQuantileBracket(b,a,1-p);return [1-h,1-l];}
+ let l=0,h=1;for(let i=0;i<80;i++){const m=(l+h)/2,v=ibeta(a,b,m);if(!Number.isFinite(v))throw Error("Неустойчивый расчёт beta CDF");if(v<p)l=m;else h=m;if(h-l<1e-14)break;}
+ return [l,h];
+}
