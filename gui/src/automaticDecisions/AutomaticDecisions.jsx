@@ -153,12 +153,12 @@ const GeneralDecisions=forwardRef(function GeneralDecisions({navigation,onRuntim
 
 const E2_MODES=[["general","Общее"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["robustness","Устойчивость"],["optimization","Оптимизация"],["dynamics","Динамика"],["queue","СМО"],["data","Данные"]];
 export const AutomaticDecisions=forwardRef(function AutomaticDecisions(props,ref){
- const [mode,setMode]=useState("general"),[busy,setBusy]=useState(false),actions=useRef(null);
+ const [mode,setMode]=useState("general"),[mcExtended,setMcExtended]=useState(false),[busy,setBusy]=useState(false),actions=useRef(null);
  const onRuntime=React.useCallback(value=>{setBusy(Boolean(value.running));props.onRuntimeChange?.(value);},[props.onRuntimeChange]);
  useImperativeHandle(ref,()=>({start:()=>actions.current?.start(),stop:()=>actions.current?.stop(),reset:()=>actions.current?.reset(),newSeed:()=>actions.current?.newSeed()}),[]);
  const navigation=React.isValidElement(props.navigation)?React.cloneElement(props.navigation,{},React.Children.map(props.navigation.props.children,child=>{
   if(!React.isValidElement(child)||child.props.className!=="r27-mode-tabs")return child;
   return React.cloneElement(child,{},E2_MODES.map(([id,name])=><button type="button" key={id} className={"r27-mode-tab"+(id===mode?" active":"")} aria-pressed={id===mode} disabled={busy} title={name} onClick={()=>setMode(id)}>{name}</button>));
  })):props.navigation;
- return mode==="mc"?<MonteCarloPanel {...props} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>:mode==="general"?<GeneralDecisions {...props} navigation={navigation} onRuntimeChange={onRuntime} ref={actions}/>:<ExtendedStudyPanel key={mode} {...props} mode={mode} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>;
+ return mode==="mc"?(mcExtended?<ExtendedStudyPanel key="mcExtended" {...props} mode="mcExtended" onSwitchMC={()=>setMcExtended(false)} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>:<MonteCarloPanel {...props} onSwitchMC={()=>setMcExtended(true)} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>):mode==="general"?<GeneralDecisions {...props} navigation={navigation} onRuntimeChange={onRuntime} ref={actions}/>:<ExtendedStudyPanel key={mode} {...props} mode={mode} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>;
 });

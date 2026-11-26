@@ -1,20 +1,22 @@
+import {advancedMC,validateAdvancedMC} from "./advancedMC.js";
 import {BASE,EXT_VERSION,validateExt,uniformGroups,seedFor,spaceSize,lawsExt,calibration,tables,point,select,loss,exactExt,simulateExt,sampler,mixLaw,groupGeometry,l1Radius,draw} from "./extendedModel.js";
 import {random,multinomial,extrem} from "./kernel.js";
 import {studentCritical} from "./statistics.js";
 const seq=n=>Array.from({length:n},(_,i)=>i),sum=a=>a.reduce((s,v)=>s+v,0),mean=a=>sum(a)/a.length,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const integer=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b,real=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b;
 const fail=()=>{throw Error("Некорректные параметры серии");};
-export const STUDY_VERSION="E2.8-experimental-v1";
+export const STUDY_VERSION="E2.10-experimental-v1";
 export const FACTORS={prior:{label:"π",min:.01,max:.8},c:{label:"c",min:0,max:3},m:{label:"M",min:100,max:100000},rhoScale:{label:"Множитель ρ",min:0,max:1},drop:{label:"Пропуски",min:0,max:.9}};
 const METRICS=["coverage","loss","lower","tight","upperRisk","posteriorMass","violation","width","identityGap"];
-export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false};
+export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false};
 function grid(a,b,n,round=false){return [...new Set(seq(n).map(i=>{const v=a+(b-a)*i/(n-1);return round?Math.round(v):v;}))];}
 function range(a,b,n,f){if(!FACTORS[f]||!integer(n,2,15)||!real(a,FACTORS[f].min,FACTORS[f].max)||!real(b,a,FACTORS[f].max)||(f==="m"&&(!Number.isInteger(a)||!Number.isInteger(b))))fail();return grid(a,b,n,f==="m");}
 function baseFor(raw){return validateExt({...raw,stress:"none",eta:0});}
 function compact(r){return Object.fromEntries(["size","coverage","loss","miss","false","posteriorMass","width","violation","nomCoverage","nomLoss","lower","tight","upperRisk","assumptionsValid","identityGap","radii","counts"].filter(k=>r[k]!==undefined).map(k=>[k,r[k]]));}
 export function validateStudy(mode,raw){
  const c={...EXTRA_DEFAULTS,...raw},base=baseFor(c);
- if(!["sensitivity","robustness","optimization","dynamics","queue","data"].includes(mode))fail();
+ if(!["sensitivity","robustness","optimization","dynamics","queue","data","mcExtended"].includes(mode))fail();
+ if(mode==="mcExtended")return validateAdvancedMC({...c,stress:c.stress==="all"?"none":c.stress});
  if(mode==="sensitivity"){
   if(!["grid","two","sobol","morris","families","scale"].includes(c.experiment))fail();
   if(["grid","two"].includes(c.experiment)){range(c.from,c.to,c.levels,c.factor);if(c.experiment==="two"){if(c.factor===c.factor2)fail();range(c.from2,c.to2,c.levels2,c.factor2);if(c.levels*c.levels2*c.reps>450)throw Error("Не более 450 расчётов за серию");}}
@@ -30,7 +32,8 @@ export function validateStudy(mode,raw){
 }
 export function studyPlan(mode,raw){
  const c=validateStudy(mode,raw),units=[];
- if(mode==="sensitivity"){
+ if(mode==="mcExtended"){for(let rep=0;rep<c.reps;rep++)units.push({kind:"advancedMC",rep});}
+ else if(mode==="sensitivity"){
   if(c.experiment==="scale"){for(const B of [...new Set([1,2,3,5,10,20,c.groupsMax].filter(v=>v<=c.groupsMax))])units.push({kind:"scale",B,n:c.agentsMax});}
   else if(c.experiment==="sobol"){
    // Independent uniform inputs: prior, price, correlation multiplier and missingness.
@@ -73,6 +76,7 @@ export function evaluateUnit(mode,raw,unit,total=1){
   let exact=null,exactMs=null;if(r.size<=300000){const start=performance.now();exact=compact(exactExt(conf,r.counts));exactMs=performance.now()-start;}
   return {unit,modelConfig:conf,agents:unit.B*unit.n,size:r.size,N:r.N,seed:r.seed,counts:r.counts,hist:r.hist,coverage:r.coverage,loss:r.loss,coverageLow:r.coverageLow,coverageHigh:r.coverageHigh,lossLow:r.lossLow,lossHigh:r.lossHigh,exactCoverage:exact?.coverage??null,exactLoss:exact?.loss??null,mcMs,exactMs,groupTableCells:conf.groups.reduce((a,n)=>a+2*2*(n+1)*(n+2)/2,0),ms:performance.now()-t0};
  }
+ if(unit.kind==="advancedMC")return {unit,...advancedMC(c,unit.rep),ms:performance.now()-t0};
  if(unit.kind==="queue"){const r=queueStudy(c,unit.rep);return {unit,...r,ms:performance.now()-t0};}
  if(unit.kind==="adaptive")return {unit,...adaptiveStudy(c),ms:performance.now()-t0};
  if(unit.kind==="sequential")return {unit,...sequentialStudy(c),ms:performance.now()-t0};
@@ -82,6 +86,7 @@ export function evaluateUnit(mode,raw,unit,total=1){
 function stats(a,alpha){const m=mean(a),s=a.length>1?Math.sqrt(sum(a.map(v=>(v-m)**2))/(a.length-1)):null,h=s===null?null:studentCritical(alpha,a.length-1)*s/Math.sqrt(a.length);return {mean:m,sd:s,lo:h===null?null:m-h,hi:h===null?null:m+h};}
 export function summarizeStudy(mode,c,records){
  if(!records.length)return {rows:[],aux:[]};
+ if(mode==="mcExtended")return {rows:records.flatMap(r=>r.summary),aux:records.flatMap(r=>r.trace.map(v=>({...v,rep:r.unit.rep})))};
  if(mode==="sensitivity"&&c.experiment==="morris"){
   const rows=[];for(const metric of ["coverage","loss","tight"])for(const factor of ["prior","c","rhoScale","drop"]){const effects=[];for(let i=0;i<c.sobolN;i++){const tr=records.filter(r=>r.unit.i===i).sort((a,b)=>a.unit.step-b.unit.step);if(tr.length!==5)continue;const j=tr.findIndex(r=>r.unit.tag===factor);effects.push((tr[j][metric]-tr[j-1][metric])/tr[j].unit.delta);}if(effects.length){const m=mean(effects);rows.push({metric,factor,N:effects.length,mu:m,muStar:mean(effects.map(Math.abs)),sigma:effects.length>1?Math.sqrt(sum(effects.map(v=>(v-m)**2))/(effects.length-1)):null});}}return {rows,aux:[]};
  }
