@@ -1,0 +1,297 @@
+{
+  "seed": 20261129,
+  "uniqueConfigurations": 384,
+  "run": 45883469294,
+  "commit": "3e9e422da6b464c34f561763815ea1127722f37d",
+  "results": [
+    {
+      "mode": "monitor",
+      "cases": 128,
+      "all": {
+        "cases": 128,
+        "detectors": [
+          {
+            "policy": "Отзыв: многомасштабное окно",
+            "falseAlarms": 0,
+            "preAlarms": 0,
+            "detections": 96,
+            "delay": 233.65625,
+            "lossGain": -0.1947829991343937
+          },
+          {
+            "policy": "Отзыв: e-процесс",
+            "falseAlarms": 0,
+            "preAlarms": 0,
+            "detections": 102,
+            "delay": 200.85294117647058,
+            "lossGain": -0.2146180896990475
+          }
+        ],
+        "refitLossGain": 0.17082209027046835,
+        "refitUpdates": 27.65625
+      },
+      "confirmation": {
+        "cases": 64,
+        "detectors": [
+          {
+            "policy": "Отзыв: многомасштабное окно",
+            "falseAlarms": 0,
+            "preAlarms": 0,
+            "detections": 48,
+            "delay": 231.5,
+            "lossGain": -0.19738832314177682
+          },
+          {
+            "policy": "Отзыв: e-процесс",
+            "falseAlarms": 0,
+            "preAlarms": 0,
+            "detections": 52,
+            "delay": 222.25,
+            "lossGain": -0.22037860682927818
+          }
+        ],
+        "refitLossGain": 0.17977558071678593,
+        "refitUpdates": 27.96875
+      },
+      "strata": {
+        "driftAll": {
+          "cases": 32,
+          "detectors": [
+            {
+              "policy": "Отзыв: многомасштабное окно",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 32,
+              "delay": 200.5,
+              "lossGain": -0.03843330275277627
+            },
+            {
+              "policy": "Отзыв: e-процесс",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 32,
+              "delay": 142.3125,
+              "lossGain": -0.04038612561804936
+            }
+          ],
+          "refitLossGain": 0.07068971879337071,
+          "refitUpdates": 36.71875
+        },
+        "drift": {
+          "cases": 32,
+          "detectors": [
+            {
+              "policy": "Отзыв: многомасштабное окно",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 32,
+              "delay": 332.59375,
+              "lossGain": -0.34140774005548347
+            },
+            {
+              "policy": "Отзыв: e-процесс",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 32,
+              "delay": 200.5,
+              "lossGain": -0.37180087511362525
+            }
+          ],
+          "refitLossGain": 0.2646491608205171,
+          "refitUpdates": 33.65625
+        },
+        "cross": {
+          "cases": 32,
+          "detectors": [
+            {
+              "policy": "Отзыв: многомасштабное окно",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 0,
+              "delay": null,
+              "lossGain": 0
+            },
+            {
+              "policy": "Отзыв: e-процесс",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 6,
+              "delay": 947.5,
+              "lossGain": -0.03688287698405001
+            }
+          ],
+          "refitLossGain": 0.026081007630461606,
+          "refitUpdates": 3.9375
+        },
+        "mnar": {
+          "cases": 32,
+          "detectors": [
+            {
+              "policy": "Отзыв: многомасштабное окно",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 32,
+              "delay": 167.875,
+              "lossGain": -0.3992909537293151
+            },
+            {
+              "policy": "Отзыв: e-процесс",
+              "falseAlarms": 0,
+              "preAlarms": 0,
+              "detections": 32,
+              "delay": 119.75,
+              "lossGain": -0.40940248108046534
+            }
+          ],
+          "refitLossGain": 0.3218684738375243,
+          "refitUpdates": 36.3125
+        }
+      },
+      "ms": 20844
+    },
+    {
+      "mode": "rare",
+      "cases": 128,
+      "all": [
+        {
+          "policy": "Обычная выборка",
+          "cases": 128,
+          "rmseMiss": 0.0007762644308086856,
+          "rmseFalse": 0.0009829687282417543,
+          "rmseLoss": 0.007875829994353425,
+          "meanESS": 4000,
+          "meanMissEvents": 8.2734375,
+          "meanFalseEvents": 12.0234375,
+          "meanWeight": 1,
+          "missCovered": 128,
+          "falseCovered": 128
+        },
+        {
+          "policy": "По классу",
+          "cases": 128,
+          "rmseMiss": 0.0004284843405476959,
+          "rmseFalse": 0.0011017350868950592,
+          "rmseLoss": 0.007754506271813937,
+          "meanESS": 2957.0023384901847,
+          "meanMissEvents": 27.625,
+          "meanFalseEvents": 8.4921875,
+          "meanWeight": 1.0006795591641657,
+          "missCovered": 128,
+          "falseCovered": 128
+        },
+        {
+          "policy": "По классу и внутри класса",
+          "cases": 128,
+          "rmseMiss": 0.00029103404474688433,
+          "rmseFalse": 0.0005587293347171667,
+          "rmseLoss": 0.005727078105966366,
+          "meanESS": 2127.257754220854,
+          "meanMissEvents": 212.078125,
+          "meanFalseEvents": 128.7890625,
+          "meanWeight": 0.9954454677710366,
+          "missCovered": 128,
+          "falseCovered": 128
+        }
+      ],
+      "confirmation": [
+        {
+          "policy": "Обычная выборка",
+          "cases": 64,
+          "rmseMiss": 0.0007878073507886623,
+          "rmseFalse": 0.0008389351918003193,
+          "rmseLoss": 0.007657546132547646,
+          "meanESS": 4000,
+          "meanMissEvents": 8.375,
+          "meanFalseEvents": 12.421875,
+          "meanWeight": 1,
+          "missCovered": 64,
+          "falseCovered": 64
+        },
+        {
+          "policy": "По классу",
+          "cases": 64,
+          "rmseMiss": 0.00044561226665562647,
+          "rmseFalse": 0.0010985581305343372,
+          "rmseLoss": 0.008258512988016652,
+          "meanESS": 2873.0134678974323,
+          "meanMissEvents": 29.703125,
+          "meanFalseEvents": 8.265625,
+          "meanWeight": 0.9994667030884024,
+          "missCovered": 64,
+          "falseCovered": 64
+        },
+        {
+          "policy": "По классу и внутри класса",
+          "cases": 64,
+          "rmseMiss": 0.0002525138129448992,
+          "rmseFalse": 0.0005404944263633498,
+          "rmseLoss": 0.005550342982913034,
+          "meanESS": 2086.94306594029,
+          "meanMissEvents": 207.8125,
+          "meanFalseEvents": 115.765625,
+          "meanWeight": 0.9938562456522613,
+          "missCovered": 64,
+          "falseCovered": 64
+        }
+      ],
+      "ms": 699
+    },
+    {
+      "mode": "pac",
+      "cases": 128,
+      "all": [
+        {
+          "policy": "pac",
+          "cases": 128,
+          "nonempty": 0,
+          "coverage": 0,
+          "risk": 0,
+          "exceeds": 0
+        },
+        {
+          "policy": "bernstein",
+          "cases": 128,
+          "nonempty": 120,
+          "coverage": 0.5433478595722313,
+          "risk": 0.01777329560102736,
+          "exceeds": 0
+        },
+        {
+          "policy": "combined",
+          "cases": 128,
+          "nonempty": 113,
+          "coverage": 0.5018585052990354,
+          "risk": 0.016666993539364704,
+          "exceeds": 0
+        }
+      ],
+      "confirmation": [
+        {
+          "policy": "pac",
+          "cases": 64,
+          "nonempty": 0,
+          "coverage": 0,
+          "risk": 0,
+          "exceeds": 0
+        },
+        {
+          "policy": "bernstein",
+          "cases": 64,
+          "nonempty": 59,
+          "coverage": 0.5385770336147658,
+          "risk": 0.018565844660925843,
+          "exceeds": 0
+        },
+        {
+          "policy": "combined",
+          "cases": 64,
+          "nonempty": 54,
+          "coverage": 0.488160761529141,
+          "risk": 0.01736573793688094,
+          "exceeds": 0
+        }
+      ],
+      "ms": 864
+    }
+  ]
+}
