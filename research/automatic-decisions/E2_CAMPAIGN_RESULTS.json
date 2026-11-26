@@ -1,0 +1,3311 @@
+{
+  "schema": "imas-e2-campaign-results-v2",
+  "primaryRun": 45840121350,
+  "repeatAndFollowupRun": 45840496012,
+  "sourceCommit": "e141b45f27c0c6ce96ecbcd24a83953152c05580",
+  "totalDistinctConfigurations": 1152,
+  "sections": [
+    {
+      "mode": "general",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.903247835,
+          "median": 0.9144546254,
+          "min": 0.480638345,
+          "max": 0.9978256862,
+          "positive": 128,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.5135418361,
+          "median": 0.4975334565,
+          "min": 0.08684781479,
+          "max": 1.418692092,
+          "positive": 128,
+          "negative": 0
+        },
+        "extraCoverage": {
+          "n": 128,
+          "mean": 0.09675216501,
+          "median": 0.08554537464,
+          "min": 0.002174313842,
+          "max": 0.519361655,
+          "positive": 128,
+          "negative": 0
+        },
+        "lossGain": {
+          "n": 128,
+          "mean": 0.07597589172,
+          "median": 0.06206872515,
+          "min": 0.002361587462,
+          "max": 0.4734918537,
+          "positive": 128,
+          "negative": 0
+        },
+        "certificateGain": {
+          "n": 128,
+          "mean": 0.04139693603,
+          "median": 0.04661975627,
+          "min": 0,
+          "max": 0.08861568978,
+          "positive": 123,
+          "negative": 0
+        },
+        "violation": {
+          "n": 128,
+          "mean": 0.005468654703,
+          "median": 0,
+          "min": 0,
+          "max": 0.06852468223,
+          "positive": 31,
+          "negative": 0
+        },
+        "valid": {
+          "n": 128,
+          "mean": 0.625,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 80,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.9010902689,
+          "median": 0.9130022723,
+          "min": 0.7110248417,
+          "max": 0.9978256862,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.5078293465,
+          "median": 0.4856813328,
+          "min": 0.08684781479,
+          "max": 1.020822864,
+          "positive": 64,
+          "negative": 0
+        },
+        "extraCoverage": {
+          "n": 64,
+          "mean": 0.09890973108,
+          "median": 0.08699772773,
+          "min": 0.002174313842,
+          "max": 0.2889751583,
+          "positive": 64,
+          "negative": 0
+        },
+        "lossGain": {
+          "n": 64,
+          "mean": 0.07655265268,
+          "median": 0.06286290239,
+          "min": 0.002361587462,
+          "max": 0.2412730475,
+          "positive": 64,
+          "negative": 0
+        },
+        "certificateGain": {
+          "n": 64,
+          "mean": 0.04281745684,
+          "median": 0.04728791799,
+          "min": 0,
+          "max": 0.08861568978,
+          "positive": 62,
+          "negative": 0
+        },
+        "violation": {
+          "n": 64,
+          "mean": 0.00553466409,
+          "median": 0,
+          "min": 0,
+          "max": 0.06852468223,
+          "positive": 14,
+          "negative": 0
+        },
+        "valid": {
+          "n": 64,
+          "mean": 0.625,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 40,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.9054054011,
+          "median": 0.9154050835,
+          "min": 0.480638345,
+          "max": 0.9964427796,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.5192543257,
+          "median": 0.500990769,
+          "min": 0.1547376451,
+          "max": 1.418692092,
+          "positive": 64,
+          "negative": 0
+        },
+        "extraCoverage": {
+          "n": 64,
+          "mean": 0.09459459894,
+          "median": 0.08459491645,
+          "min": 0.003557220401,
+          "max": 0.519361655,
+          "positive": 64,
+          "negative": 0
+        },
+        "lossGain": {
+          "n": 64,
+          "mean": 0.07539913077,
+          "median": 0.06192720981,
+          "min": 0.002968645322,
+          "max": 0.4734918537,
+          "positive": 64,
+          "negative": 0
+        },
+        "certificateGain": {
+          "n": 64,
+          "mean": 0.03997641521,
+          "median": 0.04542816362,
+          "min": 0,
+          "max": 0.07020883115,
+          "positive": 61,
+          "negative": 0
+        },
+        "violation": {
+          "n": 64,
+          "mean": 0.005402645316,
+          "median": 0,
+          "min": 0,
+          "max": 0.05013595569,
+          "positive": 17,
+          "negative": 0
+        },
+        "valid": {
+          "n": 64,
+          "mean": 0.625,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 40,
+          "negative": 0
+        }
+      },
+      "strata": {
+        "valid=0": {
+          "violation": {
+            "n": 48,
+            "mean": 0.01458307921,
+            "median": 0.009330789546,
+            "min": 0,
+            "max": 0.06852468223,
+            "positive": 31,
+            "negative": 0
+          },
+          "certificateGain": {
+            "n": 48,
+            "mean": 0.05216199866,
+            "median": 0.05108648102,
+            "min": 0.03386309739,
+            "max": 0.08300473382,
+            "positive": 48,
+            "negative": 0
+          },
+          "extraCoverage": {
+            "n": 48,
+            "mean": 0.1158132964,
+            "median": 0.08800119777,
+            "min": 0.03147945343,
+            "max": 0.519361655,
+            "positive": 48,
+            "negative": 0
+          },
+          "lossGain": {
+            "n": 48,
+            "mean": 0.09714893073,
+            "median": 0.0751434521,
+            "min": 0.02235230872,
+            "max": 0.4734918537,
+            "positive": 48,
+            "negative": 0
+          }
+        },
+        "valid=1": {
+          "violation": {
+            "n": 80,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          },
+          "certificateGain": {
+            "n": 80,
+            "mean": 0.03493789845,
+            "median": 0.03797901871,
+            "min": 0,
+            "max": 0.08861568978,
+            "positive": 75,
+            "negative": 0
+          },
+          "extraCoverage": {
+            "n": 80,
+            "mean": 0.0853154862,
+            "median": 0.08240663001,
+            "min": 0.002174313842,
+            "max": 0.2889751583,
+            "positive": 80,
+            "negative": 0
+          },
+          "lossGain": {
+            "n": 80,
+            "mean": 0.06327206832,
+            "median": 0.0586609716,
+            "min": 0.002361587462,
+            "max": 0.2412730475,
+            "positive": 80,
+            "negative": 0
+          }
+        }
+      },
+      "ms": 848
+    },
+    {
+      "mode": "mc",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.8809434455,
+          "median": 0.8930987465,
+          "min": 0.6163285555,
+          "max": 0.9811771726,
+          "positive": 128,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.1868316939,
+          "median": 0.180140692,
+          "min": 0.04077560657,
+          "max": 0.4485672294,
+          "positive": 128,
+          "negative": 0
+        },
+        "trueMiss": {
+          "n": 128,
+          "mean": 0.00550266477,
+          "median": 0.004360698957,
+          "min": 0.0002369417075,
+          "max": 0.02327932429,
+          "positive": 128,
+          "negative": 0
+        },
+        "plainMissSquared": {
+          "n": 128,
+          "mean": 9.660226453e-7,
+          "median": 3.897227056e-7,
+          "min": 2.380278621e-11,
+          "max": 0.00001016895472,
+          "positive": 123,
+          "negative": 0
+        },
+        "importanceMissSquared": {
+          "n": 128,
+          "mean": 1.569506359e-7,
+          "median": 4.009859405e-8,
+          "min": 1.129806478e-11,
+          "max": 0.00000131135397,
+          "positive": 111,
+          "negative": 0
+        },
+        "plainFalseSquared": {
+          "n": 128,
+          "mean": 6.814120818e-7,
+          "median": 1.009487701e-7,
+          "min": 0,
+          "max": 0.00000845498237,
+          "positive": 111,
+          "negative": 0
+        },
+        "importanceFalseSquared": {
+          "n": 128,
+          "mean": 0.00000130296206,
+          "median": 1.19088531e-7,
+          "min": 0,
+          "max": 0.0000224533137,
+          "positive": 104,
+          "negative": 0
+        },
+        "plainLossSquared": {
+          "n": 128,
+          "mean": 0.0000486154748,
+          "median": 0.00002391333213,
+          "min": 5.002467287e-9,
+          "max": 0.0005257736313,
+          "positive": 128,
+          "negative": 0
+        },
+        "importanceLossSquared": {
+          "n": 128,
+          "mean": 0.00003721074096,
+          "median": 0.00001539334993,
+          "min": 1.577236413e-9,
+          "max": 0.0003817440525,
+          "positive": 128,
+          "negative": 0
+        },
+        "plainMissInterval": {
+          "n": 128,
+          "mean": 1,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "positive": 128,
+          "negative": 0
+        },
+        "importanceMissInterval": {
+          "n": 128,
+          "mean": 1,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "positive": 128,
+          "negative": 0
+        },
+        "plainMissWidth": {
+          "n": 128,
+          "mean": 0.006607844288,
+          "median": 0.006303313928,
+          "min": 0.001152998984,
+          "max": 0.01461168923,
+          "positive": 128,
+          "negative": 0
+        },
+        "importanceMissWidth": {
+          "n": 128,
+          "mean": 0.002539273031,
+          "median": 0.002333361719,
+          "min": 0.0001970419065,
+          "max": 0.007512572165,
+          "positive": 128,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.8805769151,
+          "median": 0.8930096778,
+          "min": 0.6661239451,
+          "max": 0.9811771726,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.1855020477,
+          "median": 0.1692622105,
+          "min": 0.04077560657,
+          "max": 0.4454747003,
+          "positive": 64,
+          "negative": 0
+        },
+        "trueMiss": {
+          "n": 64,
+          "mean": 0.006034255512,
+          "median": 0.004307770505,
+          "min": 0.0005549741766,
+          "max": 0.02041112015,
+          "positive": 64,
+          "negative": 0
+        },
+        "plainMissSquared": {
+          "n": 64,
+          "mean": 0.000001249924209,
+          "median": 4.433738063e-7,
+          "min": 5.484307308e-10,
+          "max": 0.00001016895472,
+          "positive": 63,
+          "negative": 0
+        },
+        "importanceMissSquared": {
+          "n": 64,
+          "mean": 1.281689404e-7,
+          "median": 3.829974481e-8,
+          "min": 1.129806478e-11,
+          "max": 0.000001063230359,
+          "positive": 57,
+          "negative": 0
+        },
+        "plainFalseSquared": {
+          "n": 64,
+          "mean": 8.067825878e-7,
+          "median": 9.62960768e-8,
+          "min": 0,
+          "max": 0.00000845498237,
+          "positive": 54,
+          "negative": 0
+        },
+        "importanceFalseSquared": {
+          "n": 64,
+          "mean": 0.000001281306904,
+          "median": 1.11097214e-7,
+          "min": 0,
+          "max": 0.00001321772367,
+          "positive": 50,
+          "negative": 0
+        },
+        "plainLossSquared": {
+          "n": 64,
+          "mean": 0.00006180142014,
+          "median": 0.00003249900566,
+          "min": 6.490001322e-9,
+          "max": 0.0004164560968,
+          "positive": 64,
+          "negative": 0
+        },
+        "importanceLossSquared": {
+          "n": 64,
+          "mean": 0.00003787957258,
+          "median": 0.00001053371775,
+          "min": 1.577236413e-9,
+          "max": 0.0001846196744,
+          "positive": 64,
+          "negative": 0
+        },
+        "plainMissInterval": {
+          "n": 64,
+          "mean": 1,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "positive": 64,
+          "negative": 0
+        },
+        "importanceMissInterval": {
+          "n": 64,
+          "mean": 1,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "positive": 64,
+          "negative": 0
+        },
+        "plainMissWidth": {
+          "n": 64,
+          "mean": 0.006892183658,
+          "median": 0.006154869184,
+          "min": 0.001152998984,
+          "max": 0.01461168923,
+          "positive": 64,
+          "negative": 0
+        },
+        "importanceMissWidth": {
+          "n": 64,
+          "mean": 0.002517023333,
+          "median": 0.002052737456,
+          "min": 0.0005341723352,
+          "max": 0.007153579188,
+          "positive": 64,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.8813099759,
+          "median": 0.8937278039,
+          "min": 0.6163285555,
+          "max": 0.9733068363,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.1881613401,
+          "median": 0.182469436,
+          "min": 0.04825628237,
+          "max": 0.4485672294,
+          "positive": 64,
+          "negative": 0
+        },
+        "trueMiss": {
+          "n": 64,
+          "mean": 0.004971074028,
+          "median": 0.004382487214,
+          "min": 0.0002369417075,
+          "max": 0.02327932429,
+          "positive": 64,
+          "negative": 0
+        },
+        "plainMissSquared": {
+          "n": 64,
+          "mean": 6.821210817e-7,
+          "median": 3.349627693e-7,
+          "min": 2.380278621e-11,
+          "max": 0.00000717877863,
+          "positive": 60,
+          "negative": 0
+        },
+        "importanceMissSquared": {
+          "n": 64,
+          "mean": 1.857323314e-7,
+          "median": 5.745651815e-8,
+          "min": 1.153304307e-11,
+          "max": 0.00000131135397,
+          "positive": 54,
+          "negative": 0
+        },
+        "plainFalseSquared": {
+          "n": 64,
+          "mean": 5.560415757e-7,
+          "median": 1.075531343e-7,
+          "min": 0,
+          "max": 0.000004043294591,
+          "positive": 57,
+          "negative": 0
+        },
+        "importanceFalseSquared": {
+          "n": 64,
+          "mean": 0.000001324617216,
+          "median": 1.451825548e-7,
+          "min": 0,
+          "max": 0.0000224533137,
+          "positive": 54,
+          "negative": 0
+        },
+        "plainLossSquared": {
+          "n": 64,
+          "mean": 0.00003542952947,
+          "median": 0.00000968060916,
+          "min": 5.002467287e-9,
+          "max": 0.0005257736313,
+          "positive": 64,
+          "negative": 0
+        },
+        "importanceLossSquared": {
+          "n": 64,
+          "mean": 0.00003654190933,
+          "median": 0.00002048875172,
+          "min": 5.432598958e-9,
+          "max": 0.0003817440525,
+          "positive": 64,
+          "negative": 0
+        },
+        "plainMissInterval": {
+          "n": 64,
+          "mean": 1,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "positive": 64,
+          "negative": 0
+        },
+        "importanceMissInterval": {
+          "n": 64,
+          "mean": 1,
+          "median": 1,
+          "min": 1,
+          "max": 1,
+          "positive": 64,
+          "negative": 0
+        },
+        "plainMissWidth": {
+          "n": 64,
+          "mean": 0.006323504918,
+          "median": 0.006303313928,
+          "min": 0.001790589286,
+          "max": 0.01399666905,
+          "positive": 64,
+          "negative": 0
+        },
+        "importanceMissWidth": {
+          "n": 64,
+          "mean": 0.002561522728,
+          "median": 0.002692079899,
+          "min": 0.0001970419065,
+          "max": 0.007512572165,
+          "positive": 64,
+          "negative": 0
+        }
+      },
+      "strata": {},
+      "ms": 1353
+    },
+    {
+      "mode": "sensitivity",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.8406145978,
+          "median": 0.8573470716,
+          "min": 0.6429612369,
+          "max": 0.9489843067,
+          "positive": 128,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.3609908408,
+          "median": 0.3644297119,
+          "min": 0.144073406,
+          "max": 0.5781572839,
+          "positive": 128,
+          "negative": 0
+        },
+        "lossInteraction": {
+          "n": 128,
+          "mean": -0.08083007872,
+          "median": -0.07425661779,
+          "min": -0.2489880681,
+          "max": -0.01530985126,
+          "positive": 0,
+          "negative": 128
+        },
+        "coverageInteraction": {
+          "n": 128,
+          "mean": 0.06882558819,
+          "median": 0.05551784839,
+          "min": -0.03498585926,
+          "max": 0.249488741,
+          "positive": 115,
+          "negative": 13
+        },
+        "dropPenaltyLowRho": {
+          "n": 128,
+          "mean": 0.0957695373,
+          "median": 0.06296496597,
+          "min": -0.03931395272,
+          "max": 0.4692953346,
+          "positive": 115,
+          "negative": 13
+        },
+        "dropPenaltyHighRho": {
+          "n": 128,
+          "mean": 0.0269439491,
+          "median": 0.02080268113,
+          "min": -0.1408751193,
+          "max": 0.2834100006,
+          "positive": 81,
+          "negative": 47
+        },
+        "correlationPenaltyLowDrop": {
+          "n": 128,
+          "mean": 0.1112723169,
+          "median": 0.08876716435,
+          "min": -0.03286241788,
+          "max": 0.3171845648,
+          "positive": 124,
+          "negative": 4
+        },
+        "correlationPenaltyHighDrop": {
+          "n": 128,
+          "mean": 0.04244672875,
+          "median": 0.03497502485,
+          "min": -0.04283964175,
+          "max": 0.1751581683,
+          "positive": 121,
+          "negative": 7
+        },
+        "crcRisk": {
+          "n": 128,
+          "mean": 0.05361171875,
+          "median": 0.051,
+          "min": 0.003,
+          "max": 0.117,
+          "positive": 128,
+          "negative": 0
+        },
+        "pacRisk": {
+          "n": 128,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "crcCoverage": {
+          "n": 128,
+          "mean": 0.5413164063,
+          "median": 0.54475,
+          "min": 0.2035,
+          "max": 0.958,
+          "positive": 128,
+          "negative": 0
+        },
+        "pacCoverage": {
+          "n": 128,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "bayesLoss": {
+          "n": 128,
+          "mean": 0.418320057,
+          "median": 0.4141859548,
+          "min": 0.1343487824,
+          "max": 0.7237457177,
+          "positive": 128,
+          "negative": 0
+        },
+        "m6Loss": {
+          "n": 128,
+          "mean": 0.4650284298,
+          "median": 0.4661477537,
+          "min": 0.1679713823,
+          "max": 0.7392743643,
+          "positive": 128,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.8499678409,
+          "median": 0.8610213086,
+          "min": 0.6977765611,
+          "max": 0.9489843067,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.3667584163,
+          "median": 0.3707957378,
+          "min": 0.1776614237,
+          "max": 0.5744392202,
+          "positive": 64,
+          "negative": 0
+        },
+        "lossInteraction": {
+          "n": 64,
+          "mean": -0.0832763306,
+          "median": -0.07800863644,
+          "min": -0.2489880681,
+          "max": -0.02004032904,
+          "positive": 0,
+          "negative": 64
+        },
+        "coverageInteraction": {
+          "n": 64,
+          "mean": 0.0626899081,
+          "median": 0.04780352658,
+          "min": -0.03498585926,
+          "max": 0.2366419244,
+          "positive": 55,
+          "negative": 9
+        },
+        "dropPenaltyLowRho": {
+          "n": 64,
+          "mean": 0.09157917977,
+          "median": 0.05890655276,
+          "min": -0.0267357731,
+          "max": 0.4692953346,
+          "positive": 57,
+          "negative": 7
+        },
+        "dropPenaltyHighRho": {
+          "n": 64,
+          "mean": 0.02888927167,
+          "median": 0.02584081508,
+          "min": -0.1366928768,
+          "max": 0.2834100006,
+          "positive": 40,
+          "negative": 24
+        },
+        "correlationPenaltyLowDrop": {
+          "n": 64,
+          "mean": 0.1033562454,
+          "median": 0.07631731149,
+          "min": -0.03286241788,
+          "max": 0.3171845648,
+          "positive": 60,
+          "negative": 4
+        },
+        "correlationPenaltyHighDrop": {
+          "n": 64,
+          "mean": 0.04066633727,
+          "median": 0.03198241201,
+          "min": -0.04283964175,
+          "max": 0.1751581683,
+          "positive": 60,
+          "negative": 4
+        },
+        "crcRisk": {
+          "n": 64,
+          "mean": 0.052734375,
+          "median": 0.051,
+          "min": 0.015,
+          "max": 0.117,
+          "positive": 64,
+          "negative": 0
+        },
+        "pacRisk": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "crcCoverage": {
+          "n": 64,
+          "mean": 0.5263359375,
+          "median": 0.5195,
+          "min": 0.2035,
+          "max": 0.766,
+          "positive": 64,
+          "negative": 0
+        },
+        "pacCoverage": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "bayesLoss": {
+          "n": 64,
+          "mean": 0.4306923427,
+          "median": 0.4261615952,
+          "min": 0.2036920163,
+          "max": 0.6767596897,
+          "positive": 64,
+          "negative": 0
+        },
+        "m6Loss": {
+          "n": 64,
+          "mean": 0.4775964199,
+          "median": 0.4788523477,
+          "min": 0.2227383635,
+          "max": 0.7222919484,
+          "positive": 64,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.8312613547,
+          "median": 0.8393179069,
+          "min": 0.6429612369,
+          "max": 0.9466715081,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.3552232653,
+          "median": 0.3595200973,
+          "min": 0.144073406,
+          "max": 0.5781572839,
+          "positive": 64,
+          "negative": 0
+        },
+        "lossInteraction": {
+          "n": 64,
+          "mean": -0.07838382683,
+          "median": -0.07106034956,
+          "min": -0.2137052338,
+          "max": -0.01530985126,
+          "positive": 0,
+          "negative": 64
+        },
+        "coverageInteraction": {
+          "n": 64,
+          "mean": 0.07496126829,
+          "median": 0.06361599063,
+          "min": -0.02650652293,
+          "max": 0.249488741,
+          "positive": 60,
+          "negative": 4
+        },
+        "dropPenaltyLowRho": {
+          "n": 64,
+          "mean": 0.09995989483,
+          "median": 0.06428099077,
+          "min": -0.03931395272,
+          "max": 0.304466684,
+          "positive": 58,
+          "negative": 6
+        },
+        "dropPenaltyHighRho": {
+          "n": 64,
+          "mean": 0.02499862654,
+          "median": 0.02030012337,
+          "min": -0.1408751193,
+          "max": 0.2264417004,
+          "positive": 41,
+          "negative": 23
+        },
+        "correlationPenaltyLowDrop": {
+          "n": 64,
+          "mean": 0.1191883885,
+          "median": 0.0984040211,
+          "min": 0.004819143014,
+          "max": 0.3027864695,
+          "positive": 64,
+          "negative": 0
+        },
+        "correlationPenaltyHighDrop": {
+          "n": 64,
+          "mean": 0.04422712022,
+          "median": 0.03798209008,
+          "min": -0.009706497155,
+          "max": 0.1239347336,
+          "positive": 61,
+          "negative": 3
+        },
+        "crcRisk": {
+          "n": 64,
+          "mean": 0.0544890625,
+          "median": 0.0525,
+          "min": 0.003,
+          "max": 0.099,
+          "positive": 64,
+          "negative": 0
+        },
+        "pacRisk": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "crcCoverage": {
+          "n": 64,
+          "mean": 0.556296875,
+          "median": 0.54975,
+          "min": 0.247,
+          "max": 0.958,
+          "positive": 64,
+          "negative": 0
+        },
+        "pacCoverage": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "bayesLoss": {
+          "n": 64,
+          "mean": 0.4059477712,
+          "median": 0.4053684626,
+          "min": 0.1343487824,
+          "max": 0.7237457177,
+          "positive": 64,
+          "negative": 0
+        },
+        "m6Loss": {
+          "n": 64,
+          "mean": 0.4524604398,
+          "median": 0.4649525313,
+          "min": 0.1679713823,
+          "max": 0.7392743643,
+          "positive": 64,
+          "negative": 0
+        }
+      },
+      "strata": {},
+      "ms": 1385
+    },
+    {
+      "mode": "robustness",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.7489141243,
+          "median": 0.8103227615,
+          "min": 0.2144780886,
+          "max": 0.9375342342,
+          "positive": 128,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.623448812,
+          "median": 0.4916226759,
+          "min": 0.1833974933,
+          "max": 2.661315876,
+          "positive": 128,
+          "negative": 0
+        },
+        "coverageChange": {
+          "n": 128,
+          "mean": -0.04941169224,
+          "median": -0.00167604785,
+          "min": -0.576274404,
+          "max": 0.1536376592,
+          "positive": 44,
+          "negative": 68
+        },
+        "lossIncrease": {
+          "n": 128,
+          "mean": 0.1956229982,
+          "median": 0.0318535683,
+          "min": -0.03704635229,
+          "max": 2.234433995,
+          "positive": 100,
+          "negative": 12
+        },
+        "posteriorMassChange": {
+          "n": 128,
+          "mean": -0.3160719823,
+          "median": -0.2758990546,
+          "min": -0.915395255,
+          "max": 0,
+          "positive": 0,
+          "negative": 110
+        },
+        "violation": {
+          "n": 128,
+          "mean": 0.05857577266,
+          "median": 0.005956467904,
+          "min": 0,
+          "max": 0.6855409582,
+          "positive": 99,
+          "negative": 0
+        },
+        "nominalTight": {
+          "n": 128,
+          "mean": 0.7033738144,
+          "median": 0.7665031086,
+          "min": 0.05426549608,
+          "max": 0.915617933,
+          "positive": 128,
+          "negative": 0
+        },
+        "certificateShortfall": {
+          "n": 128,
+          "mean": 0.01453019635,
+          "median": 0,
+          "min": 0,
+          "max": 0.4022562555,
+          "positive": 13,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.7450963648,
+          "median": 0.8065700315,
+          "min": 0.3201344127,
+          "max": 0.9369061356,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.6101985246,
+          "median": 0.4824603537,
+          "min": 0.1833974933,
+          "max": 2.469934571,
+          "positive": 64,
+          "negative": 0
+        },
+        "coverageChange": {
+          "n": 64,
+          "mean": -0.05259563638,
+          "median": -0.001419904575,
+          "min": -0.5319306768,
+          "max": 0.08346331197,
+          "positive": 22,
+          "negative": 34
+        },
+        "lossIncrease": {
+          "n": 64,
+          "mean": 0.1842893353,
+          "median": 0.02735809596,
+          "min": -0.03704635229,
+          "max": 1.823439886,
+          "positive": 51,
+          "negative": 5
+        },
+        "posteriorMassChange": {
+          "n": 64,
+          "mean": -0.3030131405,
+          "median": -0.2244061113,
+          "min": -0.915395255,
+          "max": 0,
+          "positive": 0,
+          "negative": 55
+        },
+        "violation": {
+          "n": 64,
+          "mean": 0.05065354166,
+          "median": 0.004655928368,
+          "min": 0,
+          "max": 0.5746256204,
+          "positive": 50,
+          "negative": 0
+        },
+        "nominalTight": {
+          "n": 64,
+          "mean": 0.704116474,
+          "median": 0.7705939816,
+          "min": 0.1678294525,
+          "max": 0.9012863212,
+          "positive": 64,
+          "negative": 0
+        },
+        "certificateShortfall": {
+          "n": 64,
+          "mean": 0.01572127414,
+          "median": 0,
+          "min": 0,
+          "max": 0.4022562555,
+          "positive": 6,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.7527318839,
+          "median": 0.8123463219,
+          "min": 0.2144780886,
+          "max": 0.9375342342,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.6366990994,
+          "median": 0.5017509826,
+          "min": 0.2246069519,
+          "max": 2.661315876,
+          "positive": 64,
+          "negative": 0
+        },
+        "coverageChange": {
+          "n": 64,
+          "mean": -0.0462277481,
+          "median": -0.00192030439,
+          "min": -0.576274404,
+          "max": 0.1536376592,
+          "positive": 22,
+          "negative": 34
+        },
+        "lossIncrease": {
+          "n": 64,
+          "mean": 0.2069566611,
+          "median": 0.03486139653,
+          "min": -0.0307947923,
+          "max": 2.234433995,
+          "positive": 49,
+          "negative": 7
+        },
+        "posteriorMassChange": {
+          "n": 64,
+          "mean": -0.329130824,
+          "median": -0.2988392395,
+          "min": -0.8754486817,
+          "max": 0,
+          "positive": 0,
+          "negative": 55
+        },
+        "violation": {
+          "n": 64,
+          "mean": 0.06649800366,
+          "median": 0.009050101055,
+          "min": 0,
+          "max": 0.6855409582,
+          "positive": 49,
+          "negative": 0
+        },
+        "nominalTight": {
+          "n": 64,
+          "mean": 0.7026311547,
+          "median": 0.7622426529,
+          "min": 0.05426549608,
+          "max": 0.915617933,
+          "positive": 64,
+          "negative": 0
+        },
+        "certificateShortfall": {
+          "n": 64,
+          "mean": 0.01333911856,
+          "median": 0,
+          "min": 0,
+          "max": 0.3596079034,
+          "positive": 7,
+          "negative": 0
+        }
+      },
+      "strata": {
+        "drift": {
+          "lossIncrease": {
+            "n": 32,
+            "mean": 0.04993016367,
+            "median": 0.040646203,
+            "min": 0.01037662764,
+            "max": 0.1587169981,
+            "positive": 32,
+            "negative": 0
+          },
+          "coverageChange": {
+            "n": 32,
+            "mean": -0.03167308217,
+            "median": -0.02193860486,
+            "min": -0.1458339714,
+            "max": -0.004116979292,
+            "positive": 0,
+            "negative": 32
+          },
+          "posteriorMassChange": {
+            "n": 32,
+            "mean": -0.2242306753,
+            "median": -0.2112188798,
+            "min": -0.655612936,
+            "max": -4.440892099e-16,
+            "positive": 0,
+            "negative": 31
+          },
+          "violation": {
+            "n": 32,
+            "mean": 0.007567548033,
+            "median": 0.00116214461,
+            "min": 0,
+            "max": 0.0618701208,
+            "positive": 24,
+            "negative": 0
+          },
+          "certificateShortfall": {
+            "n": 32,
+            "mean": 0.002102982976,
+            "median": 0,
+            "min": 0,
+            "max": 0.04777021488,
+            "positive": 3,
+            "negative": 0
+          }
+        },
+        "cross": {
+          "lossIncrease": {
+            "n": 16,
+            "mean": 0.09686456636,
+            "median": 0.08998329221,
+            "min": 0.03723675213,
+            "max": 0.1709790365,
+            "positive": 16,
+            "negative": 0
+          },
+          "coverageChange": {
+            "n": 16,
+            "mean": 0.04214555574,
+            "median": 0.02993044681,
+            "min": 0.004523455269,
+            "max": 0.1536376592,
+            "positive": 16,
+            "negative": 0
+          },
+          "posteriorMassChange": {
+            "n": 16,
+            "mean": -0.6820008928,
+            "median": -0.6862468814,
+            "min": -0.8448628106,
+            "max": -0.5160820022,
+            "positive": 0,
+            "negative": 16
+          },
+          "violation": {
+            "n": 16,
+            "mean": 0.05492464329,
+            "median": 0.0323423785,
+            "min": 0.0006346319563,
+            "max": 0.2239731085,
+            "positive": 16,
+            "negative": 0
+          },
+          "certificateShortfall": {
+            "n": 16,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          }
+        },
+        "mnar": {
+          "lossIncrease": {
+            "n": 32,
+            "mean": 0.003376142594,
+            "median": 0.003900451088,
+            "min": -0.03704635229,
+            "max": 0.04438668767,
+            "positive": 20,
+            "negative": 12
+          },
+          "coverageChange": {
+            "n": 32,
+            "mean": 0.01368591445,
+            "median": 0.01133840962,
+            "min": -0.009660825492,
+            "max": 0.05266662434,
+            "positive": 27,
+            "negative": 5
+          },
+          "posteriorMassChange": {
+            "n": 32,
+            "mean": -0.2633906957,
+            "median": -0.2631004706,
+            "min": -0.5675226333,
+            "max": -0.03429652708,
+            "positive": 0,
+            "negative": 32
+          },
+          "violation": {
+            "n": 32,
+            "mean": 0.0176006924,
+            "median": 0.01351618784,
+            "min": 0.0003457322454,
+            "max": 0.05633434042,
+            "positive": 32,
+            "negative": 0
+          },
+          "certificateShortfall": {
+            "n": 32,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          }
+        },
+        "nonexchangeable": {
+          "lossIncrease": {
+            "n": 16,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          },
+          "coverageChange": {
+            "n": 16,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          },
+          "posteriorMassChange": {
+            "n": 16,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          },
+          "violation": {
+            "n": 16,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          },
+          "certificateShortfall": {
+            "n": 16,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          }
+        },
+        "biasedMask": {
+          "lossIncrease": {
+            "n": 16,
+            "mean": 0.03359296312,
+            "median": 0.02959105379,
+            "min": 0.004306493147,
+            "max": 0.1223827049,
+            "positive": 16,
+            "negative": 0
+          },
+          "coverageChange": {
+            "n": 16,
+            "mean": -0.02000165589,
+            "median": -0.01809095759,
+            "min": -0.07405343381,
+            "max": 0.003740952582,
+            "positive": 1,
+            "negative": 15
+          },
+          "posteriorMassChange": {
+            "n": 16,
+            "mean": -0.1496040733,
+            "median": -0.07291014996,
+            "min": -0.5646283261,
+            "max": -2.220446049e-15,
+            "positive": 0,
+            "negative": 15
+          },
+          "violation": {
+            "n": 16,
+            "mean": 0.005498376143,
+            "median": 0.0009135190351,
+            "min": 0,
+            "max": 0.04671746686,
+            "positive": 12,
+            "negative": 0
+          },
+          "certificateShortfall": {
+            "n": 16,
+            "mean": 0.001436158719,
+            "median": 0,
+            "min": 0,
+            "max": 0.02297853951,
+            "positive": 1,
+            "negative": 0
+          }
+        },
+        "contamination": {
+          "lossIncrease": {
+            "n": 16,
+            "mean": 1.327913844,
+            "median": 1.472881329,
+            "min": 0.1607111335,
+            "max": 2.234433995,
+            "positive": 16,
+            "negative": 0
+          },
+          "coverageChange": {
+            "n": 16,
+            "mean": -0.3814631023,
+            "median": -0.3832152175,
+            "min": -0.576274404,
+            "max": -0.1518042283,
+            "positive": 0,
+            "negative": 16
+          },
+          "posteriorMassChange": {
+            "n": 16,
+            "mean": -0.7217281501,
+            "median": -0.7400225449,
+            "min": -0.915395255,
+            "max": -0.3866579663,
+            "positive": 0,
+            "negative": 16
+          },
+          "violation": {
+            "n": 16,
+            "mean": 0.357846681,
+            "median": 0.3771818002,
+            "min": 0,
+            "max": 0.6855409582,
+            "positive": 15,
+            "negative": 0
+          },
+          "certificateShortfall": {
+            "n": 16,
+            "mean": 0.1105994461,
+            "median": 0.04473284397,
+            "min": 0,
+            "max": 0.4022562555,
+            "positive": 9,
+            "negative": 0
+          }
+        }
+      },
+      "ms": 572
+    },
+    {
+      "mode": "optimization",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.757215011,
+          "median": 0.7947833919,
+          "min": 0.3912653092,
+          "max": 0.9479623954,
+          "positive": 128,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.4619923663,
+          "median": 0.4427999264,
+          "min": 0.1605289729,
+          "max": 0.819040096,
+          "positive": 128,
+          "negative": 0
+        },
+        "skewCoverageGain": {
+          "n": 128,
+          "mean": -0.001617672701,
+          "median": -0.0006235846611,
+          "min": -0.06621146443,
+          "max": 0.04248287745,
+          "positive": 59,
+          "negative": 69
+        },
+        "skewLossGain": {
+          "n": 128,
+          "mean": -0.00233048151,
+          "median": -0.001617533687,
+          "min": -0.04318376819,
+          "max": 0.02386734288,
+          "positive": 41,
+          "negative": 87
+        },
+        "multiCoverageGain": {
+          "n": 128,
+          "mean": 0.08553358332,
+          "median": -0.01599013586,
+          "min": -0.1763447493,
+          "max": 0.6919811035,
+          "positive": 61,
+          "negative": 67
+        },
+        "multiLossGain": {
+          "n": 128,
+          "mean": 0.1368772566,
+          "median": 0.1204070095,
+          "min": -0.04171729392,
+          "max": 0.4414826182,
+          "positive": 123,
+          "negative": 5
+        },
+        "certified": {
+          "n": 128,
+          "mean": 1.609375,
+          "median": 1.5,
+          "min": 0,
+          "max": 3,
+          "positive": 86,
+          "negative": 0
+        },
+        "balancedFeasible": {
+          "n": 128,
+          "mean": 0.5078125,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 65,
+          "negative": 0
+        },
+        "skewedFeasible": {
+          "n": 128,
+          "mean": 0.5,
+          "median": 0.5,
+          "min": 0,
+          "max": 1,
+          "positive": 64,
+          "negative": 0
+        },
+        "singleFeasible": {
+          "n": 128,
+          "mean": 0.6015625,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 77,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.761461253,
+          "median": 0.7925490334,
+          "min": 0.4190080293,
+          "max": 0.9479623954,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.4684822716,
+          "median": 0.4427999264,
+          "min": 0.1605289729,
+          "max": 0.8048014086,
+          "positive": 64,
+          "negative": 0
+        },
+        "skewCoverageGain": {
+          "n": 64,
+          "mean": -0.00179628113,
+          "median": -0.0003335758431,
+          "min": -0.06621146443,
+          "max": 0.01904156225,
+          "positive": 31,
+          "negative": 33
+        },
+        "skewLossGain": {
+          "n": 64,
+          "mean": -0.002250263958,
+          "median": -0.001229200413,
+          "min": -0.04318376819,
+          "max": 0.01619459008,
+          "positive": 22,
+          "negative": 42
+        },
+        "multiCoverageGain": {
+          "n": 64,
+          "mean": 0.09116344144,
+          "median": -0.01680480209,
+          "min": -0.1415670129,
+          "max": 0.6152804162,
+          "positive": 30,
+          "negative": 34
+        },
+        "multiLossGain": {
+          "n": 64,
+          "mean": 0.1408879719,
+          "median": 0.1191998931,
+          "min": -0.04171729392,
+          "max": 0.3641319993,
+          "positive": 60,
+          "negative": 4
+        },
+        "certified": {
+          "n": 64,
+          "mean": 1.53125,
+          "median": 1,
+          "min": 0,
+          "max": 3,
+          "positive": 43,
+          "negative": 0
+        },
+        "balancedFeasible": {
+          "n": 64,
+          "mean": 0.484375,
+          "median": 0,
+          "min": 0,
+          "max": 1,
+          "positive": 31,
+          "negative": 0
+        },
+        "skewedFeasible": {
+          "n": 64,
+          "mean": 0.46875,
+          "median": 0,
+          "min": 0,
+          "max": 1,
+          "positive": 30,
+          "negative": 0
+        },
+        "singleFeasible": {
+          "n": 64,
+          "mean": 0.578125,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 37,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.7529687689,
+          "median": 0.7976446005,
+          "min": 0.3912653092,
+          "max": 0.9350838801,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.455502461,
+          "median": 0.4412622144,
+          "min": 0.2097216239,
+          "max": 0.819040096,
+          "positive": 64,
+          "negative": 0
+        },
+        "skewCoverageGain": {
+          "n": 64,
+          "mean": -0.001439064271,
+          "median": -0.001215192805,
+          "min": -0.02678165871,
+          "max": 0.04248287745,
+          "positive": 28,
+          "negative": 36
+        },
+        "skewLossGain": {
+          "n": 64,
+          "mean": -0.002410699062,
+          "median": -0.002308701727,
+          "min": -0.03149738542,
+          "max": 0.02386734288,
+          "positive": 19,
+          "negative": 45
+        },
+        "multiCoverageGain": {
+          "n": 64,
+          "mean": 0.0799037252,
+          "median": -0.01350192506,
+          "min": -0.1763447493,
+          "max": 0.6919811035,
+          "positive": 31,
+          "negative": 33
+        },
+        "multiLossGain": {
+          "n": 64,
+          "mean": 0.1328665414,
+          "median": 0.1221065058,
+          "min": -0.0001496517236,
+          "max": 0.4414826182,
+          "positive": 63,
+          "negative": 1
+        },
+        "certified": {
+          "n": 64,
+          "mean": 1.6875,
+          "median": 2,
+          "min": 0,
+          "max": 3,
+          "positive": 43,
+          "negative": 0
+        },
+        "balancedFeasible": {
+          "n": 64,
+          "mean": 0.53125,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 34,
+          "negative": 0
+        },
+        "skewedFeasible": {
+          "n": 64,
+          "mean": 0.53125,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 34,
+          "negative": 0
+        },
+        "singleFeasible": {
+          "n": 64,
+          "mean": 0.625,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 40,
+          "negative": 0
+        }
+      },
+      "strata": {},
+      "ms": 644
+    },
+    {
+      "mode": "dynamics",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.8613828125,
+          "median": 0.908,
+          "min": 0,
+          "max": 1,
+          "positive": 126,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.6511853982,
+          "median": 0.6703325973,
+          "min": 0.3273448604,
+          "max": 0.9775131205,
+          "positive": 128,
+          "negative": 0
+        },
+        "forgettingGain": {
+          "n": 128,
+          "mean": -0.1801973801,
+          "median": -0.1151716543,
+          "min": -0.6030801803,
+          "max": 0.02200781427,
+          "positive": 2,
+          "negative": 99
+        },
+        "windowGain": {
+          "n": 128,
+          "mean": -0.007233866199,
+          "median": 0,
+          "min": -0.2392815202,
+          "max": 0.1965297212,
+          "positive": 42,
+          "negative": 54
+        },
+        "longGain": {
+          "n": 128,
+          "mean": -0.00720896613,
+          "median": 0,
+          "min": -0.2392815202,
+          "max": 0.1965297212,
+          "positive": 42,
+          "negative": 54
+        },
+        "nominalActiveGain": {
+          "n": 128,
+          "mean": 0.02998602182,
+          "median": 0.01956830434,
+          "min": 0,
+          "max": 0.1379535041,
+          "positive": 107,
+          "negative": 0
+        },
+        "testActiveGain": {
+          "n": 128,
+          "mean": 0.0324112583,
+          "median": 0.01927203475,
+          "min": -0.07634362558,
+          "max": 0.246,
+          "positive": 100,
+          "negative": 7
+        },
+        "queryGain": {
+          "n": 128,
+          "mean": 0.0125078125,
+          "median": 0,
+          "min": -2.345,
+          "max": 1.139,
+          "positive": 49,
+          "negative": 47
+        },
+        "alarm": {
+          "n": 128,
+          "mean": 0.015625,
+          "median": 0,
+          "min": 0,
+          "max": 1,
+          "positive": 2,
+          "negative": 0
+        },
+        "unsafe": {
+          "n": 128,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.845546875,
+          "median": 0.9165,
+          "min": 0,
+          "max": 1,
+          "positive": 62,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.6706417459,
+          "median": 0.6930338946,
+          "min": 0.3363709467,
+          "max": 0.9365632733,
+          "positive": 64,
+          "negative": 0
+        },
+        "forgettingGain": {
+          "n": 64,
+          "mean": -0.1751963554,
+          "median": -0.1063122879,
+          "min": -0.6030801803,
+          "max": 0.02200781427,
+          "positive": 2,
+          "negative": 48
+        },
+        "windowGain": {
+          "n": 64,
+          "mean": -0.01183169707,
+          "median": 0,
+          "min": -0.2392815202,
+          "max": 0.04409829091,
+          "positive": 22,
+          "negative": 27
+        },
+        "longGain": {
+          "n": 64,
+          "mean": -0.01178189693,
+          "median": 0,
+          "min": -0.2392815202,
+          "max": 0.04409829091,
+          "positive": 22,
+          "negative": 27
+        },
+        "nominalActiveGain": {
+          "n": 64,
+          "mean": 0.02939930304,
+          "median": 0.02152242879,
+          "min": 0,
+          "max": 0.12431204,
+          "positive": 52,
+          "negative": 0
+        },
+        "testActiveGain": {
+          "n": 64,
+          "mean": 0.03296490665,
+          "median": 0.02380079836,
+          "min": -0.009017302753,
+          "max": 0.171195347,
+          "positive": 50,
+          "negative": 2
+        },
+        "queryGain": {
+          "n": 64,
+          "mean": 0.03184375,
+          "median": 0,
+          "min": -0.812,
+          "max": 1.139,
+          "positive": 26,
+          "negative": 23
+        },
+        "alarm": {
+          "n": 64,
+          "mean": 0.015625,
+          "median": 0,
+          "min": 0,
+          "max": 1,
+          "positive": 1,
+          "negative": 0
+        },
+        "unsafe": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.87721875,
+          "median": 0.902,
+          "min": 0.38,
+          "max": 1,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.6317290505,
+          "median": 0.6393600851,
+          "min": 0.3273448604,
+          "max": 0.9775131205,
+          "positive": 64,
+          "negative": 0
+        },
+        "forgettingGain": {
+          "n": 64,
+          "mean": -0.1851984048,
+          "median": -0.1207984812,
+          "min": -0.5863665613,
+          "max": 0,
+          "positive": 0,
+          "negative": 51
+        },
+        "windowGain": {
+          "n": 64,
+          "mean": -0.00263603533,
+          "median": 0,
+          "min": -0.1493914365,
+          "max": 0.1965297212,
+          "positive": 20,
+          "negative": 27
+        },
+        "longGain": {
+          "n": 64,
+          "mean": -0.00263603533,
+          "median": 0,
+          "min": -0.1493914365,
+          "max": 0.1965297212,
+          "positive": 20,
+          "negative": 27
+        },
+        "nominalActiveGain": {
+          "n": 64,
+          "mean": 0.0305727406,
+          "median": 0.01642452863,
+          "min": 0,
+          "max": 0.1379535041,
+          "positive": 55,
+          "negative": 0
+        },
+        "testActiveGain": {
+          "n": 64,
+          "mean": 0.03185760994,
+          "median": 0.01488575972,
+          "min": -0.07634362558,
+          "max": 0.246,
+          "positive": 50,
+          "negative": 5
+        },
+        "queryGain": {
+          "n": 64,
+          "mean": -0.006828125,
+          "median": 0,
+          "min": -2.345,
+          "max": 1,
+          "positive": 23,
+          "negative": 24
+        },
+        "alarm": {
+          "n": 64,
+          "mean": 0.015625,
+          "median": 0,
+          "min": 0,
+          "max": 1,
+          "positive": 1,
+          "negative": 0
+        },
+        "unsafe": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        }
+      },
+      "strata": {
+        "shift=false": {
+          "forgettingGain": {
+            "n": 64,
+            "mean": -0.1762670523,
+            "median": -0.1139689541,
+            "min": -0.5906655965,
+            "max": 0.02200781427,
+            "positive": 2,
+            "negative": 49
+          },
+          "windowGain": {
+            "n": 64,
+            "mean": -0.0008317448437,
+            "median": 0,
+            "min": -0.2392815202,
+            "max": 0.1965297212,
+            "positive": 24,
+            "negative": 24
+          },
+          "longGain": {
+            "n": 64,
+            "mean": -0.0008317448437,
+            "median": 0,
+            "min": -0.2392815202,
+            "max": 0.1965297212,
+            "positive": 24,
+            "negative": 24
+          },
+          "nominalActiveGain": {
+            "n": 64,
+            "mean": 0.02452798744,
+            "median": 0.01554537308,
+            "min": 0,
+            "max": 0.1025669511,
+            "positive": 49,
+            "negative": 0
+          },
+          "testActiveGain": {
+            "n": 64,
+            "mean": 0.02841259584,
+            "median": 0.01686891198,
+            "min": -0.07634362558,
+            "max": 0.246,
+            "positive": 45,
+            "negative": 4
+          },
+          "alarm": {
+            "n": 64,
+            "mean": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "positive": 0,
+            "negative": 0
+          }
+        },
+        "shift=true": {
+          "forgettingGain": {
+            "n": 64,
+            "mean": -0.1841277079,
+            "median": -0.1164472456,
+            "min": -0.6030801803,
+            "max": 0,
+            "positive": 0,
+            "negative": 50
+          },
+          "windowGain": {
+            "n": 64,
+            "mean": -0.01363598755,
+            "median": 0,
+            "min": -0.1507486951,
+            "max": 0.05844724567,
+            "positive": 18,
+            "negative": 30
+          },
+          "longGain": {
+            "n": 64,
+            "mean": -0.01358618742,
+            "median": 0,
+            "min": -0.1507486951,
+            "max": 0.05844724567,
+            "positive": 18,
+            "negative": 30
+          },
+          "nominalActiveGain": {
+            "n": 64,
+            "mean": 0.03544405621,
+            "median": 0.02049914391,
+            "min": 0,
+            "max": 0.1379535041,
+            "positive": 58,
+            "negative": 0
+          },
+          "testActiveGain": {
+            "n": 64,
+            "mean": 0.03640992075,
+            "median": 0.02313311485,
+            "min": -0.009017302753,
+            "max": 0.171195347,
+            "positive": 55,
+            "negative": 3
+          },
+          "alarm": {
+            "n": 64,
+            "mean": 0.03125,
+            "median": 0,
+            "min": 0,
+            "max": 1,
+            "positive": 2,
+            "negative": 0
+          }
+        }
+      },
+      "ms": 2106
+    },
+    {
+      "mode": "queue",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.8070534974,
+          "median": 0.828440501,
+          "min": 0.4571428571,
+          "max": 0.9256449165,
+          "positive": 128,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.5114292682,
+          "median": 0.4910871668,
+          "min": 0.1821316614,
+          "max": 1.172685678,
+          "positive": 128,
+          "negative": 0
+        },
+        "coverageGain": {
+          "n": 128,
+          "mean": 0.02611475101,
+          "median": 0.006716249718,
+          "min": 0,
+          "max": 0.2028665932,
+          "positive": 84,
+          "negative": 0
+        },
+        "lossGain": {
+          "n": 128,
+          "mean": 0.07853091709,
+          "median": 0.006267440237,
+          "min": -0.01200416261,
+          "max": 0.9749709111,
+          "positive": 81,
+          "negative": 3
+        },
+        "failureGain": {
+          "n": 128,
+          "mean": 0.01905603606,
+          "median": 0,
+          "min": 0,
+          "max": 0.1929437707,
+          "positive": 55,
+          "negative": 0
+        },
+        "queueGain": {
+          "n": 128,
+          "mean": 0.3967912466,
+          "median": 0.04597438368,
+          "min": 0,
+          "max": 4.019068907,
+          "positive": 84,
+          "negative": 0
+        },
+        "unsafe": {
+          "n": 128,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "baseFailure": {
+          "n": 128,
+          "mean": 0.02789575988,
+          "median": 0,
+          "min": 0,
+          "max": 0.3164277839,
+          "positive": 62,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.8206995456,
+          "median": 0.8320568677,
+          "min": 0.606741573,
+          "max": 0.9256449165,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.507192043,
+          "median": 0.4842379735,
+          "min": 0.2086743121,
+          "max": 1.116439838,
+          "positive": 64,
+          "negative": 0
+        },
+        "coverageGain": {
+          "n": 64,
+          "mean": 0.0254360653,
+          "median": 0.005272042951,
+          "min": 0,
+          "max": 0.2028665932,
+          "positive": 38,
+          "negative": 0
+        },
+        "lossGain": {
+          "n": 64,
+          "mean": 0.07481429361,
+          "median": 0.003768498616,
+          "min": -0.01200416261,
+          "max": 0.9749709111,
+          "positive": 36,
+          "negative": 2
+        },
+        "failureGain": {
+          "n": 64,
+          "mean": 0.01827740548,
+          "median": 0,
+          "min": 0,
+          "max": 0.1929437707,
+          "positive": 23,
+          "negative": 0
+        },
+        "queueGain": {
+          "n": 64,
+          "mean": 0.4607452974,
+          "median": 0.03463174021,
+          "min": 0,
+          "max": 4.019068907,
+          "positive": 38,
+          "negative": 0
+        },
+        "unsafe": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "baseFailure": {
+          "n": 64,
+          "mean": 0.02676014696,
+          "median": 0,
+          "min": 0,
+          "max": 0.3164277839,
+          "positive": 29,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.7934074492,
+          "median": 0.8240058619,
+          "min": 0.4571428571,
+          "max": 0.9165885661,
+          "positive": 64,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.5156664934,
+          "median": 0.502990457,
+          "min": 0.1821316614,
+          "max": 1.172685678,
+          "positive": 64,
+          "negative": 0
+        },
+        "coverageGain": {
+          "n": 64,
+          "mean": 0.02679343671,
+          "median": 0.007712428662,
+          "min": 0,
+          "max": 0.1761565836,
+          "positive": 46,
+          "negative": 0
+        },
+        "lossGain": {
+          "n": 64,
+          "mean": 0.08224754056,
+          "median": 0.01231874666,
+          "min": -0.003493145561,
+          "max": 0.698350586,
+          "positive": 45,
+          "negative": 1
+        },
+        "failureGain": {
+          "n": 64,
+          "mean": 0.01983466665,
+          "median": 0.001479289941,
+          "min": 0,
+          "max": 0.1529411765,
+          "positive": 32,
+          "negative": 0
+        },
+        "queueGain": {
+          "n": 64,
+          "mean": 0.3328371958,
+          "median": 0.05772208047,
+          "min": 0,
+          "max": 3.313664777,
+          "positive": 46,
+          "negative": 0
+        },
+        "unsafe": {
+          "n": 64,
+          "mean": 0,
+          "median": 0,
+          "min": 0,
+          "max": 0,
+          "positive": 0,
+          "negative": 0
+        },
+        "baseFailure": {
+          "n": 64,
+          "mean": 0.02903137281,
+          "median": 0.004584671014,
+          "min": 0,
+          "max": 0.1708185053,
+          "positive": 33,
+          "negative": 0
+        }
+      },
+      "strata": {
+        "offered>=1.5=false": {
+          "coverageGain": {
+            "n": 49,
+            "mean": 0.01143679264,
+            "median": 0,
+            "min": 0,
+            "max": 0.08831168831,
+            "positive": 24,
+            "negative": 0
+          },
+          "lossGain": {
+            "n": 49,
+            "mean": 0.02582354172,
+            "median": 0,
+            "min": -0.003493145561,
+            "max": 0.2609030431,
+            "positive": 22,
+            "negative": 2
+          },
+          "failureGain": {
+            "n": 49,
+            "mean": 0.005424306482,
+            "median": 0,
+            "min": 0,
+            "max": 0.07012987013,
+            "positive": 11,
+            "negative": 0
+          },
+          "queueGain": {
+            "n": 49,
+            "mean": 0.08118416572,
+            "median": 0,
+            "min": 0,
+            "max": 0.8865213057,
+            "positive": 24,
+            "negative": 0
+          }
+        },
+        "offered>=1.5=true": {
+          "coverageGain": {
+            "n": 79,
+            "mean": 0.03521880114,
+            "median": 0.01315789474,
+            "min": 0,
+            "max": 0.2028665932,
+            "positive": 60,
+            "negative": 0
+          },
+          "lossGain": {
+            "n": 79,
+            "mean": 0.1112228335,
+            "median": 0.0214564189,
+            "min": -0.01200416261,
+            "max": 0.9749709111,
+            "positive": 59,
+            "negative": 1
+          },
+          "failureGain": {
+            "n": 79,
+            "mean": 0.02751115947,
+            "median": 0.005623242737,
+            "min": 0,
+            "max": 0.1929437707,
+            "positive": 44,
+            "negative": 0
+          },
+          "queueGain": {
+            "n": 79,
+            "mean": 0.5925475372,
+            "median": 0.1846794497,
+            "min": 0,
+            "max": 4.019068907,
+            "positive": 60,
+            "negative": 0
+          }
+        }
+      },
+      "ms": 218
+    },
+    {
+      "mode": "data",
+      "cases": 128,
+      "distinctInputs": 128,
+      "all": {
+        "coverage": {
+          "n": 128,
+          "mean": 0.2250263243,
+          "median": 0.05172477608,
+          "min": 0,
+          "max": 0.7367303609,
+          "positive": 70,
+          "negative": 0
+        },
+        "loss": {
+          "n": 128,
+          "mean": 0.9077553992,
+          "median": 0.8533036531,
+          "min": 0.3853444107,
+          "max": 1.544792301,
+          "positive": 128,
+          "negative": 0
+        },
+        "groupLossGain": {
+          "n": 64,
+          "mean": -0.03782150332,
+          "median": -0.005354267613,
+          "min": -0.4521097359,
+          "max": 0.08106785928,
+          "positive": 14,
+          "negative": 38
+        },
+        "groupCoverageGain": {
+          "n": 64,
+          "mean": -0.06175460973,
+          "median": -0.02824345422,
+          "min": -0.4986737401,
+          "max": 0.1656441718,
+          "positive": 8,
+          "negative": 43
+        },
+        "groupEscalationCostIncrease": {
+          "n": 64,
+          "mean": 0.06522154099,
+          "median": 0.02798688216,
+          "min": -0.1560336563,
+          "max": 0.5040650431,
+          "positive": 43,
+          "negative": 8
+        },
+        "groupAutomaticLossChange": {
+          "n": 64,
+          "mean": -0.02740003767,
+          "median": -0.01021821664,
+          "min": -0.1962864721,
+          "max": 0.07934560327,
+          "positive": 6,
+          "negative": 37
+        },
+        "meanBetweenGain": {
+          "n": 61,
+          "mean": 0.1204932633,
+          "median": 0.1203613359,
+          "min": 0.005613022307,
+          "max": 0.3031990395,
+          "positive": 61,
+          "negative": 0
+        },
+        "maxBetweenGain": {
+          "n": 61,
+          "mean": 0.3025208869,
+          "median": 0.309298282,
+          "min": -0.02835211972,
+          "max": 0.6640172133,
+          "positive": 57,
+          "negative": 3
+        },
+        "emLossGain": {
+          "n": 64,
+          "mean": 0.1242287499,
+          "median": 0.1073595145,
+          "min": -0.04456679995,
+          "max": 0.4107397143,
+          "positive": 60,
+          "negative": 4
+        },
+        "completionLossGain": {
+          "n": 64,
+          "mean": -0.4236225498,
+          "median": -0.4040002335,
+          "min": -0.9333163198,
+          "max": -3.885780586e-15,
+          "positive": 0,
+          "negative": 63
+        },
+        "completionCoverageGap": {
+          "n": 64,
+          "mean": 0.4802471543,
+          "median": 0.5154191996,
+          "min": 0,
+          "max": 0.7661691542,
+          "positive": 63,
+          "negative": 0
+        },
+        "emCoverageGap": {
+          "n": 64,
+          "mean": -0.2873770636,
+          "median": -0.2658218126,
+          "min": -0.6648044693,
+          "max": -0.04645476773,
+          "positive": 0,
+          "negative": 64
+        },
+        "matchedEMLossIncrease": {
+          "n": 64,
+          "mean": 0.01750212018,
+          "median": 0.007640579115,
+          "min": -0.0404496567,
+          "max": 0.09903030703,
+          "positive": 44,
+          "negative": 18
+        },
+        "matchedEMCoverageChange": {
+          "n": 64,
+          "mean": -0.01258016032,
+          "median": -0.00283218126,
+          "min": -0.118902439,
+          "max": 0.08706467662,
+          "positive": 22,
+          "negative": 36
+        },
+        "matchedBoundsLossIncrease": {
+          "n": 64,
+          "mean": 0.3880571056,
+          "median": 0.3762870359,
+          "min": 0,
+          "max": 0.8655191316,
+          "positive": 62,
+          "negative": 0
+        },
+        "matchedBoundsCoverageChange": {
+          "n": 64,
+          "mean": -0.4323679819,
+          "median": -0.4412126633,
+          "min": -0.7661691542,
+          "max": 0,
+          "positive": 0,
+          "negative": 62
+        },
+        "emConvergence": {
+          "n": 64,
+          "mean": 0.8125,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 63,
+          "negative": 0
+        }
+      },
+      "discovery": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.2408899951,
+          "median": 0.1329237564,
+          "min": 0,
+          "max": 0.7266666667,
+          "positive": 37,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.9168781735,
+          "median": 0.8501137765,
+          "min": 0.3853444107,
+          "max": 1.544792301,
+          "positive": 64,
+          "negative": 0
+        },
+        "groupLossGain": {
+          "n": 32,
+          "mean": -0.0331125879,
+          "median": -0.00495961247,
+          "min": -0.4521097359,
+          "max": 0.08106785928,
+          "positive": 8,
+          "negative": 20
+        },
+        "groupCoverageGain": {
+          "n": 32,
+          "mean": -0.04370367841,
+          "median": -0.02613410446,
+          "min": -0.4986737401,
+          "max": 0.1656441718,
+          "positive": 5,
+          "negative": 22
+        },
+        "groupEscalationCostIncrease": {
+          "n": 32,
+          "mean": 0.05260091987,
+          "median": 0.02386724148,
+          "min": -0.1560336563,
+          "max": 0.5040650431,
+          "positive": 22,
+          "negative": 5
+        },
+        "groupAutomaticLossChange": {
+          "n": 32,
+          "mean": -0.01948833197,
+          "median": -0.01010467115,
+          "min": -0.1962864721,
+          "max": 0.07934560327,
+          "positive": 5,
+          "negative": 17
+        },
+        "meanBetweenGain": {
+          "n": 30,
+          "mean": 0.1089193509,
+          "median": 0.1062309404,
+          "min": 0.01264662504,
+          "max": 0.2108683723,
+          "positive": 30,
+          "negative": 0
+        },
+        "maxBetweenGain": {
+          "n": 30,
+          "mean": 0.2797543022,
+          "median": 0.2826125248,
+          "min": -0.02835211972,
+          "max": 0.5397620702,
+          "positive": 28,
+          "negative": 1
+        },
+        "emLossGain": {
+          "n": 32,
+          "mean": 0.1307316498,
+          "median": 0.110591614,
+          "min": -0.04456679995,
+          "max": 0.4107397143,
+          "positive": 29,
+          "negative": 3
+        },
+        "completionLossGain": {
+          "n": 32,
+          "mean": -0.4398293306,
+          "median": -0.4129081396,
+          "min": -0.779445183,
+          "max": -0.04001587707,
+          "positive": 0,
+          "negative": 32
+        },
+        "completionCoverageGap": {
+          "n": 32,
+          "mean": 0.4932199288,
+          "median": 0.5309178959,
+          "min": 0.04748603352,
+          "max": 0.7661691542,
+          "positive": 32,
+          "negative": 0
+        },
+        "emCoverageGap": {
+          "n": 32,
+          "mean": -0.2823178616,
+          "median": -0.2574095853,
+          "min": -0.6648044693,
+          "max": -0.06496062992,
+          "positive": 0,
+          "negative": 32
+        },
+        "matchedEMLossIncrease": {
+          "n": 32,
+          "mean": 0.009792237349,
+          "median": 0.007108724308,
+          "min": -0.0404496567,
+          "max": 0.0718314251,
+          "positive": 18,
+          "negative": 12
+        },
+        "matchedEMCoverageChange": {
+          "n": 32,
+          "mean": -0.0005446062884,
+          "median": 0,
+          "min": -0.03853955375,
+          "max": 0.08706467662,
+          "positive": 12,
+          "negative": 15
+        },
+        "matchedBoundsLossIncrease": {
+          "n": 32,
+          "mean": 0.4036655453,
+          "median": 0.3949147174,
+          "min": 0.001914591611,
+          "max": 0.779445183,
+          "positive": 32,
+          "negative": 0
+        },
+        "matchedBoundsCoverageChange": {
+          "n": 32,
+          "mean": -0.4477678438,
+          "median": -0.4831797576,
+          "min": -0.7661691542,
+          "max": -0.002493765586,
+          "positive": 0,
+          "negative": 32
+        },
+        "emConvergence": {
+          "n": 32,
+          "mean": 0.796875,
+          "median": 1,
+          "min": 0.25,
+          "max": 1,
+          "positive": 32,
+          "negative": 0
+        }
+      },
+      "confirmation": {
+        "coverage": {
+          "n": 64,
+          "mean": 0.2091626535,
+          "median": 0.01229771885,
+          "min": 0,
+          "max": 0.7367303609,
+          "positive": 33,
+          "negative": 0
+        },
+        "loss": {
+          "n": 64,
+          "mean": 0.8986326248,
+          "median": 0.8773033561,
+          "min": 0.4213908455,
+          "max": 1.491116253,
+          "positive": 64,
+          "negative": 0
+        },
+        "groupLossGain": {
+          "n": 32,
+          "mean": -0.04253041875,
+          "median": -0.007051518358,
+          "min": -0.2657452026,
+          "max": 0.05985297866,
+          "positive": 6,
+          "negative": 18
+        },
+        "groupCoverageGain": {
+          "n": 32,
+          "mean": -0.07980554105,
+          "median": -0.02824345422,
+          "min": -0.4279475983,
+          "max": 0.03519668737,
+          "positive": 3,
+          "negative": 21
+        },
+        "groupEscalationCostIncrease": {
+          "n": 32,
+          "mean": 0.07784216212,
+          "median": 0.0299419508,
+          "min": -0.05239956251,
+          "max": 0.3924867756,
+          "positive": 21,
+          "negative": 3
+        },
+        "groupAutomaticLossChange": {
+          "n": 32,
+          "mean": -0.03531174337,
+          "median": -0.01127158281,
+          "min": -0.1834061135,
+          "max": 0.01315789474,
+          "positive": 1,
+          "negative": 20
+        },
+        "meanBetweenGain": {
+          "n": 31,
+          "mean": 0.1316938237,
+          "median": 0.1308545965,
+          "min": 0.005613022307,
+          "max": 0.3031990395,
+          "positive": 31,
+          "negative": 0
+        },
+        "maxBetweenGain": {
+          "n": 31,
+          "mean": 0.3245530656,
+          "median": 0.3400646245,
+          "min": -0.0120319971,
+          "max": 0.6640172133,
+          "positive": 29,
+          "negative": 2
+        },
+        "emLossGain": {
+          "n": 32,
+          "mean": 0.11772585,
+          "median": 0.1073595145,
+          "min": -0.005043996793,
+          "max": 0.2893753949,
+          "positive": 31,
+          "negative": 1
+        },
+        "completionLossGain": {
+          "n": 32,
+          "mean": -0.4074157689,
+          "median": -0.3758735772,
+          "min": -0.9333163198,
+          "max": -3.885780586e-15,
+          "positive": 0,
+          "negative": 31
+        },
+        "completionCoverageGap": {
+          "n": 32,
+          "mean": 0.4672743797,
+          "median": 0.4805128738,
+          "min": 0,
+          "max": 0.7578475336,
+          "positive": 31,
+          "negative": 0
+        },
+        "emCoverageGap": {
+          "n": 32,
+          "mean": -0.2924362657,
+          "median": -0.2701372074,
+          "min": -0.5863095238,
+          "max": -0.04645476773,
+          "positive": 0,
+          "negative": 32
+        },
+        "matchedEMLossIncrease": {
+          "n": 32,
+          "mean": 0.02521200302,
+          "median": 0.01452264763,
+          "min": -0.01840383811,
+          "max": 0.09903030703,
+          "positive": 26,
+          "negative": 6
+        },
+        "matchedEMCoverageChange": {
+          "n": 32,
+          "mean": -0.02461571436,
+          "median": -0.01108754115,
+          "min": -0.118902439,
+          "max": 0.07932692308,
+          "positive": 10,
+          "negative": 21
+        },
+        "matchedBoundsLossIncrease": {
+          "n": 32,
+          "mean": 0.3724486659,
+          "median": 0.3612478489,
+          "min": 0,
+          "max": 0.8655191316,
+          "positive": 30,
+          "negative": 0
+        },
+        "matchedBoundsCoverageChange": {
+          "n": 32,
+          "mean": -0.4169681201,
+          "median": -0.4184190745,
+          "min": -0.7570093458,
+          "max": 0,
+          "positive": 0,
+          "negative": 30
+        },
+        "emConvergence": {
+          "n": 32,
+          "mean": 0.828125,
+          "median": 1,
+          "min": 0,
+          "max": 1,
+          "positive": 31,
+          "negative": 0
+        }
+      },
+      "strata": {
+        "grouping": {
+          "groupLossGain": {
+            "n": 64,
+            "mean": -0.03782150332,
+            "median": -0.005354267613,
+            "min": -0.4521097359,
+            "max": 0.08106785928,
+            "positive": 14,
+            "negative": 38
+          },
+          "groupCoverageGain": {
+            "n": 64,
+            "mean": -0.06175460973,
+            "median": -0.02824345422,
+            "min": -0.4986737401,
+            "max": 0.1656441718,
+            "positive": 8,
+            "negative": 43
+          },
+          "groupEscalationCostIncrease": {
+            "n": 64,
+            "mean": 0.06522154099,
+            "median": 0.02798688216,
+            "min": -0.1560336563,
+            "max": 0.5040650431,
+            "positive": 43,
+            "negative": 8
+          },
+          "groupAutomaticLossChange": {
+            "n": 64,
+            "mean": -0.02740003767,
+            "median": -0.01021821664,
+            "min": -0.1962864721,
+            "max": 0.07934560327,
+            "positive": 6,
+            "negative": 37
+          },
+          "meanBetweenGain": {
+            "n": 61,
+            "mean": 0.1204932633,
+            "median": 0.1203613359,
+            "min": 0.005613022307,
+            "max": 0.3031990395,
+            "positive": 61,
+            "negative": 0
+          },
+          "maxBetweenGain": {
+            "n": 61,
+            "mean": 0.3025208869,
+            "median": 0.309298282,
+            "min": -0.02835211972,
+            "max": 0.6640172133,
+            "positive": 57,
+            "negative": 3
+          }
+        },
+        "partial/mnar=false": {
+          "emLossGain": {
+            "n": 32,
+            "mean": 0.1449164823,
+            "median": 0.1334877241,
+            "min": -0.01081703887,
+            "max": 0.4107397143,
+            "positive": 30,
+            "negative": 2
+          },
+          "completionLossGain": {
+            "n": 32,
+            "mean": -0.3876319619,
+            "median": -0.3734019292,
+            "min": -0.8439495316,
+            "max": -3.885780586e-15,
+            "positive": 0,
+            "negative": 31
+          },
+          "completionCoverageGap": {
+            "n": 32,
+            "mean": 0.4504170932,
+            "median": 0.4492715591,
+            "min": 0,
+            "max": 0.7570093458,
+            "positive": 31,
+            "negative": 0
+          },
+          "matchedEMLossIncrease": {
+            "n": 32,
+            "mean": 0.005033510988,
+            "median": 0.003196988201,
+            "min": -0.03482269571,
+            "max": 0.06436796093,
+            "positive": 20,
+            "negative": 10
+          },
+          "matchedEMCoverageChange": {
+            "n": 32,
+            "mean": -0.004213451365,
+            "median": 0,
+            "min": -0.06531531532,
+            "max": 0.02173913043,
+            "positive": 15,
+            "negative": 13
+          },
+          "matchedBoundsLossIncrease": {
+            "n": 32,
+            "mean": 0.3499018461,
+            "median": 0.3458846343,
+            "min": 0,
+            "max": 0.7369249378,
+            "positive": 31,
+            "negative": 0
+          },
+          "matchedBoundsCoverageChange": {
+            "n": 32,
+            "mean": -0.401233668,
+            "median": -0.4123300319,
+            "min": -0.7570093458,
+            "max": 0,
+            "positive": 0,
+            "negative": 31
+          },
+          "emConvergence": {
+            "n": 32,
+            "mean": 0.8125,
+            "median": 1,
+            "min": 0,
+            "max": 1,
+            "positive": 31,
+            "negative": 0
+          }
+        },
+        "partial/mnar=true": {
+          "emLossGain": {
+            "n": 32,
+            "mean": 0.1035410175,
+            "median": 0.1000989326,
+            "min": -0.04456679995,
+            "max": 0.2969926879,
+            "positive": 30,
+            "negative": 2
+          },
+          "completionLossGain": {
+            "n": 32,
+            "mean": -0.4596131376,
+            "median": -0.4604008086,
+            "min": -0.9333163198,
+            "max": -0.0645676423,
+            "positive": 0,
+            "negative": 32
+          },
+          "completionCoverageGap": {
+            "n": 32,
+            "mean": 0.5100772153,
+            "median": 0.5459159743,
+            "min": 0.1805929919,
+            "max": 0.7661691542,
+            "positive": 32,
+            "negative": 0
+          },
+          "matchedEMLossIncrease": {
+            "n": 32,
+            "mean": 0.02997072938,
+            "median": 0.01879518602,
+            "min": -0.0404496567,
+            "max": 0.09903030703,
+            "positive": 24,
+            "negative": 8
+          },
+          "matchedEMCoverageChange": {
+            "n": 32,
+            "mean": -0.02094686928,
+            "median": -0.01617664251,
+            "min": -0.118902439,
+            "max": 0.08706467662,
+            "positive": 7,
+            "negative": 23
+          },
+          "matchedBoundsLossIncrease": {
+            "n": 32,
+            "mean": 0.4262123651,
+            "median": 0.4186316492,
+            "min": 0,
+            "max": 0.8655191316,
+            "positive": 31,
+            "negative": 0
+          },
+          "matchedBoundsCoverageChange": {
+            "n": 32,
+            "mean": -0.4635022959,
+            "median": -0.4831797576,
+            "min": -0.7661691542,
+            "max": 0,
+            "positive": 0,
+            "negative": 31
+          },
+          "emConvergence": {
+            "n": 32,
+            "mean": 0.8125,
+            "median": 1,
+            "min": 0.25,
+            "max": 1,
+            "positive": 32,
+            "negative": 0
+          }
+        }
+      },
+      "ms": 867
+    }
+  ],
+  "followup": {
+    "cases": 128,
+    "rootSeed": 20261127,
+    "summary": [
+      {
+        "family": "common_shock",
+        "policy": "robust",
+        "lossInteraction": {
+          "n": 128,
+          "mean": -0.06969519336450805,
+          "min": -0.25584390624467473,
+          "max": -0.0022663128786159226,
+          "negative": 128,
+          "positive": 0,
+          "zero": 0
+        },
+        "coverageInteraction": {
+          "n": 128,
+          "mean": 0.04493064099101948,
+          "min": -0.0558040697894463,
+          "max": 0.2557595201157594,
+          "negative": 12,
+          "positive": 116,
+          "zero": 0
+        }
+      },
+      {
+        "family": "common_shock",
+        "policy": "oracle",
+        "lossInteraction": {
+          "n": 128,
+          "mean": -0.06130227478008471,
+          "min": -0.2195938540151927,
+          "max": -0.005077021015081437,
+          "negative": 128,
+          "positive": 0,
+          "zero": 0
+        },
+        "coverageInteraction": {
+          "n": 128,
+          "mean": 0.026822203705219236,
+          "min": -0.021282098829446983,
+          "max": 0.1879172040931535,
+          "negative": 12,
+          "positive": 72,
+          "zero": 44
+        }
+      },
+      {
+        "family": "beta_binomial",
+        "policy": "robust",
+        "lossInteraction": {
+          "n": 128,
+          "mean": -0.07689930636939853,
+          "min": -0.4659080579873872,
+          "max": -0.005623880915712143,
+          "negative": 128,
+          "positive": 0,
+          "zero": 0
+        },
+        "coverageInteraction": {
+          "n": 128,
+          "mean": 0.048660352421263,
+          "min": -0.035184105228496215,
+          "max": 0.22649034831879122,
+          "negative": 10,
+          "positive": 118,
+          "zero": 0
+        }
+      },
+      {
+        "family": "beta_binomial",
+        "policy": "oracle",
+        "lossInteraction": {
+          "n": 128,
+          "mean": -0.06460271231045096,
+          "min": -0.22906616100237387,
+          "max": -0.0065451465442258605,
+          "negative": 128,
+          "positive": 0,
+          "zero": 0
+        },
+        "coverageInteraction": {
+          "n": 128,
+          "mean": 0.028553211138842086,
+          "min": -0.017549504803954563,
+          "max": 0.20097117113619245,
+          "negative": 7,
+          "positive": 77,
+          "zero": 44
+        }
+      }
+    ]
+  }
+}
