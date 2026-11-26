@@ -734,3 +734,7 @@
 .r27-replay-compact button.r27-export-control svg{width:13px;height:13px}
 .r27-replay-compact button.r27-export-control:hover{border-color:#2672ff;color:#2672ff}
 
+
+/* E2 research modes use the shared navigation tokens. Wrap the wider mode set. */
+main[data-study="uncertainty"] .r27-mode-tabs{flex:1 1 auto;flex-wrap:wrap;gap:4px}
+main[data-study="uncertainty"] .r27-mode-tab:disabled:not(.active){opacity:.52;cursor:not-allowed}

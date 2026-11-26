@@ -524,8 +524,7 @@ for (let i=0; i<researchTabs.length; i++) {
   await page.locator("main.r27-experiment-content > .imas-experiment-heading > h2.r27-study-title").waitFor({ timeout: 10000 });
   await assertStandardWorkspace(researchTabs[i]);
   if(JSON.stringify(await navSignature())!==JSON.stringify(trustNavigation))throw Error(researchTabs[i]+": different experiment navigation markup");
-  if((await page.getByRole("group",{name:"Режим эксперимента"}).getByText("Основной режим").count())!==1)throw Error("Research mode placeholder must preserve the shared navigation");
-  if((await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button").count())!==0)throw Error("Trust-only modes displayed in unrelated experiment");
+  if(i===0){const modes=page.getByRole("group",{name:"Режим эксперимента"});if(await modes.getByRole("button",{name:"Общее",exact:true}).getAttribute("aria-pressed")!=="true"||await modes.getByRole("button").count()!==8)throw Error("E2 navigation mismatch");}else {if((await page.getByRole("group",{name:"Режим эксперимента"}).getByText("Основной режим").count())!==1)throw Error("Research mode placeholder must preserve the shared navigation");if((await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button").count())!==0)throw Error("Trust-only modes displayed in unrelated experiment");}
   if(JSON.stringify(await toolbarSignature())!==JSON.stringify(trustToolbar))throw Error(researchTabs[i]+": different toolbar markup");
 
 
@@ -670,6 +669,17 @@ if((await page.locator(".r27-analytics > section.panel.r27-panel").count())<2)th
 const topologyVisibleOnResearch = await page.locator(".r27-playback-svg").count();
 const researchScreenshot = path.join(here, "research2027.png");
 await page.screenshot({ path: researchScreenshot, fullPage: false });
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Монте-Карло",exact:true}).click();
+await page.getByRole("spinbutton",{name:"N — число имитаций"}).fill("3000");
+await page.getByRole("spinbutton",{name:"M — объём калибровки"}).fill("500");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.getByRole("heading",{name:"Итоговая таблица Монте-Карло",exact:true}).waitFor({timeout:45000});
+const [mcDownload]=await Promise.all([page.waitForEvent("download"),page.getByRole("button",{name:"Скачать JSON",exact:true}).click()]);
+const mcResult=JSON.parse(fs.readFileSync(await mcDownload.path(),"utf8"));
+if(mcResult.n!==3000||mcResult.checkpoints.length!==16||!mcResult.exact)throw Error("E2.1 MC export incomplete");
+await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Общее",exact:true}).click();
+await page.getByRole("combobox",{name:"Режим исследования"}).waitFor();
+
 await page.locator(".r27-experiment-navigation").getByRole("button", { name: "Справка", exact: true }).click();
 await page.getByRole("heading", { name: "Единая справка по экспериментальному комплексу IMAS-lab" }).waitFor();
 if((await page.locator(".r27-module-article").count())!==6)throw Error("Missing exactly six experiment manual articles");

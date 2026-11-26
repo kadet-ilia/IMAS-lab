@@ -1,3 +1,4 @@
+import {MonteCarloPanel} from "./MonteCarloPanel.jsx";
 import React,{forwardRef,useEffect,useImperativeHandle,useMemo,useRef,useState} from "react";
 import {BarChart,Bar,LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,Legend,ResponsiveContainer,ReferenceLine,ErrorBar} from "recharts";
 import {ExperimentLayout,ExperimentPanel,ExperimentKpi,ExperimentParameterTooltip,ExperimentProgress} from "../ExperimentLayout.jsx";
@@ -91,7 +92,7 @@ const passports=[
  ["Ширина","Σ P(o)·(p+−p−)","Средняя по тестовому закону"],
  ["Гарантируемая доля","max(0, γ̂−D, γ̂−d₁−R≥2)","При принятых допущениях, уровень 1−α"],
  ["Нарушение риска","Σ P(o)·1{допуск и истинный риск>c}","Все запросы"]];
-export const AutomaticDecisions=forwardRef(function AutomaticDecisions({navigation,onRuntimeChange,onExportSvg},ref){
+const GeneralDecisions=forwardRef(function GeneralDecisions({navigation,onRuntimeChange,onExportSvg},ref){
  const [c,setC]=useState(DEFAULTS),[records,setRecords]=useState(null),[running,setRunning]=useState(false),[progress,setProgress]=useState(null),[error,setError]=useState(""),[last,setLast]=useState(null),[elapsed,setElapsed]=useState(null),[loaded,setLoaded]=useState(null),[metric,setMetric]=useState("loss"),[shown,setShown]=useState("fixed"),[scenario,setScenario]=useState(3),[method,setMethod]=useState(6),[methods,setMethods]=useState(METHODS);
  const worker=useRef(null),generation=useRef(0),lastKey=useRef(null),currentLoaded=useRef(null),busy=useRef(false);
  const stop=()=>{generation.current++;worker.current?.terminate();worker.current=null;busy.current=false;setRunning(false);setError("Расчёт остановлен. Сохранены завершённые калибровки.");};
@@ -147,4 +148,16 @@ export const AutomaticDecisions=forwardRef(function AutomaticDecisions({navigati
  <ExperimentPanel title="Паспорта ключевых показателей" subtitle="Определения, знаменатели, единицы измерения"><Table rows={passports.map(([indicator,formula,denominator])=>({indicator,formula,denominator}))}/><p className="r27-note">Встроенный контроль арифметических инвариантов пройден; это не независимая эксплуатационная валидация.</p></ExperimentPanel>
  <ExperimentPanel title="Интерпретация и экспорт" subtitle="Первичные калибровки и вычисленные результаты"><div className="r27-result-tools"><button type="button" onClick={()=>download("imas_e2_"+shown+".csv",csv(rows),"text/csv;charset=utf-8")}>Скачать CSV</button><button type="button" onClick={()=>download("imas_e2_"+c.seed+".json",JSON.stringify(payload()),"application/json")}>Скачать JSON</button><button type="button" onClick={()=>download("imas_e2_primary.json",JSON.stringify({version:VERSION,config:c,records:records.map(r=>({unit:r.unit,counts:r.counts,validation:r.validation})),fixtureHash:loaded?.hash}),"application/json")}>Скачать исходные калибровки</button>{c.mode==="article"&&loaded?<button type="button" onClick={()=>download("e2-fixtures.json",JSON.stringify(loaded.fixture),"application/json")}>Скачать эталонный набор</button>:null}</div><p className="r27-note">Синтетические данные. При равной автоматизации тестовый закон используется только для аналитического сравнения. Валидационная серия настраивается на независимой выборке. Контроль LP в режиме статьи использует решения независимого Python LP; в пользовательском режиме он не выполняется.</p></ExperimentPanel>
  </>:null}</ExperimentLayout>;
+});
+
+const E2_MODES=[["general","Общее"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["robustness","Устойчивость"],["optimization","Оптимизация"],["dynamics","Динамика"],["queue","СМО"],["data","Данные"]];
+export const AutomaticDecisions=forwardRef(function AutomaticDecisions(props,ref){
+ const [mode,setMode]=useState("general"),[busy,setBusy]=useState(false),actions=useRef(null);
+ const onRuntime=React.useCallback(value=>{setBusy(Boolean(value.running));props.onRuntimeChange?.(value);},[props.onRuntimeChange]);
+ useImperativeHandle(ref,()=>({start:()=>actions.current?.start(),stop:()=>actions.current?.stop(),reset:()=>actions.current?.reset(),newSeed:()=>actions.current?.newSeed()}),[]);
+ const navigation=React.isValidElement(props.navigation)?React.cloneElement(props.navigation,{},React.Children.map(props.navigation.props.children,child=>{
+  if(!React.isValidElement(child)||child.props.className!=="r27-mode-tabs")return child;
+  return React.cloneElement(child,{},E2_MODES.map(([id,name])=><button type="button" key={id} className={"r27-mode-tab"+(id===mode?" active":"")} aria-pressed={id===mode} disabled={busy||!["general","mc"].includes(id)} title={["general","mc"].includes(id)?name:"Запланировано; расчёт пока не реализован"} onClick={()=>setMode(id)}>{name}</button>));
+ })):props.navigation;
+ return mode==="mc"?<MonteCarloPanel {...props} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>:<GeneralDecisions {...props} navigation={navigation} onRuntimeChange={onRuntime} ref={actions}/>;
 });
