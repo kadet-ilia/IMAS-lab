@@ -99,6 +99,9 @@ jobs:
           OPENBLAS_NUM_THREADS: '1'
       - run: npm run e2:parity
         working-directory: gui
+      - name: Independent extended model reference (SciPy LP)
+        working-directory: gui
+        run: node scripts/check-e2-extended.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: imas-e2-reproducibility
