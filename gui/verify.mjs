@@ -510,7 +510,7 @@ await page.getByRole("searchbox", {name:"Поиск по содержанию с
 if(!(await page.getByRole("link", {name:"Модель доверия"}).count()))throw Error("Baseline mathematical help not indexed");
 await page.getByRole("searchbox", {name:"Поиск по содержанию справки"}).fill("");
 await page.locator(".r27-help-branch").filter({hasText:"Автоматические решения"}).locator("summary").first().click();
-await page.getByRole("heading", {name:"Математическая модель локального наблюдения"}).waitFor();
+await page.getByRole("heading", {name:"Маргинализация неполных наблюдений"}).waitFor();
 
 const helpScreenshot = path.join(here, "help.png");
 await page.screenshot({ path: helpScreenshot, fullPage: false });
