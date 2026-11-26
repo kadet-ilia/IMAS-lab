@@ -730,6 +730,45 @@ for(const name of ["Чувствительность","Устойчивость"
  extensionEvidence[name]={rows:payload.tables.rows.length,mode:payload.mode,complete:payload.complete};
 }
 
+// E2.9–E2.12: exercise the actual new controls and inspect exported scientific records.
+const downloadE2=async()=>{
+ await page.getByRole("status").filter({hasText:"Экспериментальная серия завершена"}).waitFor({timeout:60000});
+ const [d]=await Promise.all([page.waitForEvent("download"),page.getByRole("button",{name:"Скачать JSON",exact:true}).click()]);
+ return JSON.parse(fs.readFileSync(await d.path(),"utf8"));
+};
+const runE2=()=>page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.getByRole("checkbox",{name:"Автоматически выявить группы"}).check();
+await runE2();
+const groupingE2=await downloadE2();
+if(!groupingE2.dataResult.grouping||groupingE2.dataResult.grouping.discoveryN!==300||groupingE2.dataResult.split.trainN!==300||groupingE2.dataResult.summary.length!==2)throw Error("E2.11 independent discovery/calibration/test split failed");
+await page.getByRole("img",{name:"Граф условных информационных зависимостей"}).waitFor();
+extensionEvidence["Группировка"]={groups:groupingE2.dataResult.grouping.groups.length,discovery:300,calibration:300,test:400};
+
+await modesE2.getByRole("button",{name:"Оптимизация",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид оптимизации / расширения"}).selectOption("heterogeneous");
+await page.getByRole("textbox",{name:"Неоднородные конфигурации JSON"}).fill(JSON.stringify([{name:"Малая",groups:[2,3]},{name:"Большая",groups:[20,20,20,20]}]));
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"Объём номинальной имитации"}).fill("1000");
+await runE2();
+const designE2=await downloadE2();
+if(designE2.records.length!==2||designE2.records[0].algorithm!=="exact"||designE2.records[1].algorithm!=="mc_certificate"||designE2.records[1].loss!==null)throw Error("E2.12 heterogeneous design or MC semantics failed");
+extensionEvidence["Неоднородные конфигурации"]={candidates:2,algorithm:designE2.records.map(r=>r.algorithm)};
+
+await modesE2.getByRole("button",{name:"Монте-Карло",exact:true}).click();
+await page.getByRole("button",{name:"Расширенный Монте-Карло",exact:true}).click();
+await page.getByRole("heading",{name:"Расширенный Монте-Карло — методика исследования",exact:true}).waitFor();
+for(const [name,value] of [["Размеры групп (через запятую)","2,2,2,2"],["u при X=0 (через запятую)","0.2,0.2,0.2,0.2"],["u при X=1 (через запятую)","0.8,0.8,0.8,0.8"],["Корреляции ρ (через запятую)","0.3,0.3,0.3,0.3"]])await page.getByRole("textbox",{name,exact:true}).fill(value);
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"Максимум имитаций на калибровку"}).fill("2000");
+await page.getByRole("spinbutton",{name:"Точность (0 — фиксированный объём)"}).fill("1");
+await page.getByRole("checkbox",{name:"Выборка по значимости по классу угрозы"}).check();
+await runE2();
+const advancedE2=await downloadE2();
+if(advancedE2.records.length!==2||advancedE2.config.groups.length!==4||advancedE2.records.some(r=>r.n!==1000||!r.achieved)||advancedE2.tables.rows.length!==4)throw Error("E2.10 adaptive importance sampling failed");
+extensionEvidence["Расширенный Монте-Карло"]={groups:4,calibrations:2,adaptiveN:advancedE2.records.map(r=>r.n)};
+await page.getByRole("button",{name:"Классический Монте-Карло S1–S8",exact:true}).click();
+
+
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Общее",exact:true}).click();
 await page.getByRole("combobox",{name:"Режим исследования"}).waitFor();
 
