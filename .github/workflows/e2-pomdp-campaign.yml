@@ -1,0 +1,26 @@
+name: E2 dynamic POMDP and individual acquisition pilot (256 configurations)
+on:
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/scripts/e2-pomdp-campaign.mjs'
+      - '.github/workflows/e2-pomdp-campaign.yml'
+  workflow_dispatch:
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run exact finite-tree pilot
+        working-directory: gui
+        run: node scripts/e2-pomdp-campaign.mjs pomdp-campaign
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2-pomdp-evidence
+          path: gui/pomdp-campaign/
+          retention-days: 90

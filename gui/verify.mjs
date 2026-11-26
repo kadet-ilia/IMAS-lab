@@ -953,6 +953,16 @@ if(regroupE2.records.length!==2||regroupE2.tables.rows.length!==6||regroupE2.rec
 await page.getByRole("heading",{name:"Протокол выбора структуры",exact:true}).waitFor();
 extensionEvidence["Динамическая перегруппировка"]={runs:2,policies:3,requests:300};
 
+await modesE2.getByRole("button",{name:"Динамика",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид динамического исследования"}).selectOption("pomdp");
+await page.getByRole("spinbutton",{name:"Горизонт в тактах"}).fill("2");
+await runE2();
+const pomdpE2=await downloadE2();
+if(pomdpE2.tables.rows.length!==6||pomdpE2.records[0].lowerBound>pomdpE2.records[0].upperBound+1e-10||pomdpE2.tables.rows.some(v=>v.loss>v.upperRisk+1e-9||v.stressLoss>v.upperRisk+1e-9))throw Error("E2.27/28 POMDP incomplete");
+await page.getByRole("heading",{name:"Сравнение индивидуальных политик POMDP",exact:true}).waitFor();
+extensionEvidence["Робастная динамическая POMDP"]={policies:6,horizon:2,nodes:pomdpE2.records[0].states};
+
+
 
 
 
