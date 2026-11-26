@@ -151,7 +151,7 @@ const GeneralDecisions=forwardRef(function GeneralDecisions({navigation,onRuntim
  </>:null}</ExperimentLayout>;
 });
 
-const E2_MODES=[["general","Общее"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["robustness","Устойчивость"],["optimization","Оптимизация"],["dynamics","Динамика"],["queue","СМО"],["data","Данные"]];
+const E2_MODES=[["general","Общее"],["mc","Монте-Карло"],["sensitivity","Чувствительность"],["robustness","Устойчивость"],["optimization","Оптимизация"],["dynamics","Динамика"],["queue","СМО"],["data","Данные"],["batch","Серии экспериментов"]];
 export const AutomaticDecisions=forwardRef(function AutomaticDecisions(props,ref){
  const [mode,setMode]=useState("general"),[mcExtended,setMcExtended]=useState(false),[busy,setBusy]=useState(false),actions=useRef(null);
  const onRuntime=React.useCallback(value=>{setBusy(Boolean(value.running));props.onRuntimeChange?.(value);},[props.onRuntimeChange]);
