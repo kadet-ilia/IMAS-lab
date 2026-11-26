@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {EXTRA_DEFAULTS,studyPlan,evaluateUnit} from "./extendedStudies.js";
+import {tiltLaw,mixtureWeight,rareStudy} from "./rareEvents.js";
+import {varianceRiskThreshold} from "./alternativeRisk.js";
+const c={...EXTRA_DEFAULTS,groups:[2,2],u:[[.15,.2],[.85,.8]],rho:[.2,.3],m:1000,reps:1,prior:.1,mcN:2000,mcExact:true,mcVariant:"rare",stress:"none"};
+test("Tilt preserves support and moves the mean",()=>{const p=[.1,.2,0,.7],q=tiltLaw(p,-3);assert.equal(q[2],0);assert.ok(Math.abs(q.reduce((a,b)=>a+b,0)-1)<1e-12);assert.ok(q[0]>p[0]&&q[3]<p[3]);});
+test("Mixture weights integrate exactly to the target, including both classes",()=>{const q=[[[.8,.2],[.6,.4]],[[.3,.7],[.1,.9]]],t=q.map((row,x)=>row.map(a=>tiltLaw(a,x?-2:2)));let z=0,m=0;for(let x=0;x<2;x++)for(let a=0;a<2;a++)for(let b=0;b<2;b++){const prob=(x?c.mcProposal:1-c.mcProposal)*(c.rareDefensive*q[x][0][a]*q[x][1][b]+(1-c.rareDefensive)*t[x][0][a]*t[x][1][b]),w=mixtureWeight(c,q,t,{x,full:[a,b]});z+=prob*w;m+=prob*w*x;}assert.ok(Math.abs(z-1)<1e-12&&Math.abs(m-c.prior)<1e-12);});
+test("Rare comparison common calibration and valid bounded weights",()=>{const p=studyPlan("mcExtended",c);assert.equal(p[0].kind,"rareMC");const r=evaluateUnit("mcExtended",c,p[0],1);assert.equal(r.summary.length,3);for(const v of r.summary){assert.ok(v.maxWeight<=v.weightBound+1e-10&&v.ess<=v.N+1e-8);assert.ok(Number.isFinite(v.exactMiss)&&v.missLow<=v.missHigh);}assert.deepEqual(rareStudy(c,0).summary,r.summary);});
+test("Empirical Bernstein benefits zero variance and combined correction is conservative",()=>{const rows=Array.from({length:1000},()=>({score:.05,autoLoss:0})),t=[0,.1,.2],v=varianceRiskThreshold(rows,t,.1,6,.05);assert.equal(v.pac,null);assert.equal(v.bernstein,.2);assert.equal(v.combined,.2);const u=v.curve[1],expected=7*6*Math.log(2*3/.05)/(3*999);assert.ok(Math.abs(u.bernsteinBound-expected)<1e-12);assert.equal(u.variance,0);assert.ok(u.combinedBound>=u.bernsteinBound);});
