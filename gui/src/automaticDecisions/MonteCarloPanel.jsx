@@ -1,7 +1,8 @@
 import React,{forwardRef,useEffect,useImperativeHandle,useRef,useState} from "react";
 import {LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,Legend,ResponsiveContainer,ReferenceLine} from "recharts";
 import {ExperimentLayout,ExperimentPanel,ExperimentKpi,ExperimentProgress,ExperimentParameterTooltip} from "../ExperimentLayout.jsx";
-import {MC_DEFAULTS,validateMC} from "./monteCarlo.js";
+import {MC_DEFAULTS,MC_VERSION,validateMC} from "./monteCarlo.js";
+import {studyKey,readPayload,writeCheckpoint,deleteCheckpoint} from "./extendedStorage.js";
 import {SCENARIOS} from "./kernel.js";
 const labels={coverage:"Автоматизация",loss:"Ожидаемые потери",miss:"Пропуск угрозы",false:"Ложное реагирование"};
 const fmt=(v,d=5)=>Number.isFinite(v)?v.toLocaleString("ru-RU",{maximumFractionDigits:d}):"—";
@@ -10,20 +11,22 @@ function NumberField({label,value,set,min,max,step=1,disabled,note}){return <lab
 function saveFile(name,content,type){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 export const MonteCarloPanel=forwardRef(function MonteCarloPanel({navigation,onRuntimeChange,title,author},ref){
  const [c,setC]=useState(MC_DEFAULTS),[running,setRunning]=useState(false),[progress,setProgress]=useState(null),[error,setError]=useState(""),[result,setResult]=useState(null),[last,setLast]=useState(null),[elapsed,setElapsed]=useState(null),[method,setMethod]=useState(6);
- const worker=useRef(null),started=useRef(0);
- const terminate=()=>{worker.current?.terminate();worker.current=null;};
+ const worker=useRef(null),started=useRef(0),generation=useRef(0),busy=useRef(false);
+ const terminate=()=>{generation.current++;worker.current?.terminate();worker.current=null;busy.current=false;};
  useEffect(()=>()=>terminate(),[]);
  const resetResult=()=>{setResult(null);setLast(null);setElapsed(null);setProgress(null);setError("");};
- const update=(key,value)=>{if(worker.current)return;setC(old=>({...old,[key]:value}));resetResult();};
- const stop=()=>{terminate();setRunning(false);setProgress(null);setError("Расчёт остановлен. Незавершённая серия не экспортируется.");};
+ const update=(key,value)=>{if(busy.current)return;setC(old=>({...old,[key]:value}));resetResult();};
+ const stop=()=>{terminate();setRunning(false);setProgress(null);setError("Расчёт остановлен. Завершённые пакеты сохранены; повторный запуск продолжает серию.");};
  const reset=()=>{terminate();setRunning(false);setC(MC_DEFAULTS);resetResult();};
  const newSeed=()=>update("mcSeed",((c.mcSeed+1)>>>0)||1);
- const start=()=>{if(worker.current)return;resetResult();try{
- const config=validateMC(c),w=new Worker(new URL("./monteCarlo.worker.js",import.meta.url),{type:"module"});worker.current=w;started.current=performance.now();setRunning(true);setProgress({message:"Калибровка и подготовка",completed:0,total:config.samples,percent:0});
- const fail=e=>{if(worker.current!==w)return;terminate();setRunning(false);setError(String(e.message||e));};
- w.onerror=fail;w.onmessage=({data})=>{if(worker.current!==w)return;if(data.type==="error"){fail(data.error);return;}if(data.type==="progress"){setProgress({message:"Генерация независимых запросов",completed:data.n,total:data.total,percent:100*data.n/data.total});}if(data.type==="done"){setResult(data.result);setLast(new Date());setElapsed(performance.now()-started.current);setProgress({message:"Имитационная серия завершена",completed:config.samples,total:config.samples,percent:100});terminate();setRunning(false);}};
- w.postMessage({type:"start",config});
- }catch(e){terminate();setRunning(false);setError(e.message||String(e));}};
+ const clear=async()=>{if(busy.current)return;try{await deleteCheckpoint(await studyKey(MC_VERSION,validateMC(c)));resetResult();}catch(e){setError(e.message||String(e));}};
+ const start=async()=>{if(busy.current)return;busy.current=true;const token=++generation.current;resetResult();setRunning(true);started.current=performance.now();try{
+ const config=validateMC(c),key=await studyKey(MC_VERSION,config),resume=await readPayload(key);if(token!==generation.current)return;
+ const w=new Worker(new URL("./monteCarlo.worker.js",import.meta.url),{type:"module"});worker.current=w;setProgress({message:"Калибровка и подготовка",completed:resume?.n??0,total:config.samples,percent:100*(resume?.n??0)/config.samples});
+ const fail=e=>{if(worker.current!==w||token!==generation.current)return;terminate();setRunning(false);setError(String(e.message||e));};
+ w.onerror=fail;w.onmessage=async({data})=>{if(worker.current!==w||token!==generation.current)return;try{if(data.type==="error")throw Error(data.error);if(data.type==="checkpoint"){await writeCheckpoint(key,data.checkpoint);if(token!==generation.current)return;setProgress({message:"Генерация независимых запросов",completed:data.n,total:data.total,percent:100*data.n/data.total});w.postMessage({type:"continue",n:data.n});}if(data.type==="done"){setResult(data.result);setLast(new Date());setElapsed(performance.now()-started.current);setProgress({message:"Имитационная серия завершена",completed:config.samples,total:config.samples,percent:100});terminate();setRunning(false);}}catch(e){fail(e);}};
+ w.postMessage({type:"start",config,resume});
+ }catch(e){if(token===generation.current){terminate();setRunning(false);setError(e.message||String(e));}}};
  useImperativeHandle(ref,()=>({start,stop,reset,newSeed}));
  useEffect(()=>onRuntimeChange?.({studyId:"uncertainty",running,seed:c.mcSeed,lastCompletedAt:last,hasResult:!!result,steps:progress?.completed??0,elapsedMs:elapsed}),[running,c.mcSeed,last,result,progress,elapsed,onRuntimeChange]);
  const f=(key,label,min,max,step=1,note)=><NumberField key={key} label={label} value={c[key]} set={v=>update(key,v)} min={min} max={max} step={step} disabled={running} note={note}/>;
@@ -34,7 +37,7 @@ export const MonteCarloPanel=forwardRef(function MonteCarloPanel({navigation,onR
  <div className="sidebar-section"><h3>Информационные группы</h3>{c.groups.map((n,g)=><details className="advanced" key={g}><summary>Группа {g+1} · {n} агентов</summary><div className="advanced-body"><NumberField label={"Число агентов группы "+(g+1)} value={n} set={v=>update("groups",c.groups.map((a,i)=>i===g?v:a))} min={2} max={30} disabled={running}/>{[0,1].map(x=><NumberField key={x} label={"u"+(g+1)+x+" — P(Y=1 | X="+x+")"} value={c.u[x][g]} set={v=>update("u",c.u.map((a,i)=>i===x?a.map((b,j)=>j===g?v:b):a))} min={0} max={1} step={.01} disabled={running}/>)}<NumberField label={"ρ"+(g+1)+" — базовая корреляция"} value={c.rho[g]} set={v=>update("rho",c.rho.map((a,i)=>i===g?v:a))} min={0} max={1} step={.01} disabled={running}/></div></details>)}<p className="r27-note">{c.groups.reduce((a,b)=>a+b,0)} агентов; {fmt(N,0)} конфигураций</p></div>
  <div className="sidebar-section"><h3>Калибровка и выборка</h3>{f("m","M — объём калибровки",1,1000000)}{f("samples","N — число имитаций",1000,2000000,1000)}{f("seed","Зерно калибровки",1,4294967295)}{f("mcSeed","Зерно тестовых имитаций",1,4294967295)}{f("prior","π — вероятность угрозы",.000001,.999999,.01)}{f("alpha","α — ошибка калибровки",.000001,.999999,.01)}{f("mcAlpha","α MC — ошибка оценивания",.000001,.999999,.01,"Семейный уровень доверия для всех контрольных объёмов, двух методов и четырёх показателей.")}</div>
  <div className="sidebar-section"><h3>Матрица потерь</h3>{f("b","b — пропуск угрозы",.000001,1000,.1)}{f("f","f — ложное реагирование",.000001,1000,.1)}{f("d","d — правильное реагирование",0,1000,.1)}{f("c","c — цена эскалации",0,1000,.05)}</div>
- <label className="field"><span><input type="checkbox" checked={c.exact} disabled={running} onChange={e=>update("exact",e.target.checked)}/> Сравнить с точным перечислением</span></label><p className="r27-note">Без точного сравнения используются только групповые таблицы. Для сравнения максимум 300 000 конфигураций.</p>
+ <label className="field"><span><input type="checkbox" checked={c.exact} disabled={running} onChange={e=>update("exact",e.target.checked)}/> Сравнить с точным перечислением</span></label><p className="r27-note">Без точного сравнения используются только групповые таблицы. Для сравнения максимум 300 000 конфигураций. Контрольные точки сохраняются каждые 5000 запросов.</p><button type="button" className="r27-settings-reset" onClick={clear} disabled={running}>Удалить контрольную точку MC</button>
  </div><button className="run-button" type="button" disabled={running} onClick={start}>{running?"Выполняется…":"Запустить эксперимент"}</button>{running?<button type="button" className="r27-settings-stop" onClick={stop}>Остановить расчёт</button>:null}</aside>;
  return <ExperimentLayout studyId="uncertainty" navigation={navigation} authors={author} title={title} description="Монте-Карло: независимая генерация запросов при фиксированной синтетической калибровке, оценка статистической точности M6 и M7." sidebar={sidebar} progress={<ExperimentProgress running={running} progress={progress}/>} error={error?<div className="error-banner" role="alert">{error}</div>:null}>
  <div className="kpi-grid r27-research-kpis">{Object.entries(labels).map(([k,label])=><ExperimentKpi key={k} label={label} value={show(kpi(k)?.estimate,k)} note={result?"M"+method+" · "+fmt(result.n,0)+" запросов":"M6/M7 · нет результатов"}/>)}</div>

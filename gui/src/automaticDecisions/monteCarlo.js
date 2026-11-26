@@ -1,6 +1,6 @@
 // E2.1: independent stochastic observation generation; no joint enumeration in MC-only mode.
 import {DEFAULTS,laws,geometry,radius,extrem,bounds,joint,decisions,metrics,random,multinomial} from "./kernel.js";
-export const MC_VERSION="E2.1-mc-v1";
+export const MC_VERSION="E2.1-mc-v2";
 export const MC_DEFAULTS={...DEFAULTS,mode:"custom",reps:1,m:20000,samples:100000,mcSeed:20262128,mcAlpha:.05,exact:true};
 const METHODS=[6,7], KEYS=["coverage","loss","miss","false"];
 const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
@@ -48,11 +48,13 @@ export function observation(c,F,r){
  return {x,ix};
 }
 export function checkpointPlan(N){return [...new Set([1000,3000,10000,30000,100000,300000,1000000,N].filter(n=>n<=N))].sort((a,b)=>a-b);}
-export function createMC(raw,counts0){
- const c=validateMC(raw),G=geometry(c),{q,test}=laws(c,c.scenario),counts=counts0||makeCalibration(c,q),B=groupBounds(c,G,counts),F=test.map(row=>row.map(cdf)),r=random(c.mcSeed),plan=checkpointPlan(c.samples);
+export function createMC(raw,counts0,resume=null){
+ const c=validateMC(raw),G=geometry(c),{q,test}=laws(c,c.scenario),counts=resume?.counts||counts0||makeCalibration(c,q),B=groupBounds(c,G,counts),F=test.map(row=>row.map(cdf)),plan=checkpointPlan(c.samples);
+ let rngState=(resume?.rngState??c.mcSeed)>>>0;const r=()=>{rngState^=rngState<<13;rngState^=rngState>>>17;rngState^=rngState<<5;return (rngState>>>0)/4294967296;};
  const exact=c.exact?(()=>{const P=joint(c,G,test,c.scenario),[l,u]=bounds(c,G,B.hat,c.m);return Object.fromEntries(METHODS.map(m=>[m,metrics(c,P,decisions(c,l,u,c.c,m===6))]));})():null;
- const maxLoss=Math.max(c.b,c.f,c.d,c.c), hist=Object.fromEntries(METHODS.map(m=>[m,[[0,0,0],[0,0,0]]]));
- let n=0;const checkpoints=[];
+ const maxLoss=Math.max(c.b,c.f,c.d,c.c), hist=resume?JSON.parse(JSON.stringify(resume.hist)):Object.fromEntries(METHODS.map(m=>[m,[[0,0,0],[0,0,0]]]));
+ let n=resume?.n??0;const checkpoints=resume?resume.checkpoints.slice():[];
+ if(resume&&(resume.version!==MC_VERSION||!Number.isInteger(n)||n<0||n>c.samples||!Number.isInteger(resume.rngState)||resume.rngState<1||resume.rngState>4294967295||METHODS.some(m=>!Array.isArray(hist[m])||hist[m].length!==2||hist[m].some(a=>!Array.isArray(a)||a.length!==3||a.some(v=>!Number.isSafeInteger(v)||v<0))||hist[m].flat().reduce((a,b)=>a+b,0)!==n)||checkpoints.length!==plan.filter(v=>v<=n).length*8))throw Error("Некорректная контрольная точка MC");
  function advance(count){
   if(!Number.isInteger(count)||count<1)throw Error("Некорректный размер пакета");
   const stop=Math.min(c.samples,n+count);
@@ -73,5 +75,6 @@ export function createMC(raw,counts0){
   return n;
  }
  function result(){return {version:MC_VERSION,config:c,counts,checkpoints:checkpoints.slice(),hist:JSON.parse(JSON.stringify(hist)),n,exact,plannedLooks:plan,confidence:1-c.mcAlpha,assumptionsValid:![4,7,8].includes(c.scenario),calibrationIncluded:q.every((row,x)=>row.every((a,g)=>sum(a.map((v,j)=>Math.abs(v-B.hat[x][g][j])))<=radius(c,c.groups[g],c.m)))};}
- return {advance,result};
+ const checkpoint=()=>({version:MC_VERSION,n,rngState:rngState>>>0,counts,hist:JSON.parse(JSON.stringify(hist)),checkpoints:checkpoints.slice()});
+ return {advance,result,checkpoint};
 }
