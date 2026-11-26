@@ -59,7 +59,7 @@ const kernel = (function kernel(){
  function masses(c,P){return P[0].map((p,i)=>(1-c.prior)*p+c.prior*P[1][i]);}
  function metrics(c,P,a,cost=c.c,acc=null){let cov=0,miss=0,fp=0,tp=0;for(let i=0;i<a.length;i++){const keep=acc?acc[i]:+(a[i]!==2),p0=(1-c.prior)*P[0][i]*keep,p1=c.prior*P[1][i]*keep;cov+=p0+p1;if(a[i]===0)miss+=p1;if(a[i]===1){fp+=p0;tp+=p1;}}cov=clamp(cov,0,1);return {coverage:cov,loss:c.b*miss+c.f*fp+c.d*tp+cost*(1-cov),miss,false:fp};}
  function match(c,p,z,target){const v=p.map(a=>Math.round(score(c,a)*1e12)/1e12),o=seq(v.length).sort((a,b)=>v[a]-v[b]);let mass=0,i=0;while(i<o.length-1&&mass+z[o[i]]<target)mass+=z[o[i++]];const cut=v[o[i]];let less=0,tie=0;for(let j=0;j<v.length;j++){if(v[j]<cut)less+=z[j];else if(v[j]===cut)tie+=z[j];}const frac=clamp((target-less)/Math.max(tie,1e-300),0,1);return v.map(a=>a<cut?1:a===cut?frac:0);}
- function estimate(c,q,type){return q.map(row=>row.map((p,g)=>{const n=c.groups[g],j=seq(n+1),u=clamp(dot(j,p)/n,1e-9,1-1e-9),r=(dot(j.map(k=>k*(k-1)),p)/(n*(n-1))-u*u)/(u*(1-u));return type===3?mix(n,dot(j,p)/n,0):type===8?beta(n,u,clamp(r,0,.999999)):mix(n,u,clamp(r,0,1));}));}
+ function estimate(c,q,type){return q.map(row=>row.map((p,g)=>{const n=c.groups[g],j=seq(n+1),u=clamp(dot(j,p)/n,1e-9,1-1e-9),r=(dot(j.map(k=>k*(k-1)),p)/(n*(n-1))-u*u)/(u*(1-u));return type===3?mix(n,clamp(dot(j,p)/n,0,1),0):type===8?beta(n,u,clamp(r,0,.999999)):mix(n,u,clamp(r,0,1));}));}
  function cert(c,G,q,a,s,m){const T=transforms(c,G,s,true),F=marg(T,q),P=F.map(outer),nominal=metrics(c,P,a).coverage,e=c.groups.map(n=>radius(c,n,m)),D=1-e.reduce((a,v)=>a*(1-v/2),1),rem=(e[0]*e[1]+e[0]*e[2]+e[1]*e[2]+e[0]*e[1]*e[2])/2;let d=0;
   for(let x=0;x<2;x++){const f=F[x],h=G.shape.map(n=>new Float64Array(n));let i=0;for(let j=0;j<G.shape[0];j++)for(let k=0;k<G.shape[1];k++)for(let l=0;l<G.shape[2];l++,i++)if(a[i]!==2){h[0][j]+=f[1][k]*f[2][l];h[1][k]+=f[0][j]*f[2][l];h[2][l]+=f[0][j]*f[1][k];}
    for(let g=0;g<3;g++){const v=seq(c.groups[g]+1).map(j=>dot(h[g],T[g].map(row=>row[j])));d+=(x===1?c.prior:1-c.prior)*(dot(v,q[x][g])+extrem(v.map(y=>-y),q[x][g],e[g]));}}
@@ -98,18 +98,32 @@ const kernel = (function kernel(){
    if(vcount){v=new Float64Array(G.size);let n=0;for(const [i,count] of vcount){if(!Number.isInteger(i)||i<0||i>=G.size||!Number.isSafeInteger(count)||count<0||v[i]!==0)throw Error("Некорректная валидационная выборка");v[i]=count;n+=count;}if(n!==m)throw Error("Неверный объём валидации");v=v.map(a=>a/m);}
    else {if(c.mode==="article")throw Error("Отсутствует эталонная валидационная выборка");v=Float64Array.from(multinomial(m,masses(c,joint(c,G,q,s,true)),vr),a=>a/m);}
    const target=dot(v,aa[6].map(x=>+(x!==2)));
-   result.rows.validation=[...[3,4,8,11].map(j=>record(j,pm[j].map(p=>+(p>theta(c))),c.c,match(c,pm[j],v,target))),met];result.validation= vcount||Array.from(v.entries()).filter(([,a])=>a>0).map(([i,a])=>[i,Math.round(a*m)]);
+   result.rows.validation=[...[3,4,8,11].map(j=>record(j,pm[j].map(p=>+(p>theta(c))),c.c,match(c,pm[j],v,target))),met];if(c.mode==="custom")result.validation=Array.from(v.entries()).filter(([,a])=>a>0).map(([i,a])=>[i,Math.round(a*m)]);
   }
   // A real enumerated observation, not an invented time series.
   let idx=0;for(let i=1;i<z.length;i++)if(z[i]>z[idx])idx=i;
   const ix=[Math.floor(idx/(G.shape[1]*G.shape[2])),Math.floor(idx/G.shape[2])%G.shape[1],idx%G.shape[2]];
   result.sample={pairs:ix.map((i,g)=>G.pairs[g][i]),lo:lo[idx],hi:hi[idx],action:aa[6][idx],risk0:c.b*hi[idx],risk1:c.f+(c.d-c.f)*lo[idx],mass:z[idx],scenario:s,rep};
-  if(series==="control"){
-   const size=100000,rg=random((20262125+s+c.seed-DEFAULTS.seed)>>>0);let coverage=0,loss=0,sq=0;for(let k=0;k<size;k++){const x=+(rg()<c.prior);let ix=0;for(let g=0;g<3;g++){const n=c.groups[g],u=s===4&&x===1&&g===0?.45:c.u[x][g],rho=s===1?0:s===4&&x===1&&g===0?.8:c.rho[g],common=rg()<rho,shared=rg()<u;let m0=0,k0=0;for(let i=0;i<n;i++){const y=common?shared:rg()<u;if(rg()<(s<=2?.95:.6)){m0++;k0+=+y;}}ix=ix*G.shape[g]+m0*(m0+1)/2+k0;}if(s>4)break;const a=aa[6][ix],L=a===2?c.c:a===0?c.b*x:x?c.d:c.f;coverage+=+(a!==2);loss+=L;sq+=L*L;}
-   if(s<=4)result.rows.monte_carlo=[{scenario:s,exact_coverage:met.coverage,mc_coverage:coverage/size,exact_loss:met.loss,mc_loss:loss/size,se:Math.sqrt(Math.max(0,(sq-loss*loss/size)/(size-1))/size),size}];
-   result.rows.certificate_checks=[];let sampled_min_coverage=1;const rg2=random(91822+s);for(let k=0;k<100;k++){const qq=hat.map(row=>row.map((p,g)=>{const v=normalize(p.map(()=>-Math.log(Math.max(1e-15,rg2())))),f=rg2()*Math.min(1,radius(c,c.groups[g],m)/Math.max(1e-15,sum(p.map((a,i)=>Math.abs(a-v[i])))));return p.map((a,i)=>a+f*(v[i]-a));}));sampled_min_coverage=Math.min(sampled_min_coverage,metrics(c,joint(c,G,qq,s,true),aa[6]).coverage);}
+  if(series==="control"||(series==="all"&&rep===0)){
+   const control=fr?.control;if(c.mode==="article"&&!control)throw Error("Отсутствуют контрольные первичные данные");
+   const size=100000;
+   if(s<=4){
+    let coverage=0,loss=0,sq=0,nobs=0;
+    const add=(x,ix,n)=>{if(!Number.isInteger(ix)||ix<0||ix>=G.size||!Number.isSafeInteger(n)||n<0)throw Error("Повреждён контроль Монте-Карло");const a=aa[6][ix],L=a===2?c.c:a===0?c.b*x:x?c.d:c.f;coverage+=n*(a!==2);loss+=n*L;sq+=n*L*L;nobs+=n;};
+    if(control?.mc){if(control.mc.length!==2)throw Error("Неверный контрольный массив");control.mc.forEach((row,x)=>row.forEach(([ix,n])=>add(x,ix,n)));}
+    else {const rg=random((20262125+s+c.seed-DEFAULTS.seed)>>>0);for(let k=0;k<size;k++){const x=+(rg()<c.prior);let ix=0;for(let g=0;g<3;g++){const n=c.groups[g],u=s===4&&x===1&&g===0?.45:c.u[x][g],rho=s===1?0:s===4&&x===1&&g===0?.8:c.rho[g],common=rg()<rho,shared=rg()<u;let m0=0,k0=0;for(let i=0;i<n;i++){const y=common?shared:rg()<u;if(rg()<(s<=2?.95:.6)){m0++;k0+=+y;}}ix=ix*G.shape[g]+m0*(m0+1)/2+k0;}add(x,ix,1);}}
+    if(nobs!==size)throw Error("Неверное число запросов Монте-Карло");
+    result.rows.monte_carlo=[{scenario:s,exact_coverage:met.coverage,mc_coverage:coverage/size,exact_loss:met.loss,mc_loss:loss/size,se:Math.sqrt(Math.max(0,(sq-loss*loss/size)/(size-1))/size),size}];
+   }
+   let sampled_min_coverage=1,box_lp_error=null,l1_lp_error=null;
+   const rg2=random(91822+s);
+   if(control&&control.candidates?.length!==100)throw Error("Неполный набор допустимых законов");
+   for(let k=0;k<100;k++){const qq=control?.candidates[k]||hat.map(row=>row.map((p,g)=>{const v=normalize(p.map(()=>-Math.log(Math.max(1e-15,rg2())))),f=rg2()*Math.min(1,radius(c,c.groups[g],m)/Math.max(1e-15,sum(p.map((a,i)=>Math.abs(a-v[i])))));return p.map((a,i)=>a+f*(v[i]-a));}));
+    if(!qq.every((row,x)=>row.every((a,g)=>a.every(v=>Number.isFinite(v)&&v>=0)&&Math.abs(sum(a)-1)<1e-10&&sum(a.map((v,i)=>Math.abs(v-hat[x][g][i])))<=radius(c,c.groups[g],m)+1e-12)))throw Error("Контрольный закон вне множества");
+    sampled_min_coverage=Math.min(sampled_min_coverage,metrics(c,joint(c,G,qq,s,true),aa[6]).coverage);}
    if(sampled_min_coverage+1e-12<certificate.lower_tight)throw Error("Выборочная проверка сертификата не пройдена");
-   result.rows.certificate_checks.push({scenario:s,lower:certificate.lower,lower_tight:certificate.lower_tight,sampled_min_coverage,box_lp_error:null});
+   if(control){box_lp_error=0;if(s<=5)l1_lp_error=0;for(let x=0;x<2;x++)for(let g=0;g<3;g++)for(let i=0;i<G.H[g].length;i++){const h=G.H[g][i],p=hat[x][g],b=control.box_lp[x][g][i];if(!Number.isFinite(b))throw Error("Неполный LP-эталон");box_lp_error=Math.max(box_lp_error,Math.abs(boxExt(h,p,boxRadius(c,m))-b));if(s<=5){const v=control.l1_lp[x][g][i];if(!Number.isFinite(v))throw Error("Неполный L1-эталон");l1_lp_error=Math.max(l1_lp_error,Math.abs(extrem(h,p,radius(c,c.groups[g],m))-v));}}if(box_lp_error>1e-8||(l1_lp_error!==null&&l1_lp_error>1e-8))throw Error("Расхождение с независимым LP");}
+   result.rows.certificate_checks=[{scenario:s,lower:certificate.lower,lower_tight:certificate.lower_tight,sampled_min_coverage,box_lp_error,l1_lp_error}];
   }
   return result;
  }
