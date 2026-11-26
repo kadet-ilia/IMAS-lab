@@ -1,0 +1,522 @@
+{
+  "seed": 20261201,
+  "uniqueConfigurations": 256,
+  "run": 45896743085,
+  "commit": "ad128046ddabbf145e2190e225c7f612387f57df",
+  "results": [
+    {
+      "domain": "dynamic",
+      "all": {
+        "cases": 128,
+        "policies": [
+          {
+            "policy": "Немедленная робастная",
+            "loss": 0.7210617608144859,
+            "stressLoss": 0.7210617608144859,
+            "upperRisk": 0.7210617608144859,
+            "coverage": 0.390625,
+            "stressCoverage": 0.390625,
+            "queries": 0,
+            "delay": 0,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Случайный запрос",
+            "loss": 0.4786679778735274,
+            "stressLoss": 0.5067919051425485,
+            "upperRisk": 0.5739245568486621,
+            "coverage": 0.7597794567861995,
+            "stressCoverage": 0.7554160769045302,
+            "queries": 1.0464919877852485,
+            "delay": 1.437035229073271,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Циклический DP",
+            "loss": 0.42108224864538957,
+            "stressLoss": 0.45980253922461156,
+            "upperRisk": 0.5724248943419336,
+            "coverage": 0.8815112432698969,
+            "stressCoverage": 0.878656972966073,
+            "queries": 1.3846933852547556,
+            "delay": 1.9480315470741019,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Жадный робастный",
+            "loss": 0.38555524534673824,
+            "stressLoss": 0.41789117609927334,
+            "upperRisk": 0.48471934670092864,
+            "coverage": 0.8716535821849852,
+            "stressCoverage": 0.8708103315896921,
+            "queries": 1.009134583403982,
+            "delay": 1.2604374142817576,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Номинальный DP",
+            "loss": 0.34922029051290737,
+            "stressLoss": 0.3961605008268748,
+            "upperRisk": 0.49690182758549595,
+            "coverage": 0.9346203916658261,
+            "stressCoverage": 0.9327339331002357,
+            "queries": 1.3421383921928622,
+            "delay": 1.7103602820559844,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Робастный DP",
+            "loss": 0.3720780127971706,
+            "stressLoss": 0.405785378102954,
+            "upperRisk": 0.4781840147504031,
+            "coverage": 0.87945608472418,
+            "stressCoverage": 0.8778795503587213,
+            "queries": 1.1584909065653313,
+            "delay": 1.4391350361774033,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          }
+        ],
+        "robustVsNominal": {
+          "nominal": {
+            "mean": 0.022857722284263256,
+            "negative": 0,
+            "positive": 84,
+            "zero": 44,
+            "min": 0,
+            "max": 0.2829489889648238
+          },
+          "stress": {
+            "mean": 0.009624877276079115,
+            "negative": 36,
+            "positive": 48,
+            "zero": 44,
+            "min": -0.054923954638792294,
+            "max": 0.18160320352697856
+          },
+          "upper": {
+            "mean": -0.01871781283509298,
+            "negative": 84,
+            "positive": 0,
+            "zero": 44,
+            "min": -0.14521322847902973,
+            "max": 0
+          }
+        },
+        "robustVsGreedy": {
+          "upper": {
+            "mean": -0.006535331950525526,
+            "negative": 32,
+            "positive": 0,
+            "zero": 96,
+            "min": -0.14922891756014056,
+            "max": 0
+          }
+        },
+        "nominalVsCyclic": {
+          "nominal": {
+            "mean": -0.07186195813248193,
+            "negative": 112,
+            "positive": 0,
+            "zero": 16,
+            "min": -0.3023297113457488,
+            "max": 0
+          }
+        },
+        "meanGap": 0.12896372423749553,
+        "differentFirst": 33,
+        "activeFirstNotFirstAgent": 84,
+        "meanStates": 685.4453125
+      },
+      "confirmation": {
+        "cases": 64,
+        "policies": [
+          {
+            "policy": "Немедленная робастная",
+            "loss": 0.6959531014823236,
+            "stressLoss": 0.6959531014823236,
+            "upperRisk": 0.6959531014823236,
+            "coverage": 0.421875,
+            "stressCoverage": 0.421875,
+            "queries": 0,
+            "delay": 0,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Случайный запрос",
+            "loss": 0.46894167034917583,
+            "stressLoss": 0.49228969154100505,
+            "upperRisk": 0.5533521397176144,
+            "coverage": 0.7729388690119157,
+            "stressCoverage": 0.768826145750697,
+            "queries": 1.0079122366318245,
+            "delay": 1.4108896616287527,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Циклический DP",
+            "loss": 0.414123442854433,
+            "stressLoss": 0.4440920031389842,
+            "upperRisk": 0.5505269754394836,
+            "coverage": 0.89208838903941,
+            "stressCoverage": 0.8914504266539915,
+            "queries": 1.31717000998283,
+            "delay": 1.8527912432127778,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Жадный робастный",
+            "loss": 0.37776600238080227,
+            "stressLoss": 0.40460919073639184,
+            "upperRisk": 0.46783323497064283,
+            "coverage": 0.8675515168414633,
+            "stressCoverage": 0.8666223611619007,
+            "queries": 1.0107028194704102,
+            "delay": 1.269881702740506,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Номинальный DP",
+            "loss": 0.3438929052202616,
+            "stressLoss": 0.38083848376968027,
+            "upperRisk": 0.4792969358160455,
+            "coverage": 0.9209243924960583,
+            "stressCoverage": 0.9193665749410708,
+            "queries": 1.357599601595403,
+            "delay": 1.7460501785567086,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Робастный DP",
+            "loss": 0.36499840527235805,
+            "stressLoss": 0.39193520905933243,
+            "upperRisk": 0.4606488384719588,
+            "coverage": 0.8784265771754528,
+            "stressCoverage": 0.8769161907100914,
+            "queries": 1.1583542282900132,
+            "delay": 1.4392720380161705,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          }
+        ],
+        "robustVsNominal": {
+          "nominal": {
+            "mean": 0.02110550005209641,
+            "negative": 0,
+            "positive": 42,
+            "zero": 22,
+            "min": 0,
+            "max": 0.18376359768795048
+          },
+          "stress": {
+            "mean": 0.011096725289652219,
+            "negative": 13,
+            "positive": 29,
+            "zero": 22,
+            "min": -0.054923954638792294,
+            "max": 0.18111587654418582
+          },
+          "upper": {
+            "mean": -0.018648097344086664,
+            "negative": 42,
+            "positive": 0,
+            "zero": 22,
+            "min": -0.10078363484185121,
+            "max": 0
+          }
+        },
+        "robustVsGreedy": {
+          "upper": {
+            "mean": -0.007184396498684057,
+            "negative": 18,
+            "positive": 0,
+            "zero": 46,
+            "min": -0.14922891756014056,
+            "max": 0
+          }
+        },
+        "nominalVsCyclic": {
+          "nominal": {
+            "mean": -0.07023053763417139,
+            "negative": 56,
+            "positive": 0,
+            "zero": 8,
+            "min": -0.3023297113457488,
+            "max": 0
+          }
+        },
+        "meanGap": 0.11675593325169728,
+        "differentFirst": 16,
+        "activeFirstNotFirstAgent": 42,
+        "meanStates": 662.421875
+      }
+    },
+    {
+      "domain": "heterogeneous",
+      "all": {
+        "cases": 128,
+        "policies": [
+          {
+            "policy": "Немедленная робастная",
+            "loss": 0.7772081057401332,
+            "stressLoss": 0.7772081057401332,
+            "upperRisk": 0.7772081057401332,
+            "coverage": 0.2890625,
+            "stressCoverage": 0.2890625,
+            "queries": 0,
+            "delay": 0,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Случайный запрос",
+            "loss": 0.6501623677860475,
+            "stressLoss": 0.6695847781637209,
+            "upperRisk": 0.6874011136640966,
+            "coverage": 0.5653644860905825,
+            "stressCoverage": 0.564135530455434,
+            "queries": 0.6902264509619167,
+            "delay": 1.143659900360538,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Циклический DP",
+            "loss": 0.6110947161161108,
+            "stressLoss": 0.6372505107624792,
+            "upperRisk": 0.6629060583358212,
+            "coverage": 0.6576356072667829,
+            "stressCoverage": 0.6556258752900795,
+            "queries": 0.8959047707200383,
+            "delay": 1.4639284269380795,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Жадный робастный",
+            "loss": 0.559105609098903,
+            "stressLoss": 0.587173470151192,
+            "upperRisk": 0.6057859908915181,
+            "coverage": 0.6915793959588984,
+            "stressCoverage": 0.6893443785285991,
+            "queries": 0.8560763093352708,
+            "delay": 1.3280390488216394,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Номинальный DP",
+            "loss": 0.550201634093701,
+            "stressLoss": 0.5844142430696698,
+            "upperRisk": 0.6103010812215302,
+            "coverage": 0.7431582658871139,
+            "stressCoverage": 0.7408313586851937,
+            "queries": 1.0494279292141198,
+            "delay": 1.6176690720146087,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Робастный DP",
+            "loss": 0.5571500166369829,
+            "stressLoss": 0.5851457199962296,
+            "upperRisk": 0.6042799868947776,
+            "coverage": 0.696755150526214,
+            "stressCoverage": 0.6945892307843775,
+            "queries": 0.8899647345859938,
+            "delay": 1.3707556805582288,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          }
+        ],
+        "robustVsNominal": {
+          "nominal": {
+            "mean": 0.006948382543282012,
+            "negative": 0,
+            "positive": 46,
+            "zero": 82,
+            "min": 0,
+            "max": 0.0696270052415926
+          },
+          "stress": {
+            "mean": 0.0007314769265592777,
+            "negative": 21,
+            "positive": 25,
+            "zero": 82,
+            "min": -0.0337885298035453,
+            "max": 0.04065946463867376
+          },
+          "upper": {
+            "mean": -0.006021094326752741,
+            "negative": 46,
+            "positive": 0,
+            "zero": 82,
+            "min": -0.07050703909386391,
+            "max": 0
+          }
+        },
+        "robustVsGreedy": {
+          "upper": {
+            "mean": -0.001506003996740468,
+            "negative": 10,
+            "positive": 0,
+            "zero": 118,
+            "min": -0.04118150683815003,
+            "max": 0
+          }
+        },
+        "nominalVsCyclic": {
+          "nominal": {
+            "mean": -0.06089308202240967,
+            "negative": 79,
+            "positive": 0,
+            "zero": 49,
+            "min": -0.4038468234228383,
+            "max": 0
+          }
+        },
+        "meanGap": 0.05407835280107624,
+        "differentFirst": 25,
+        "activeFirstNotFirstAgent": 71,
+        "meanStates": 275.5
+      },
+      "confirmation": {
+        "cases": 64,
+        "policies": [
+          {
+            "policy": "Немедленная робастная",
+            "loss": 0.7753312934597066,
+            "stressLoss": 0.7753312934597066,
+            "upperRisk": 0.7753312934597066,
+            "coverage": 0.296875,
+            "stressCoverage": 0.296875,
+            "queries": 0,
+            "delay": 0,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Случайный запрос",
+            "loss": 0.6456624665705156,
+            "stressLoss": 0.662802234765759,
+            "upperRisk": 0.6807980240610922,
+            "coverage": 0.5511267839628675,
+            "stressCoverage": 0.5490672794420224,
+            "queries": 0.6356008832348267,
+            "delay": 1.0162089172908546,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Циклический DP",
+            "loss": 0.6173682109462909,
+            "stressLoss": 0.6405560503673249,
+            "upperRisk": 0.6679642347466943,
+            "coverage": 0.6517292621080129,
+            "stressCoverage": 0.6502458866214554,
+            "queries": 0.8201342686737206,
+            "delay": 1.317743641612267,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Жадный робастный",
+            "loss": 0.5633797732569176,
+            "stressLoss": 0.5885605476183491,
+            "upperRisk": 0.6094617067734254,
+            "coverage": 0.6856939611615457,
+            "stressCoverage": 0.6834165524598614,
+            "queries": 0.8470648592441898,
+            "delay": 1.2698886365527828,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Номинальный DP",
+            "loss": 0.555605884577485,
+            "stressLoss": 0.5859362862325572,
+            "upperRisk": 0.6142945186299489,
+            "coverage": 0.7201341657862997,
+            "stressCoverage": 0.718119260544826,
+            "queries": 1.037668063954794,
+            "delay": 1.5329671322253928,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          },
+          {
+            "policy": "Робастный DP",
+            "loss": 0.5627782122885538,
+            "stressLoss": 0.5875524165347173,
+            "upperRisk": 0.6088514716221726,
+            "coverage": 0.6877419035171914,
+            "stressCoverage": 0.685723141844213,
+            "queries": 0.8726514892540129,
+            "delay": 1.3041141401143461,
+            "unsafe": 0,
+            "stressUnsafe": 0
+          }
+        ],
+        "robustVsNominal": {
+          "nominal": {
+            "mean": 0.007172327711068877,
+            "negative": 0,
+            "positive": 26,
+            "zero": 38,
+            "min": 0,
+            "max": 0.06742993988423618
+          },
+          "stress": {
+            "mean": 0.001616130302159919,
+            "negative": 8,
+            "positive": 18,
+            "zero": 38,
+            "min": -0.017705791325926756,
+            "max": 0.031218511583373076
+          },
+          "upper": {
+            "mean": -0.005443047007776442,
+            "negative": 26,
+            "positive": 0,
+            "zero": 38,
+            "min": -0.07050703909386391,
+            "max": 0
+          }
+        },
+        "robustVsGreedy": {
+          "upper": {
+            "mean": -0.0006102351512527202,
+            "negative": 3,
+            "positive": 0,
+            "zero": 61,
+            "min": -0.020877283195885665,
+            "max": 0
+          }
+        },
+        "nominalVsCyclic": {
+          "nominal": {
+            "mean": -0.06176232636880617,
+            "negative": 41,
+            "positive": 0,
+            "zero": 23,
+            "min": -0.39471159658583854,
+            "max": 0
+          }
+        },
+        "meanGap": 0.05324558704468766,
+        "differentFirst": 15,
+        "activeFirstNotFirstAgent": 38,
+        "meanStates": 238.671875
+      }
+    }
+  ]
+}
