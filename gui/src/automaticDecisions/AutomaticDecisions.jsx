@@ -1,3 +1,4 @@
+import {ExtendedStudyPanel} from "./ExtendedStudyPanel.jsx";
 import {MonteCarloPanel} from "./MonteCarloPanel.jsx";
 import React,{forwardRef,useEffect,useImperativeHandle,useMemo,useRef,useState} from "react";
 import {BarChart,Bar,LineChart,Line,CartesianGrid,XAxis,YAxis,Tooltip,Legend,ResponsiveContainer,ReferenceLine,ErrorBar} from "recharts";
@@ -157,7 +158,7 @@ export const AutomaticDecisions=forwardRef(function AutomaticDecisions(props,ref
  useImperativeHandle(ref,()=>({start:()=>actions.current?.start(),stop:()=>actions.current?.stop(),reset:()=>actions.current?.reset(),newSeed:()=>actions.current?.newSeed()}),[]);
  const navigation=React.isValidElement(props.navigation)?React.cloneElement(props.navigation,{},React.Children.map(props.navigation.props.children,child=>{
   if(!React.isValidElement(child)||child.props.className!=="r27-mode-tabs")return child;
-  return React.cloneElement(child,{},E2_MODES.map(([id,name])=><button type="button" key={id} className={"r27-mode-tab"+(id===mode?" active":"")} aria-pressed={id===mode} disabled={busy||!["general","mc"].includes(id)} title={["general","mc"].includes(id)?name:"Запланировано; расчёт пока не реализован"} onClick={()=>setMode(id)}>{name}</button>));
+  return React.cloneElement(child,{},E2_MODES.map(([id,name])=><button type="button" key={id} className={"r27-mode-tab"+(id===mode?" active":"")} aria-pressed={id===mode} disabled={busy} title={name} onClick={()=>setMode(id)}>{name}</button>));
  })):props.navigation;
- return mode==="mc"?<MonteCarloPanel {...props} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>:<GeneralDecisions {...props} navigation={navigation} onRuntimeChange={onRuntime} ref={actions}/>;
+ return mode==="mc"?<MonteCarloPanel {...props} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>:mode==="general"?<GeneralDecisions {...props} navigation={navigation} onRuntimeChange={onRuntime} ref={actions}/>:<ExtendedStudyPanel key={mode} {...props} mode={mode} navigation={navigation} onRuntimeChange={onRuntime} title={TITLE} author={AUTHOR} ref={actions}/>;
 });

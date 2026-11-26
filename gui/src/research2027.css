@@ -738,3 +738,7 @@
 /* E2 research modes use the shared navigation tokens. Wrap the wider mode set. */
 main[data-study="uncertainty"] .r27-mode-tabs{flex:1 1 auto;flex-wrap:wrap;gap:4px}
 main[data-study="uncertainty"] .r27-mode-tab:disabled:not(.active){opacity:.52;cursor:not-allowed}
+
+/* Extended E2 scientific panels: use the same field/table tokens. */
+.e2-json-preview{font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f8fb;padding:8px;max-height:220px;overflow:auto}
+main[data-study="uncertainty"] .r27-unified-settings textarea{width:100%;box-sizing:border-box;resize:vertical;font:inherit}
