@@ -72,6 +72,5 @@ Desktop.ini
 *.iml
 
 # E2 generated input/output
-/gui/public/e2-fixtures.json
 /research/automatic-decisions/reference/*.csv
 /research/automatic-decisions/reference/checks.txt

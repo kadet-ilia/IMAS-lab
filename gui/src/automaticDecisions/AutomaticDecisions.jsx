@@ -48,7 +48,7 @@ function Settings({c,update,running,start,stop,reset,clear,loadFile,fixtureHash}
   </div>
   <details className="advanced"><summary>Воспроизводимость</summary><div className="advanced-body">
    <label className="field"><span>Импорт первичных частот статьи (JSON)</span><input type="file" accept=".json,application/json" disabled={running} onChange={e=>{if(e.target.files?.[0])loadFile(e.target.files[0]);e.target.value="";}}/></label>
-   <p className="r27-note">{fixtureHash?"SHA-256: "+fixtureHash.slice(0,16)+"…":"При запуске используется e2-fixtures.json, если он создан при сборке; иначе импортируйте эталонный файл."}</p>
+   <p className="r27-note">{fixtureHash?"SHA-256: "+fixtureHash.slice(0,16)+"…":"В режиме статьи используется встроенный проверяемый эталонный набор. Импорт — резервный способ загрузки."}</p>
    <button type="button" className="r27-settings-reset" onClick={clear} disabled={running}>Удалить сохранённую серию</button>
    <button type="button" className="r27-settings-reset" onClick={reset} disabled={running}>Восстановить параметры по умолчанию</button>
   </div></details>
@@ -101,7 +101,7 @@ export const AutomaticDecisions=forwardRef(function AutomaticDecisions({navigati
  const reset=()=>change(DEFAULTS);
  const newSeed=()=>change({...c,mode:"custom",seed:Math.max(1,Math.floor(Math.random()*4294967295))});
  const importFixture=async(file)=>{try{const data=await parseFixture(await file.text());currentLoaded.current=data;setLoaded(data);setError("");setRecords(null);setProgress(null);}catch(e){setError(e.message||String(e));}};
- const ensureFixture=async()=>{if(currentLoaded.current)return currentLoaded.current;const response=await fetch(import.meta.env.BASE_URL+"e2-fixtures.json");if(!response.ok)throw Error("Эталонные частоты отсутствуют. Выполните npm run e2:fixtures или импортируйте JSON.");let data;try{data=await parseFixture(await response.text());}catch(e){throw Error("Не удалось загрузить эталонные частоты: "+e.message+"; импортируйте JSON из Python.");}currentLoaded.current=data;setLoaded(data);return data;};
+ const ensureFixture=async()=>{if(currentLoaded.current)return currentLoaded.current;const base=import.meta.env.BASE_URL;const [response,manifest]=await Promise.all([fetch(base+"e2-fixtures.json",{cache:"no-cache"}),fetch(base+"e2-fixtures.sha256",{cache:"no-cache"})]);if(!response.ok||!manifest.ok)throw Error("Эталонные ресурсы не опубликованы. Обновите сборку стенда или импортируйте JSON.");const type=response.headers.get("content-type")||"";const raw=await response.text();if(type.includes("text/html")||raw.trimStart().startsWith("<"))throw Error("Сервер вернул HTML вместо эталонного JSON. Требуется повторное развёртывание полной сборки.");let data;try{data=await parseFixture(raw);const expected=(await manifest.text()).trim();if(!/^[a-f0-9]{64}$/.test(expected)||data.hash!==expected)throw Error("SHA-256 не совпадает");}catch(e){throw Error("Не удалось проверить эталонный набор: "+e.message+"; обновите сборку или импортируйте JSON.");}currentLoaded.current=data;setLoaded(data);return data;};
  const clear=async()=>{try{const hash=c.mode==="article"?(await ensureFixture()).hash:null,key=await keyFor(c,hash);await remove(key);setRecords(null);setProgress(null);setLast(null);setError("");}catch(e){setError(e.message||String(e));}};
  const start=async()=>{
   if(busy.current)return;busy.current=true;const id=++generation.current,startTime=performance.now();

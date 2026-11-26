@@ -623,6 +623,14 @@ for (let i=0; i<researchTabs.length; i++) {
 }
 await page.getByRole("combobox", { name: "Выбор эксперимента" }).selectOption("study-uncertainty");
 const seedInput = page.locator(".r27-unified-settings input[aria-label=\"Начальное зерно генератора\"]");
+// Verify the shipped article assets through the real browser and start a fixed article calibration.
+const bundled=await page.evaluate(async()=>{const response=await fetch("e2-fixtures.json");const manifest=await fetch("e2-fixtures.sha256");const raw=await response.text();const expected=(await manifest.text()).trim();const hash=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(raw))),v=>v.toString(16).padStart(2,"0")).join("");return {ok:response.ok&&manifest.ok&&hash===expected,records:JSON.parse(raw).records.length};});
+if(!bundled.ok||bundled.records!==390)throw Error("E2: invalid published article fixtures");
+await page.getByRole("combobox",{name:"Экспериментальная серия"}).selectOption("cost");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.locator(".progress-strip").getByText(/Завершено калибровок: [1-9]/).waitFor({timeout:90000});
+await page.locator(".topbar").getByRole("button",{name:"Остановить",exact:true}).click();
+await page.locator(".topbar").getByRole("button",{name:"Сбросить",exact:true}).click();
 const firstSeed = await seedInput.inputValue();
 await page.locator(".topbar").getByRole("button",{name:"Новый сид",exact:true}).click();
 if((await seedInput.inputValue())===firstSeed)throw Error("Common toolbar seed action has no effect on research study");
