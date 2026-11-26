@@ -1,0 +1,26 @@
+name: E2 scientific campaign (1024 configurations)
+on:
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/scripts/e2-campaign.mjs'
+      - '.github/workflows/e2-campaign.yml'
+  workflow_dispatch:
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run 128 distinct configurations in each of 8 sections
+        working-directory: gui
+        run: node scripts/e2-campaign.mjs campaign-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2-campaign-evidence
+          path: gui/campaign-results/
+          retention-days: 90

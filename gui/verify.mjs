@@ -737,6 +737,13 @@ const downloadE2=async()=>{
  return JSON.parse(fs.readFileSync(await d.path(),"utf8"));
 };
 const runE2=()=>page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+for(const name of ["Автоматически выявить группы","Предположение независимых одинаково распределённых тестовых запросов"]){
+ const checkbox=page.getByRole("checkbox",{name,exact:true});
+ const size=await checkbox.boundingBox();
+ if(!size||Math.abs(size.width-14)>1||Math.abs(size.height-14)>1)throw Error("E2 compact data checkbox: "+name+" "+JSON.stringify(size));
+ const inline=await checkbox.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.nextElementSibling.getBoundingClientRect();return b.left>=a.right&&b.left-a.right<=12&&Math.abs(b.top-a.top)<=6;});
+ if(!inline)throw Error("E2 checkbox and label alignment: "+name);
+}
 await page.getByRole("checkbox",{name:"Автоматически выявить группы"}).check();
 await runE2();
 const groupingE2=await downloadE2();

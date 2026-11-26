@@ -742,3 +742,18 @@ main[data-study="uncertainty"] .r27-mode-tab:disabled:not(.active){opacity:.52;c
 /* Extended E2 scientific panels: use the same field/table tokens. */
 .e2-json-preview{font-size:11px;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f8fb;padding:8px;max-height:220px;overflow:auto}
 main[data-study="uncertainty"] .r27-unified-settings textarea{width:100%;box-sizing:border-box;resize:vertical;font:inherit}
+
+
+/* Data-only compact native checkboxes; do not inherit full-width input fields. */
+.workspace > .r27-unified-settings.sidebar .r27-data-checkbox{
+  display:flex;align-items:flex-start;gap:7px;margin:9px 0;cursor:pointer;
+  font-size:12px;line-height:1.4;color:var(--text, #26394d);
+}
+.workspace > .r27-unified-settings.sidebar .r27-data-checkbox > input[type="checkbox"]{
+  appearance:auto;flex:0 0 14px;box-sizing:border-box;width:14px!important;
+  height:14px!important;min-width:14px!important;max-width:14px!important;
+  min-height:14px!important;margin:1px 0 0;padding:0!important;
+  accent-color:var(--blue,#286b9f);
+}
+.workspace > .r27-unified-settings.sidebar .r27-data-checkbox > span{flex:1;min-width:0;}
+.workspace > .r27-unified-settings.sidebar .r27-data-checkbox:has(input:disabled){opacity:.6;cursor:not-allowed;}
