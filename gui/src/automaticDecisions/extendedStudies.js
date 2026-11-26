@@ -1,3 +1,4 @@
+import {candidateConfigs,evaluateDesign} from "./designOptimization.js";
 import {advancedMC,validateAdvancedMC} from "./advancedMC.js";
 import {BASE,EXT_VERSION,validateExt,uniformGroups,seedFor,spaceSize,lawsExt,calibration,tables,point,select,loss,exactExt,simulateExt,sampler,mixLaw,groupGeometry,l1Radius,draw} from "./extendedModel.js";
 import {random,multinomial,extrem} from "./kernel.js";
@@ -5,10 +6,10 @@ import {studentCritical} from "./statistics.js";
 const seq=n=>Array.from({length:n},(_,i)=>i),sum=a=>a.reduce((s,v)=>s+v,0),mean=a=>sum(a)/a.length,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const integer=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b,real=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b;
 const fail=()=>{throw Error("Некорректные параметры серии");};
-export const STUDY_VERSION="E2.11-experimental-v1";
+export const STUDY_VERSION="E2.12-experimental-v1";
 export const FACTORS={prior:{label:"π",min:.01,max:.8},c:{label:"c",min:0,max:3},m:{label:"M",min:100,max:100000},rhoScale:{label:"Множитель ρ",min:0,max:1},drop:{label:"Пропуски",min:0,max:.9}};
 const METRICS=["coverage","loss","lower","tight","upperRisk","posteriorMass","violation","width","identityGap"];
-export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false,discoverGroups:false,discoveryFraction:.5,groupThreshold:.05,groupMethod:"complete",groupMaxSize:50};
+export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false,discoverGroups:false,discoveryFraction:.5,groupThreshold:.05,groupMethod:"complete",groupMaxSize:50,approxLarge:true,designSpec:[{name:"Базовая",groups:[9,7,5]},{name:"Компактная",groups:[5,4,3]},{name:"Расширенная",groups:[10,8,6,4]}]};
 function grid(a,b,n,round=false){return [...new Set(seq(n).map(i=>{const v=a+(b-a)*i/(n-1);return round?Math.round(v):v;}))];}
 function range(a,b,n,f){if(!FACTORS[f]||!integer(n,2,15)||!real(a,FACTORS[f].min,FACTORS[f].max)||!real(b,a,FACTORS[f].max)||(f==="m"&&(!Number.isInteger(a)||!Number.isInteger(b))))fail();return grid(a,b,n,f==="m");}
 function baseFor(raw){return validateExt({...raw,stress:"none",eta:0});}
@@ -24,7 +25,8 @@ export function validateStudy(mode,raw){
   if(c.experiment==="scale"&&(!integer(c.mcN,1000,50000)||!integer(c.groupsMax,1,20)||!integer(c.agentsMax,2,50)))fail();
  }
  if(mode==="robustness"&&(!["drift","cross","mnar","nonexchangeable","biasedMask","contamination","all"].includes(c.stress)||!integer(c.levels,2,11)||c.levels*c.reps*(c.stress==="all"?6:1)>450))fail();
- if(mode==="optimization"&&(!["grid","multiclass"].includes(c.experiment)||!real(c.requiredCoverage,0,1)||!real(c.riskLimit,0,1000)||!real(c.agentCost,0,1000)||!real(c.groupCost,0,1000)||!integer(c.groupsMin,1,8)||!integer(c.groupsMax,c.groupsMin,8)||!integer(c.agentsMin,2,20)||!integer(c.agentsMax,c.agentsMin,20)||!integer(c.mcN,1000,50000)))fail();
+ if(mode==="optimization"&&(!["grid","heterogeneous","multiclass"].includes(c.experiment)||!real(c.requiredCoverage,0,1)||!real(c.riskLimit,0,1000)||!real(c.agentCost,0,1000)||!real(c.groupCost,0,1000)||!integer(c.groupsMin,1,8)||!integer(c.groupsMax,c.groupsMin,8)||!integer(c.agentsMin,2,20)||!integer(c.agentsMax,c.agentsMin,20)||!integer(c.mcN,1000,50000)))fail();
+ if(mode==="optimization"&&c.experiment==="heterogeneous"){if(typeof c.approxLarge!=="boolean")fail();candidateConfigs(c,c.designSpec);}
  if(mode==="dynamics"&&(!["adaptive","sequential"].includes(c.experiment)||!integer(c.steps,100,20000)||!integer(c.window,20,2000)||!integer(c.delay,0,2000)||!integer(c.updateEvery,1,1000)||!real(c.changeAt,.1,.9)||!real(c.shift,0,1)||!integer(c.rounds,2,20)||!real(c.waitCost,0,1000)))fail();
  if(mode==="queue"&&(!real(c.arrival,.01,100000)||!real(c.service,.01,100000)||!integer(c.operators,1,100)||!["model","lower","manual"].includes(c.gammaSource)||!real(c.gamma,0,1)||!real(c.deadline,0,10000)||!integer(c.arrivals,100,100000)||!integer(c.warmup,0,c.arrivals-2)||!integer(c.queueReps,1,30)))fail();
  if(mode==="data"&&(!real(c.trainFraction,.1,.9)||typeof c.iidTest!=="boolean"||typeof c.discoverGroups!=="boolean"||!real(c.discoveryFraction,.1,.9)||!real(c.groupThreshold,1e-8,1)||!["complete","components"].includes(c.groupMethod)||!integer(c.groupMaxSize,1,50)))fail();
@@ -51,6 +53,7 @@ export function studyPlan(mode,raw){
   else for(const x of range(c.from,c.to,c.levels,c.factor))for(const y of c.experiment==="two"?range(c.from2,c.to2,c.levels2,c.factor2):[null])for(let rep=0;rep<c.reps;rep++)units.push({kind:"exact",x,y,rep,values:{[c.factor]:x,...(y===null?{}:{[c.factor2]:y})}});
  }else if(mode==="robustness"){
   for(const stress of c.stress==="all"?["drift","cross","mnar","nonexchangeable","biasedMask","contamination"]:[c.stress])for(const x of grid(0,1,c.levels))for(let rep=0;rep<c.reps;rep++)units.push({kind:"exact",stress,x,rep});
+ }else if(mode==="optimization"&&c.experiment==="heterogeneous"){for(const spec of candidateConfigs(c,c.designSpec))units.push({kind:"heterogeneous",spec});
  }else if(mode==="optimization"&&c.experiment==="grid"){
   for(let B=c.groupsMin;B<=c.groupsMax;B++)for(let n=c.agentsMin;n<=c.agentsMax;n++)units.push({kind:"candidate",B,n});
  }else if(mode==="queue"){for(let rep=0;rep<c.queueReps;rep++)units.push({kind:"queue",rep});}
@@ -64,6 +67,7 @@ export function evaluateUnit(mode,raw,unit,total=1){
   const conf={...base,...unit.values,...(unit.family?{family:unit.family}:{}),...(unit.stress?{stress:unit.stress,eta:unit.x}:{}),seed:seedFor(c.seed,unit.rep??0)};
   const r=exactExt(conf);return {unit,modelConfig:r.config,...compact(r),ms:performance.now()-t0};
  }
+ if(unit.kind==="heterogeneous")return evaluateDesign(base,unit,total);
  if(unit.kind==="candidate"){
   // Confidence adjustment across the entire prespecified finite design (one calibration per candidate).
   const conf={...base,...uniformGroups(unit.B,unit.n,base),alpha:c.alpha/total,seed:seedFor(c.seed,unit.B*100+unit.n)},cost=unit.B*c.groupCost+unit.B*unit.n*c.agentCost;
@@ -99,8 +103,8 @@ export function summarizeStudy(mode,c,records){
    for(const factor of names){const ab=complete.map(i=>lookup.get(i+":"+factor)[metric]);rows.push({factor,metric,N:complete.length,variance:v,first:v>1e-20?1-mean(ab.map((x,i)=>(b[i]-x)**2))/(2*v):null,total:v>1e-20?mean(ab.map((x,i)=>(a[i]-x)**2))/(2*v):null});}
   }return {rows,aux:[]};
  }
- if(mode==="optimization"&&c.experiment==="grid"){
-  const rows=records.map(r=>({B:r.unit.B,n:r.unit.n,agents:r.agents,size:r.size,cost:r.cost,status:r.status,coverage:r.coverage??null,loss:r.loss??null,tight:r.tight??null,upperRisk:r.upperRisk??null}));
+ if(mode==="optimization"&&["grid","heterogeneous"].includes(c.experiment)){
+  const rows=records.map(r=>({...(r.unit.spec?{candidate:r.unit.spec.name,composition:r.unit.spec.groups.join(", "),B:r.unit.spec.groups.length,algorithm:r.algorithm,nomCoverage:r.nomCoverage??null,nomLoss:r.nomLoss??null}:{B:r.unit.B,n:r.unit.n}),agents:r.agents,size:r.size,cost:r.cost,status:r.status,coverage:r.coverage??null,loss:r.loss??null,tight:r.tight??null,upperRisk:r.upperRisk??null}));
   const valid=rows.filter(r=>r.status==="feasible");for(const r of rows)r.pareto=r.status==="feasible"&&!valid.some(q=>q!==r&&q.cost<=r.cost&&q.upperRisk<=r.upperRisk&&q.tight>=r.tight&&(q.cost<r.cost||q.upperRisk<r.upperRisk||q.tight>r.tight));
   return {rows,aux:valid.filter(r=>r.pareto).sort((a,b)=>a.cost-b.cost)};
  }
