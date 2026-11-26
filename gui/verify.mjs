@@ -926,6 +926,34 @@ if(rareE2.tables.rows.length!==3||rareE2.tables.rows.some(v=>!Number.isFinite(v.
 await page.getByRole("heading",{name:"Редкие ошибки — сравнение предложений (первый повтор)",exact:true}).waitFor();
 extensionEvidence["Редкие ошибки"]={policies:3,N:1000};
 
+await modesE2.getByRole("button",{name:"Оптимизация",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид оптимизации / расширения"}).selectOption("structure");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2");
+await page.getByRole("textbox",{name:"u при X=0 (через запятую)"}).fill(".15,.15");
+await page.getByRole("textbox",{name:"u при X=1 (через запятую)"}).fill(".85,.85");
+await page.getByRole("textbox",{name:"Корреляции ρ (через запятую)"}).fill(".65,.65");
+await page.getByRole("spinbutton",{name:"Размер каждого блока данных"}).fill("100");
+await page.getByRole("spinbutton",{name:"Объём независимого теста структуры"}).fill("200");
+await runE2();
+const structE2=await downloadE2();
+if(structE2.tables.rows.length!==3||structE2.records[0].candidates.length!==15||structE2.tables.rows.some(v=>v.certified||v.N!==200))throw Error("E2.24 structure experiment incomplete");
+await page.getByRole("heading",{name:"Фронт Парето по валидационным показателям (первый повтор)",exact:true}).waitFor();
+extensionEvidence["Многокритериальная группировка"]={partitions:15,policies:3,test:200};
+
+await modesE2.getByRole("button",{name:"Динамика",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид динамического исследования"}).selectOption("regroup");
+await page.getByRole("combobox",{name:"Поиск разбиения"}).selectOption("graph");
+await page.getByRole("spinbutton",{name:"Размер каждого блока данных"}).fill("100");
+await page.getByRole("spinbutton",{name:"Количество запросов"}).fill("300");
+await page.getByRole("spinbutton",{name:"Период пересмотра (запросы)"}).fill("100");
+await page.getByRole("spinbutton",{name:"Минимум запросов между изменениями"}).fill("100");
+await runE2();
+const regroupE2=await downloadE2();
+if(regroupE2.records.length!==2||regroupE2.tables.rows.length!==6||regroupE2.records.some(r=>r.events.length!==300||r.events.some(v=>v.fitLast>=v.t)))throw Error("E2.26 regroup experiment incomplete");
+await page.getByRole("heading",{name:"Протокол выбора структуры",exact:true}).waitFor();
+extensionEvidence["Динамическая перегруппировка"]={runs:2,policies:3,requests:300};
+
+
 
 
 

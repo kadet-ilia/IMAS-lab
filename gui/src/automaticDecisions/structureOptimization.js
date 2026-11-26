@@ -27,7 +27,7 @@ export function validateStructure(c,dynamic=false){
  const K=c.structSearch==="exact"?enumeratePartitions(N,c.structMax).length:11;
  if(dynamic&&(!int(c.structPeriod,50,2000)||!int(c.structDwell,0,20000)||!real(c.structReconf,0,1000)||!real(c.structHysteresis,0,100)||c.groups.length<2))throw Error("Некорректные параметры реконфигурации");
  const updates=dynamic?1+Math.ceil(c.steps/c.structPeriod):1;
- if(K*c.structBlock*updates*c.structReps*N>50000000||c.structTest*K*c.structReps>5000000)throw Error("Превышен бюджет сравнения разбиений; уменьшите число повторов или блоки");
+ if(K*c.structBlock*updates*c.structReps*N*(dynamic?2:1)>50000000||c.structTest*K*c.structReps>5000000)throw Error("Превышен бюджет сравнения разбиений; уменьшите число повторов или блоки");
  return c;
 }
 function source(c,seed){
@@ -82,7 +82,6 @@ export function chooseStructure(c,discovery,calibration,validation,original,acti
   const objective=c.structRiskWeight*riskUpper/Lmax+c.structCoverageWeight*(1-coverageLower)+c.structDependenceWeight*dependence+c.structCostWeight*designNorm;
   return {id:i,partition:p.map(g=>g.map(j=>j+1).join(",")).join(" | "),groups:p.length,...v,riskUpper,coverageLower,dependence,cost,dist,objective};
  });
- const flags=paretoFlags(rows,["riskUpper","dependence","cost"]); // coverage added below without sign confusion
  const fullFlags=paretoFlags(rows.map(r=>({...r,nonCoverage:1-r.coverageLower})),["riskUpper","nonCoverage","dependence","cost"]);
  rows.forEach((r,i)=>r.pareto=fullFlags[i]);
  const best=rows.reduce((a,b)=>b.objective<a.objective-1e-12?b:a).id,cmi=rows.reduce((a,b)=>b.dependence<a.dependence-1e-12?b:a).id;
@@ -96,7 +95,7 @@ export function structureStudy(raw,unit){
 }
 export function dynamicStructure(raw,unit){
  const c=validateStructure(validateExt({...raw,stress:"none",eta:0}),true),n=c.structBlock,seed=seedFor(c.seed,102000+unit.rep*2),testSeed=seedFor(c.seed,102001+unit.rep*2),gen=source(c,seed),stream=source(c,testSeed),original=originalPartition(c.groups),history=seq(3*n).map(i=>gen(i-3*n)),pending=[],events=[],trace=[],updates=[],switchAt=Math.floor(c.steps*c.changeAt);
- const initial=chooseStructure(c,...split(history,n),original),fixed=initial.models[initial.best];let active=fixed,staticRefit=fixed,released=0,lastChange=-c.structDwell,changes=0,cost=0;
+ const initial=chooseStructure(c,...split(history,n),original),fixed=initial.models[initial.best];let active=fixed,staticRefit=fixed,released=0,lastChange=0,changes=0,cost=0;
  const acc=seq(3).map(()=>({L:0,cov:0,miss:0,fp:0}));let block=seq(3).map(()=>({L:0,cov:0})),blockN=0;
  for(let t=0;t<c.steps;t++){
   while(released<pending.length&&pending[released].reveal<=t){history.push(pending[released++].row);if(history.length>3*n)history.shift();}
