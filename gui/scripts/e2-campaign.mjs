@@ -12,7 +12,7 @@ import {optimalStopping} from "../src/automaticDecisions/optimalStopping.js";
 import {closedQueue} from "../src/automaticDecisions/closedLoopQueue.js";
 import {validateObservations} from "../src/automaticDecisions/dataValidation.js";
 const N=128,ROOT=20261126,MODES=["general","mc","sensitivity","robustness","optimization","dynamics","queue","data"];
-const sum=a=>a.reduce((s,v)=>s+v,0),mean=a=>a.length?sum(a)/a.length:null,round=v=>Math.round(v*1e6)/1e6;
+const sum=a=>a.reduce((s,v)=>s+v,0),mean=a=>a.length?sum(a)/a.length:null,round=v=>Number(v.toPrecision(10));
 const arr=(n,f)=>Array.from({length:n},(_,i)=>f(i));
 function makeBase(i,mode,B=3){
  const seed=seedFor(ROOT,10000*(MODES.indexOf(mode)+1)+i),r=random(seedFor(seed,11)),uniform=(a,b)=>a+(b-a)*r(),integer=(a,b)=>Math.floor(uniform(a,b+1));
@@ -81,12 +81,13 @@ function data(i){
   const dataset=spec(masked(interleaved,false)),threshold=.01+.09*r(),method=i%4===0?"complete":"components",res=validateObservations(dataset,{...config,discoverGroups:true,discoveryFraction:.5,groupThreshold:threshold,groupMethod:method,groupMaxSize:2*n});
   check(res.grouping.valid&&res.summary.length===2&&!res.certified,"group discovery output");
   const [a,b]=res.summary,[before,after]=res.grouping.diagnostics;
-  return {input:{...cfg(base),N,mask,kind:"grouping",threshold,method},output:{summary:res.summary,groups:res.grouping.groups,diagnostics:res.grouping.diagnostics,split:res.split,counts:res.counts,groupedCounts:res.grouped.counts},metrics:{coverage:b.coverage,loss:b.loss,groupLossGain:a.loss-b.loss,groupCoverageGain:b.coverage-a.coverage,meanBetweenGain:before.meanBetween!==null&&after.meanBetween!==null?before.meanBetween-after.meanBetween:null,maxBetweenGain:before.maxBetween!==null&&after.maxBetween!==null?before.maxBetween-after.maxBetween:null}};
+  return {input:{...cfg(base),N,mask,kind:"grouping",threshold,method},output:{summary:res.summary,groups:res.grouping.groups,diagnostics:res.grouping.diagnostics,split:res.split,counts:res.counts,groupedCounts:res.grouped.counts},metrics:{coverage:b.coverage,loss:b.loss,groupLossGain:a.loss-b.loss,groupCoverageGain:b.coverage-a.coverage,groupEscalationCostIncrease:base.c*(a.coverage-b.coverage),groupAutomaticLossChange:(b.loss-base.c*(1-b.coverage))-(a.loss-base.c*(1-a.coverage)),meanBetweenGain:before.meanBetween!==null&&after.meanBetween!==null?before.meanBetween-after.meanBetween:null,maxBetweenGain:before.maxBetween!==null&&after.maxBetween!==null?before.maxBetween-after.maxBetween:null}};
  }
  const partial=masked(full,true),complete=partial.map((row,k)=>k<cut?full[k]:row),ref=validateObservations(spec(complete),config),res=validateObservations(spec(partial),{...config,calibrationMode:"partial",emIterations:300,emTolerance:1e-8});
  check(res.summary.length===2&&!res.certified,"partial data output");
  const [a,b]=res.summary,[v]=ref.summary;
- return {input:{...cfg(base),N,mask,kind:"partial",mnar},output:{complete:v,partial:res.summary,fit:res.partial.fit,split:res.split,countsComplete:ref.counts},metrics:{coverage:b.coverage,loss:b.loss,emLossGain:v.loss-a.loss,completionLossGain:v.loss-b.loss,completionCoverageGap:v.coverage-b.coverage,emCoverageGap:v.coverage-a.coverage,emConvergence:mean(res.diagnostics.map(v=>+v.converged))}};
+ const matched=validateObservations(spec(complete),{...config,calibrationMode:"partial",emIterations:300,emTolerance:1e-8}),[fullEM,fullBounds]=matched.summary;
+ return {input:{...cfg(base),N,mask,kind:"partial",mnar},output:{complete:v,completeMatched:matched.summary,partial:res.summary,fit:res.partial.fit,split:res.split,countsComplete:ref.counts},metrics:{coverage:b.coverage,loss:b.loss,emLossGain:v.loss-a.loss,completionLossGain:v.loss-b.loss,completionCoverageGap:v.coverage-b.coverage,emCoverageGap:v.coverage-a.coverage,matchedEMLossIncrease:a.loss-fullEM.loss,matchedEMCoverageChange:a.coverage-fullEM.coverage,matchedBoundsLossIncrease:b.loss-fullBounds.loss,matchedBoundsCoverageChange:b.coverage-fullBounds.coverage,emConvergence:mean(res.diagnostics.map(v=>+v.converged))}};
 }
 const run={general,mc,sensitivity,robustness,optimization,dynamics,queue,data};
 const stats=a=>{const b=a.filter(Number.isFinite),n=b.length;if(!n)return null;const z=b.slice().sort((x,y)=>x-y);return {n,mean:round(mean(b)),median:round((z[(n-1)>>1]+z[n>>1])/2),min:round(z[0]),max:round(z.at(-1)),positive:b.filter(v=>v>1e-9).length,negative:b.filter(v=>v< -1e-9).length};};
@@ -98,7 +99,7 @@ function selected(rows){
  if(mode==="robustness")for(const stress of [...new Set(rows.map(r=>r.input.stress))])strata[stress]=summarize(rows.filter(r=>r.input.stress===stress),["lossIncrease","coverageChange","posteriorMassChange","violation","certificateShortfall"]);
  if(mode==="dynamics")for(const shift of [false,true])strata["shift="+shift]=summarize(rows.filter(r=>(r.input.shift>0)===shift),["forgettingGain","windowGain","longGain","nominalActiveGain","testActiveGain","alarm"]);
  if(mode==="queue")for(const high of [false,true])strata["offered>=1.5="+high]=summarize(rows.filter(r=>(r.input.offered>=1.5)===high),["coverageGain","lossGain","failureGain","queueGain"]);
- if(mode==="data")for(const kind of ["grouping","partial"])for(const mn of kind==="partial"?[false,true]:[null])strata[kind+(mn===null?"":"/mnar="+mn)]=summarize(rows.filter(r=>r.input.kind===kind&&(mn===null||r.input.mnar===mn)),kind==="grouping"?["groupLossGain","groupCoverageGain","meanBetweenGain","maxBetweenGain"]:["emLossGain","completionLossGain","completionCoverageGap","emConvergence"]);
+ if(mode==="data")for(const kind of ["grouping","partial"])for(const mn of kind==="partial"?[false,true]:[null])strata[kind+(mn===null?"":"/mnar="+mn)]=summarize(rows.filter(r=>r.input.kind===kind&&(mn===null||r.input.mnar===mn)),kind==="grouping"?["groupLossGain","groupCoverageGain","groupEscalationCostIncrease","groupAutomaticLossChange","meanBetweenGain","maxBetweenGain"]:["emLossGain","completionLossGain","completionCoverageGap","matchedEMLossIncrease","matchedEMCoverageChange","matchedBoundsLossIncrease","matchedBoundsCoverageChange","emConvergence"]);
  return {mode,cases:rows.length,distinctInputs:new Set(rows.map(r=>JSON.stringify(r.input))).size,all,discovery,confirmation,strata};
 }
 const outDir=process.argv[2]||"campaign-results";fs.mkdirSync(outDir,{recursive:true});

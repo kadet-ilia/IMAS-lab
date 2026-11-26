@@ -4,6 +4,7 @@ on:
     branches: [IMAS_Lab_test]
     paths:
       - 'gui/scripts/e2-campaign.mjs'
+      - 'gui/scripts/e2-campaign-confirm.mjs'
       - '.github/workflows/e2-campaign.yml'
   workflow_dispatch:
 jobs:
@@ -18,6 +19,9 @@ jobs:
       - name: Run 128 distinct configurations in each of 8 sections
         working-directory: gui
         run: node scripts/e2-campaign.mjs campaign-results
+      - name: Challenge sensitivity interaction with 128 new configurations and two laws
+        working-directory: gui
+        run: node scripts/e2-campaign-confirm.mjs campaign-results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
