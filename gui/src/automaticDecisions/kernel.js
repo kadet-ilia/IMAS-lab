@@ -19,6 +19,7 @@ const kernel = (function kernel(){
   if(c.groups.reduce((a,n)=>a*(n+1)*(n+2)/2,1)>300000)throw Error("Превышен предварительный предел точного перечисления 300000 конфигураций");
   if(!Array.isArray(c.u)||c.u.length!==2||c.u.some(a=>!Array.isArray(a)||a.length!==3||a.some(v=>!real(v,0,1)))||!Array.isArray(c.rho)||c.rho.length!==3||c.rho.some(v=>!real(v,0,1)))throw Error("Некорректные параметры групп");
   if(!int(c.m,1,1000000)||!int(c.reps,1,100)||!int(c.seed,1,4294967295)||!int(c.scenario,1,8)||!real(c.prior,1e-9,1-1e-9)||!real(c.alpha,1e-9,1-1e-9)||!real(c.target,0,1)||!real(c.b,1e-9,1000)||!real(c.f,1e-9,1000)||!real(c.d,0,c.f)||c.d===c.f||!real(c.c,0,1000))throw Error("Некорректные параметры вероятностей, потерь или калибровки");
+  if(c.mode==="custom"&&c.series==="validation"&&![2,3,4,5].includes(c.scenario))throw Error("Валидационная серия предусмотрена для S2–S5");
   if(c.mode==="article")for(const k of ["groups","u","rho","prior","alpha","m","reps","seed","b","f","d","c","target"])if(JSON.stringify(c[k])!==JSON.stringify(DEFAULTS[k]))throw Error("Параметры статьи фиксированы: "+k);
   return c;
  }
@@ -67,11 +68,11 @@ const kernel = (function kernel(){
  function random(seed){let a=seed>>>0||1;return ()=>{a^=a<<13;a^=a>>>17;a^=a<<5;return (a>>>0)/4294967296;};}
  function multinomial(n,p,r){let out=new Array(p.length).fill(0),t=0;const F=p.map(v=>t+=v);for(let k=0;k<n;k++){let l=0,h=p.length-1,u=r();while(l<h){const m=(l+h)>>1;if(u<F[m])h=m;else l=m+1;}out[l]++;}return out;}
  function validateCounts(c,counts,m){if(!Array.isArray(counts)||counts.length!==2||counts.some(row=>!Array.isArray(row)||row.length!==3||row.some((a,g)=>!Array.isArray(a)||a.length!==c.groups[g]+1||a.some(v=>!Number.isSafeInteger(v)||v<0)||sum(a)!==m)))throw Error("Некорректные первичные частоты");return counts.map(row=>row.map(a=>a.map(v=>v/m)));}
- function fixtureRecord(f,s,rep,m){return f?.records?.find(a=>a.s===s&&a.rep===rep&&a.m===m);}
+ function fixtureRecord(f,s,rep,m,series){return f?.records?.find(a=>a.s===s&&a.rep===rep&&a.m===m&&Boolean(a.sensitivity)===(series==="sensitivity"));}
  function units(c){const ss=c.mode==="article"?seq(8).map(i=>i+1):[c.scenario],o=[];if(c.series==="sensitivity"||c.series==="all")for(const m of [500,2000,5000,20000,100000])for(let rep=0;rep<c.reps;rep++)o.push({s:3,rep,m,series:"sensitivity"});if(c.series!=="sensitivity"){let scen=c.series==="cost"?[3]:c.series==="validation"?ss.filter(s=>[2,3,4,5].includes(s)):c.series==="control"?ss: ss;for(const s of scen)for(let rep=0;rep<(c.series==="control"?1:c.reps);rep++)o.push({s,rep,m:c.m,series:c.series==="all"?"all":c.series});}return o;}
  function compute(raw,unit,fixture=null,prepared=null){
   const c=validate(raw),{s,rep,m,series}=unit,G=prepared?.G||geometry(c),{q,test}=laws(c,s),P=prepared?.P||joint(c,G,test,s),ptrue=post(c,P),z=masses(c,P);
-  const fr=fixtureRecord(fixture,s,rep,m);
+  const fr=fixtureRecord(fixture,s,rep,m,series);
   if(c.mode==="article"&&!fr)throw Error("Не найдены первичные частоты NumPy: S"+s+", повтор "+rep+", M="+m);
   const r=random((c.seed^Math.imul(s,0x9e3779b9)^Math.imul(rep+1,0x85ebca6b)^Math.imul(m,0xc2b2ae35))>>>0);
   const counts=fr?.counts||q.map(row=>row.map(a=>multinomial(m,a,r))),hat=validateCounts(c,counts,m);
