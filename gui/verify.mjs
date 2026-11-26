@@ -865,6 +865,28 @@ const restoredBatchE2=await downloadE2();
 if(JSON.stringify(restoredBatchE2.records)!==JSON.stringify(batchE2.records))throw Error("E2.31 checkpoint not restored identically");
 extensionEvidence["Серии экспериментов"]={configurations:4,runs:8,workers:2,restored:true};
 
+await modesE2.getByRole("button",{name:"Устойчивость",exact:true}).click();
+await page.getByRole("combobox",{name:"Тип нарушения"}).selectOption("dependenceRobust");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+await page.getByRole("spinbutton",{name:"Уровней интенсивности (0–1)"}).fill("3");
+await runE2();
+const depE2=await downloadE2();
+if(depE2.records.length!==3||depE2.tables.rows.length!==6||!depE2.tables.rows[1].assumptionsValid||depE2.tables.rows[3].assumptionsValid)throw Error("E2.21 TV experiment incomplete");
+await page.getByRole("heading",{name:"Робастность к остаточной зависимости",exact:true}).waitFor();
+extensionEvidence["Межгрупповая TV"]={points:3,policies:2};
+
+await modesE2.getByRole("button",{name:"Данные",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид калибровочных наблюдений"}).selectOption("identified");
+await page.getByRole("button",{name:"Загрузить синтетический пример",exact:true}).click();
+await runE2();
+const identifiedE2=await downloadE2();
+if(identifiedE2.tables.rows.length!==3||!identifiedE2.dataResult.partial.identified||identifiedE2.dataResult.certified||identifiedE2.dataResult.diagnostics.some(v=>v.widthAfter>v.widthBefore+1e-10))throw Error("E2.22 identification incomplete");
+await page.getByRole("heading",{name:"Оценки условных законов и границы завершения",exact:true}).waitFor();
+extensionEvidence["Частичная идентификация"]={policies:3,test:400};
+
+
 
 
 
