@@ -677,6 +677,59 @@ await page.getByRole("heading",{name:"Итоговая таблица Монте
 const [mcDownload]=await Promise.all([page.waitForEvent("download"),page.getByRole("button",{name:"Скачать JSON",exact:true}).click()]);
 const mcResult=JSON.parse(fs.readFileSync(await mcDownload.path(),"utf8"));
 if(mcResult.n!==3000||mcResult.checkpoints.length!==16||!mcResult.exact)throw Error("E2.1 MC export incomplete");
+await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+await page.getByRole("heading",{name:"Итоговая таблица Монте-Карло",exact:true}).waitFor({timeout:45000});
+const modesE2=page.getByRole("group",{name:"Режим эксперимента"});
+const extensionEvidence={};
+for(const name of ["Чувствительность","Устойчивость","Оптимизация","Динамика","СМО","Данные"]){
+ await modesE2.getByRole("button",{name,exact:true}).click();
+ await page.getByRole("heading",{name:name+" — методика исследования",exact:true}).waitFor();
+ if(name!=="Данные"){
+  if(name==="СМО"){
+   await page.getByRole("combobox",{name:"Источник автоматизации"}).selectOption("manual");
+   await page.getByRole("spinbutton",{name:"Число запросов к операторам"}).fill("200");
+   await page.getByRole("spinbutton",{name:"Исключить первых запросов"}).fill("20");
+   await page.getByRole("spinbutton",{name:"Повторностей"}).fill("1");
+  }else{
+   await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+   await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+   if(name==="Чувствительность"){
+    await page.getByRole("combobox",{name:"Вид анализа"}).selectOption("two");
+    await page.getByRole("spinbutton",{name:"Уровней первого фактора"}).fill("2");
+    await page.getByRole("spinbutton",{name:"Уровней второго фактора"}).fill("2");
+    await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+   }
+   if(name==="Устойчивость"){
+    await page.getByRole("spinbutton",{name:"Уровней интенсивности (0–1)"}).fill("2");
+    await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+   }
+   if(name==="Оптимизация"){
+    await page.getByRole("spinbutton",{name:"Максимум групп"}).fill("2");
+    await page.getByRole("spinbutton",{name:"Максимум агентов в группе"}).fill("3");
+   }
+   if(name==="Динамика"){
+    await page.getByRole("spinbutton",{name:"Количество запросов"}).fill("100");
+    await page.getByRole("spinbutton",{name:"Размер окна каждого класса"}).fill("50");
+   }
+  }
+ }else{
+  await page.getByRole("button",{name:"Загрузить синтетический пример",exact:true}).click();
+  await page.locator(".sidebar").getByText(/Синтетический демонстрационный набор/).waitFor();
+ }
+ await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
+ await page.getByRole("status").filter({hasText:"Экспериментальная серия завершена"}).waitFor({timeout:60000});
+ const [download]=await Promise.all([page.waitForEvent("download"),page.getByRole("button",{name:"Скачать JSON",exact:true}).click()]);
+ const payload=JSON.parse(fs.readFileSync(await download.path(),"utf8"));
+ if(!payload.complete||!payload.tables.rows.length)throw Error("E2 extension result missing: "+name);
+ if(name==="Чувствительность"&&payload.tables.rows.length!==4)throw Error("E2 factorial grid incomplete");
+ if(name==="Устойчивость"&&payload.tables.rows.length!==2)throw Error("E2 stress grid incomplete");
+ if(name==="Оптимизация"&&payload.tables.rows.length!==2)throw Error("E2 candidate grid incomplete");
+ if(name==="Динамика"&&payload.tables.rows.length!==3)throw Error("E2 adaptive comparison incomplete");
+ if(name==="СМО"&&payload.tables.rows.length!==1)throw Error("E2 queue replicates incomplete");
+ if(name==="Данные"&&(!payload.dataResult.synthetic||payload.dataResult.split.testN!==400||payload.dataResult.certified))throw Error("E2 data split or provenance missing");
+ extensionEvidence[name]={rows:payload.tables.rows.length,mode:payload.mode,complete:payload.complete};
+}
+
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Общее",exact:true}).click();
 await page.getByRole("combobox",{name:"Режим исследования"}).waitFor();
 
@@ -804,6 +857,7 @@ if(!report.researchCacheAfterNavigation||!report.researchCacheAfterReload)
 
 // NZ-15: real Chromium UI and Worker must archive and export EVERY run,
 // with observations and hidden ground truth strictly separated.
+report.e2ExtendedModes=extensionEvidence;
 report.researchSourceArchives={uncertainty:{runs:e2Result.records.length,agents:21,schema:"E2-calibration",modelVersion:e2Result.modelVersion}};
 for(const [studyId,name,N] of [
  ["study-misinformation","misinformation",7]
