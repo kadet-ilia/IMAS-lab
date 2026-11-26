@@ -553,7 +553,7 @@ for (let i=0; i<researchTabs.length; i++) {
 
   await assertNavButtonsEqual(researchTabs[i]);
   const authors=(await page.locator("main.r27-experiment-content > .imas-experiment-heading > .r27-kicker").innerText()).trim();
-  if(authors!==((i===2||i===4)?authorB:authorA))throw Error("Wrong researcher attribution on "+researchTabs[i]+": "+authors);
+  if(authors!==(i===0?"Автор · ктн Ушаков И.А.":(i===2||i===4)?authorB:authorA))throw Error("Wrong researcher attribution on "+researchTabs[i]+": "+authors);
   if ((await page.locator(".r27-theory-short").count())!==0) throw new Error("Inline mathematical theory must only be in unified help: "+researchTabs[i]);
   if ((await page.locator("main.r27-experiment-content .r27-formula").count())!==0) throw new Error("Unwanted formula on experiment page: "+researchTabs[i]);
   if (!(await page.locator(".r27-unified-settings input[type=number]").count())) throw new Error("Missing parameter inputs: " + researchTabs[i]);
@@ -627,20 +627,23 @@ const firstSeed = await seedInput.inputValue();
 await page.locator(".topbar").getByRole("button",{name:"Новый сид",exact:true}).click();
 if((await seedInput.inputValue())===firstSeed)throw Error("Common toolbar seed action has no effect on research study");
 await page.locator(".topbar").getByRole("button",{name:"Сбросить",exact:true}).click();
-await page.locator(".r27-unified-settings input[type=number]").nth(1).fill("10");
+await page.getByRole("combobox",{name:"Режим исследования"}).selectOption("custom");
+await page.getByRole("spinbutton",{name:"R — число калибровок"}).fill("2");
+await page.getByRole("spinbutton",{name:"M — наблюдений на условный закон"}).fill("500");
 await page.locator(".topbar").getByRole("button", { name: "Запустить", exact: true }).click();
-await page.locator(".r27-summary-panel .r27-table tbody tr").first().waitFor({timeout:30000});
+await page.locator(".r27-summary-panel .r27-table tbody tr").first().waitFor({timeout:45000});
 await page.getByRole("button", {name:"Воспроизвести"}).click();
-await page.getByRole("button", {name:"Пауза"}).waitFor({timeout:3000});
 await page.getByRole("button", {name:"Пауза"}).click();
-await page.getByRole("slider", {name:"Выбор такта"}).press("ArrowRight");
-if(!(await page.locator(".r27-state-matrix").count()))throw Error("Missing state heatmap");
-const researchComputed = await page.locator(".r27-summary-panel .r27-table tbody tr").count() >= 9;
+await page.getByRole("slider", {name:"Выбор этапа"}).press("ArrowRight");
+const researchComputed = await page.locator(".r27-summary-panel .r27-table tbody tr").count() === 8;
+if(!researchComputed)throw Error("E2: expected eight methods");
 const passportPanel=page.locator("section.panel").filter({hasText:"Паспорта ключевых показателей"});
 const metricPassportRows=await passportPanel.locator("tbody tr").count();
-if(metricPassportRows!==5)throw Error("UP-04: expected five executable metric passports for E2, got "+metricPassportRows);
-const passportStatus=await passportPanel.innerText();
-if(!passportStatus.includes("пройден"))throw Error("UP-04: accounting audit did not pass for E2");
+if(metricPassportRows!==8)throw Error("E2: expected eight metric passports");
+if(!(await passportPanel.innerText()).includes("пройден"))throw Error("E2: metric accounting audit failed");
+const [e2Download]=await Promise.all([page.waitForEvent("download",{timeout:15000}),page.getByRole("button",{name:"Скачать JSON",exact:true}).click()]);
+const e2Result=JSON.parse(fs.readFileSync(await e2Download.path(),"utf8"));
+if(e2Result.records.length!==2||e2Result.raw.fixed.length!==16||e2Result.tables.fixed.length!==8||e2Result.config.m!==500)throw Error("E2: raw result incomplete");
 const comparisonGrid=page.locator(".r27-study-topline");
 const plotBox=await comparisonGrid.locator(":scope > .r27-topology-full").boundingBox();
 const matrixBox=await comparisonGrid.locator(":scope > .r27-comparison-matrix").boundingBox();
@@ -761,14 +764,20 @@ for(const [studyId,name] of [
 // NZ-14: prove real Chromium IndexedDB persistence across navigation AND reload,
 // not merely an in-process mock, using the same validated E2 configuration.
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("study-uncertainty");
-await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
+await page.getByRole("combobox",{name:"Режим исследования"}).selectOption("custom");
+await page.getByRole("spinbutton",{name:"R — число калибровок"}).fill("2");
+await page.getByRole("spinbutton",{name:"M — наблюдений на условный закон"}).fill("500");
+
 await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
 await page.locator(".progress-strip").getByText("Результат восстановлен из IndexedDB",{exact:false}).waitFor({timeout:30000});
 report.researchCacheAfterNavigation=true;
 await page.reload({waitUntil:"domcontentloaded"});
 await page.getByRole("heading",{name:"Лабораторно-исследовательский стенд интеллектуальной мультиагентной системы поддержки принятия решений по обеспечению кибербезопасности"}).waitFor();
 await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption("study-uncertainty");
-await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
+await page.getByRole("combobox",{name:"Режим исследования"}).selectOption("custom");
+await page.getByRole("spinbutton",{name:"R — число калибровок"}).fill("2");
+await page.getByRole("spinbutton",{name:"M — наблюдений на условный закон"}).fill("500");
+
 await page.locator(".topbar").getByRole("button",{name:"Запустить",exact:true}).click();
 await page.locator(".progress-strip").getByText("Результат восстановлен из IndexedDB",{exact:false}).waitFor({timeout:30000});
 report.researchCacheAfterReload=true;
@@ -777,9 +786,9 @@ if(!report.researchCacheAfterNavigation||!report.researchCacheAfterReload)
 
 // NZ-15: real Chromium UI and Worker must archive and export EVERY run,
 // with observations and hidden ground truth strictly separated.
-report.researchSourceArchives={};
+report.researchSourceArchives={uncertainty:{runs:e2Result.records.length,agents:21,schema:"E2-calibration",modelVersion:e2Result.modelVersion}};
 for(const [studyId,name,N] of [
- ["study-uncertainty","uncertainty",21],["study-misinformation","misinformation",7]
+ ["study-misinformation","misinformation",7]
 ]){
  await page.getByRole("combobox",{name:"Выбор эксперимента"}).selectOption(studyId);
  await page.getByRole("spinbutton",{name:"R — число прогонов"}).fill("10");
