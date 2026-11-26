@@ -8,7 +8,7 @@ import sys
 import itertools
 from functools import lru_cache
 import numpy as np
-from scipy.optimize import minimize, linprog
+from scipy.optimize import minimize, linprog, brentq
 from scipy.stats import beta, hypergeom
 from scipy.special import rel_entr
 from extended_reference import extremum
@@ -19,13 +19,13 @@ def partial_fit(n, hist):
     mask = np.array(hist)>0
     F, z = H[mask], np.asarray(hist)[mask]
     def objective(p):
-        return -float(z@np.log(np.maximum(F@p,1e-300)))
+        return -float(z@np.log(np.maximum(F@p,1e-300)))/z.sum()
     def jac(p):
-        return -(F.T@(z/np.maximum(F@p,1e-300)))
-    sol = minimize(objective,np.ones(n+1)/(n+1),jac=jac,bounds=[(0,1)]*(n+1),constraints={"type":"eq","fun":lambda p:p.sum()-1,"jac":lambda p:np.ones(n+1)},method="SLSQP",options={"ftol":1e-10,"maxiter":2000})
+        return -(F.T@(z/np.maximum(F@p,1e-300)))/z.sum()
+    sol = minimize(objective,np.ones(n+1)/(n+1),jac=jac,bounds=[(0,1)]*(n+1),constraints={"type":"eq","fun":lambda p:p.sum()-1,"jac":lambda p:np.ones(n+1)},method="SLSQP",options={"ftol":1e-13,"maxiter":2000})
     if not sol.success:
         raise RuntimeError(sol.message)
-    return sol.x,-sol.fun
+    return sol.x,-sol.fun*z.sum()
 
 def stop_reference(c, counts, active):
     # Explicit posterior over latent (X,J_1,...,J_B), not JS product recursion.
@@ -121,10 +121,20 @@ def main():
         assert s.success;compare("simplex",r["value"],-s.fun)
     for r in data["kl"]:
         p,h=np.asarray(r["p"]),np.asarray(r["h"]);radius=r["radius"]
-        sol=minimize(lambda q:-h@q,p,jac=lambda q:-h,bounds=[(1e-12,1)]*len(p),constraints=[{"type":"eq","fun":lambda q:q.sum()-1,"jac":lambda q:np.ones(len(p))},{"type":"ineq","fun":lambda q:radius-rel_entr(p,q).sum(),"jac":lambda q:p/q}],method="SLSQP",options={"ftol":1e-11,"maxiter":1000})
-        if not sol.success:raise RuntimeError(sol.message)
-        compare("reverse_kl",r["value"],-sol.fun,2e-6)
-        assert r["value"]>=-sol.fun-2e-8
+        # All fixture masses are strictly positive. Independent primal KKT
+        # solution q_j proportional to p_j/(nu-h_j), with KL equality.
+        # Solve in the distance from max(h), avoiding a dual ternary search.
+        shift=h.max()-h
+        def primal(z):
+            q=p/(z+shift);return q/q.sum()
+        def gap(z):return rel_entr(p,primal(z)).sum()-radius
+        lower=max(1e-15,float(shift.max())*1e-15);upper=max(1.,float(shift.max()))
+        while gap(upper)>0:upper*=2
+        q=primal(brentq(gap,lower,upper,xtol=1e-14,rtol=1e-14))
+        expected=h@q
+        compare("reverse_kl_constraint",rel_entr(p,q).sum(),radius)
+        compare("reverse_kl",r["value"],expected,2e-6)
+        assert r["value"]>=expected-2e-8
     for r in data["partial"]:
         p,ll=partial_fit(r["n"],r["hist"])
         compare("partial_likelihood",r["fit"]["logLikelihood"],ll,1e-6)
@@ -150,11 +160,32 @@ def main():
             eligible=t[arr<=r["target"]];expected=float(eligible[-1]) if len(eligible) else None
             assert expected==r["result"][k],(k,expected,r["result"][k])
             for i,v in enumerate(arr):compare("risk_"+k,r["result"]["curve"][i][k+"Bound"],v)
+    for r in data["sensitivity"]:
+        # Independent vector/matrix reduction on the exported design.
+        units=r["units"];values=np.asarray(r["values"])
+        for row in r["rows"]:
+            factor,metric=row["factor"],row["metric"];col=["coverage","loss","tight"].index(metric)
+            if r["experiment"]=="sobol":
+                A=values[[i for i,u in enumerate(units) if u["tag"]=="A"],col]
+                B=values[[i for i,u in enumerate(units) if u["tag"]=="B"],col]
+                AB=values[[i for i,u in enumerate(units) if u["tag"]==factor],col]
+                var=np.var(np.r_[A,B])
+                compare("sobol_variance",row["variance"],var)
+                compare("sobol_first",row["first"],1-np.mean((B-AB)**2)/(2*var))
+                compare("sobol_total",row["total"],np.mean((A-AB)**2)/(2*var))
+            else:
+                effects=[]
+                for i,u in enumerate(units):
+                    if u["tag"]==factor:
+                        effects.append((values[i,col]-values[i-1,col])/u["delta"])
+                compare("morris_mean",row["mu"],np.mean(effects))
+                compare("morris_abs",row["muStar"],np.mean(np.abs(effects)))
+                compare("morris_sd",row["sigma"],np.std(effects,ddof=1))
     for r in data["queue"]:
         result,summary=queue_reference(r["c"],r["stream"],r["feedback"])
         for k,v in summary.items():compare("queue_"+k,r["result"][k],v)
         for e in r["result"]["events"]:
             ref=result[e["id"]];assert ref["outcome"]==e["outcome"]
             for k in ["finish","wait","action","price"]:compare("queue_event_"+k,e[k],ref[k])
-    print(json.dumps({"checks":checks,"max_absolute_error":worst,"by_check":by,"scope":"beta, unequal simplex, reverse KL, partial likelihood, weights, latent-state DP, risk threshold, event calendar"},indent=2))
+    print(json.dumps({"checks":checks,"max_absolute_error":worst,"by_check":by,"scope":"beta, unequal simplex, reverse KL, partial likelihood, weights, latent-state DP, risk threshold, Sobol/Morris reductions, event calendar"},indent=2))
 if __name__=="__main__":main()
