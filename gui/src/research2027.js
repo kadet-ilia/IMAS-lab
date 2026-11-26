@@ -4,7 +4,7 @@ import {auditResearchInference} from "./researchStatisticalAudit.js";
 /* IMAS-lab 2027: independent, seeded, synthetic research kernels.
    The formulations are explicit experimental hypotheses, not field-calibrated evidence. */
 export const STUDY_DEFS = [
-  { id:"uncertainty", short:"Неопределённость", title:"Модель распределённой поддержки принятия решений интеллектуальными агентами по обеспечению кибербезопасности объектов информационной инфраструктуры в условиях информационной неопределённости",
+  { id:"uncertainty", short:"Автоматические решения", authors:"Автор · ктн Ушаков И.А.", title:"Модель распределённой поддержки принятия решений интеллектуальными агентами по обеспечению кибербезопасности в условиях неопределённости и информационной зависимости агентов",
     origin:"Статья 1 2027", defaults:{agents:21,runs:500,seed:20270101,signalNoise:0.30,loss:0.12,corruption:0.12,threshold:0.22,record_source_runs:0,source_run_limit:100} },
   { id:"probgraph", short:"Граф угроз", title:"Графо-вероятностное моделирование сценариев реализации угроз безопасности информации в интеллектуальной мультиагентной системе поддержки принятия решений с учётом межагентных взаимодействий",
     origin:"Статья 2 2027", defaults:{agents:30,runs:2500,seed:20270201,edgeProbability:0.16,spread:0.24,steps:6,criticalFraction:0.33,record_source_runs:0,source_run_limit:100,source_event_limit:250000} },

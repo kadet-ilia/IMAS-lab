@@ -1,3 +1,4 @@
+import {AutomaticDecisions} from "./automaticDecisions/AutomaticDecisions.jsx";
 import React, {forwardRef,useEffect,useImperativeHandle,useMemo,useRef,useState} from "react";
 import {Bar,BarChart,CartesianGrid,Legend,ResponsiveContainer,Tooltip,XAxis,YAxis} from "recharts";
 import {STUDY_DEFS,toCsv,validateStudy,buildResearchReplay} from "./research2027.js";
@@ -33,13 +34,7 @@ const FIELD={
 };
 const METHOD_COLORS=["#2164ba","#0a947b","#db6b38","#7955a8"];
 const THEORY={
- uncertainty:{
- goal:"Исследовать, как информационная неполнота, неоднозначность, противоречивость и несвоевременность сообщений изменяют вероятность корректного коллективного решения и долю отказов от автоматического реагирования.",
- model:"Каждый агент получает неполное наблюдение бинарного состояния киберобстановки. Часть сообщений не поступает; часть содержит шум, устаревшие сведения либо искажения. Сравниваются знак арифметического среднего, усечённая оценка и взвешивание по наблюдаемым признакам. Идеализированный оракул с доступом к скрытым флагам выводится отдельно и не участвует в практическом ранжировании. Для каждого решения действует порог достаточности информации.",
- formulas:["yᵢ(t) = θ(t−dᵢ) + εᵢ(t) + aᵢ(t),  εᵢ ~ N(0,σ²)","x̄(t) = (1 / |I|) Σᵢ∈I yᵢ(t)","x̃(t) = (1 / |I'|) Σᵢ∈I' yᵢ(t),  I' — множество после симметричного усечения","x̂(t) = Σᵢ wᵢ(t)yᵢ(t) / Σᵢ wᵢ(t)","d(t) = sign(x̂(t)), если |x̂(t)| ≥ δ и наблюдений достаточно; иначе — оператор"],
- procedure:["Формирование эталонного бинарного состояния и независимых локальных наблюдений.","Наложение четырёх вариантов информационной неопределённости и пропусков сообщений.","Формирование трёх коллективных оценок и проверка допустимости выдачи решения.","Повторение опытов с одним зерном генератора и вычисление доли правильных, неправильных и отклонённых решений."],
- glossary:["Локальное наблюдение — информация, доступная отдельному агенту.","Отказ от автоматического решения — выдача состояния «недостаточно данных» вместо необоснованного выбора.","Покрытие — доля тактов, на которых система сформировала автоматическое решение."]
- },
+ uncertainty:{goal:"Обосновать автоматические рекомендации при информационной зависимости и неполноте наблюдений с ограничением условных потерь.",model:"Совместные условные законы групп, интервальное байесовское оценивание и статистические сертификаты.",formulas:[],procedure:[],glossary:[]},
  probgraph:{
  goal:"Оценить вероятность достижения опасного состояния при распространении последствий реализации киберугроз через ориентированные межагентные взаимодействия.",
  model:"Информационная инфраструктура представлена ориентированным случайным графом. Вершины обозначают агентов, рёбра — каналы передачи потенциально недостоверной информации. На каждом такте осуществляется вероятностный переход нарушения по рёбрам от уже затронутых агентов к незатронутым. Выделены четыре условных сценария и три режима защиты.",
@@ -127,7 +122,7 @@ function ResearchKpis({studyId,result}){
   <ExperimentKpi key={label} label={label} value={value} note={result?(i>1&&studyId!=="petri"?"Среднее по строкам сравнения":"Воспроизводимый расчёт"):"После запуска эксперимента"} tone={i===3?"teal":"blue"}/>
  )}</div>;
 }
-export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation,onRuntimeChange,onExportSvg},actionsRef){
+const LegacyResearchStudy=forwardRef(function LegacyResearchStudy({studyId,navigation,onRuntimeChange,onExportSvg},actionsRef){
  const def=STUDY_DEFS.find(x=>x.id===studyId);
  const [config,setConfig]=useState({...def.defaults}),[result,setResult]=useState(null),
   [running,setRunning]=useState(false),[error,setError]=useState(""),[metric,setMetric]=useState(""),
@@ -270,6 +265,7 @@ export const ResearchStudy=forwardRef(function ResearchStudy({studyId,navigation
    </>:<div className="empty r27-study-empty">Задайте параметры в боковом меню и запустите эксперимент. Математическая модель и ограничения изложены в единой справке.</div>}
  </ExperimentLayout>;
 });
+export const ResearchStudy=forwardRef(function ResearchStudy(props,ref){return props.studyId==="uncertainty"?<AutomaticDecisions {...props} ref={ref}/>:<LegacyResearchStudy {...props} ref={ref}/>;});
 export function ResearchHelp({baselineArticle,baselineSections}){
  return <UnifiedHelp baselineArticle={baselineArticle} baselineSections={baselineSections} researchTheory={THEORY}/>;
 }
