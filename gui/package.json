@@ -8,8 +8,12 @@
     "start": "vite --host 127.0.0.1",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "build": "vite build",
-    "test": "node --test src/*.test.mjs",
-    "verify": "node verify.mjs"
+    "test": "node --test src/*.test.mjs src/automaticDecisions/*.test.mjs",
+    "verify": "node verify.mjs",
+    "e2:fixtures": "node scripts/prepare-e2.mjs --required",
+    "e2:parity": "node scripts/check-e2-parity.mjs",
+    "prebuild": "node scripts/prepare-e2.mjs",
+    "predev": "node scripts/prepare-e2.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
