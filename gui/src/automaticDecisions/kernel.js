@@ -74,7 +74,7 @@ const kernel = (function kernel(){
   const c=validate(raw),{s,rep,m,series}=unit,G=prepared?.G||geometry(c),{q,test}=laws(c,s),P=prepared?.P||joint(c,G,test,s),ptrue=post(c,P),z=masses(c,P);
   const fr=fixtureRecord(fixture,s,rep,m,series);
   if(c.mode==="article"&&!fr)throw Error("Не найдены первичные частоты NumPy: S"+s+", повтор "+rep+", M="+m);
-  const r=random((c.seed^Math.imul(s,0x9e3779b9)^Math.imul(rep+1,0x85ebca6b)^Math.imul(m,0xc2b2ae35))>>>0);
+  const r=random((c.seed^Math.imul(s,0x9e3779b9)^Math.imul(rep+1,0x85ebca6b)^Math.imul(m,0xc2b2ae35)^(series==="sensitivity"?0x27d4eb2f:0))>>>0);
   const counts=fr?.counts||q.map(row=>row.map(a=>multinomial(m,a,r))),hat=validateCounts(c,counts,m);
   const [lo,hi]=bounds(c,G,hat,m),[blo,bhi]=bounds(c,G,hat,m,true),Pnom=joint(c,G,hat,s,true);
   const pm={3:post(c,joint(c,G,estimate(c,hat,3),s,true)),4:post(c,Pnom),8:post(c,joint(c,G,estimate(c,hat,8),s,true)),10:ptrue,11:post(c,joint(c,G,estimate(c,hat,11),s,true))};
@@ -103,7 +103,7 @@ const kernel = (function kernel(){
   // A real enumerated observation, not an invented time series.
   let idx=0;for(let i=1;i<z.length;i++)if(z[i]>z[idx])idx=i;
   const ix=[Math.floor(idx/(G.shape[1]*G.shape[2])),Math.floor(idx/G.shape[2])%G.shape[1],idx%G.shape[2]];
-  result.sample={pairs:ix.map((i,g)=>G.pairs[g][i]),lo:lo[idx],hi:hi[idx],action:aa[6][idx],risk0:c.b*hi[idx],risk1:c.f+(c.d-c.f)*lo[idx],mass:z[idx],scenario:s,rep};
+  result.sample={groupLikelihoods:hat.map(row=>row.map((p,g)=>dot(G.H[g][ix[g]],p))),reason:aa[6][idx]===2?(lo[idx]<=theta(c)&&hi[idx]>=theta(c)?"Интервал пересекает порог предпочтения":"Наихудшие потери превышают цену эскалации"):"Условия автоматизации выполнены",pairs:ix.map((i,g)=>G.pairs[g][i]),lo:lo[idx],hi:hi[idx],action:aa[6][idx],risk0:c.b*hi[idx],risk1:c.f+(c.d-c.f)*lo[idx],mass:z[idx],scenario:s,rep};
   if(series==="control"||(series==="all"&&rep===0)){
    const control=fr?.control;if(c.mode==="article"&&!control)throw Error("Отсутствуют контрольные первичные данные");
    const size=100000;
