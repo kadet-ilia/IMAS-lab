@@ -42,7 +42,7 @@ export function evaluatePartial(c,train,test,config){
  const fit=fitPartial(c,train,config),names=["EM — точечный","Границы завершения — M6"],H=names.map(()=>[[0,0,0],[0,0,0]]),trace=[];
  for(const row of test){
   const ix=row.agents.map(observationIndex),intervals=[point(c,fit.predictive,ix),point(c,fit.robust,ix)];
-  intervals.forEach(([lo,hi],i)=>{const a=select(c,lo,hi,i===0?7:6);H[i][row.x][a]++;trace.push({policy:names[i],time:row.time,x:row.x,lo,hi,action:a,loss:loss(c,a,row.x)});});
+  intervals.forEach(([lo,hi],i)=>{const supported=i!==0||fit.predictive.high.some(r=>r.every((a,g)=>a[ix[g]]>0)),a=supported?select(c,lo,hi,i===0?7:6):2;H[i][row.x][a]++;trace.push({policy:names[i],time:row.time,x:row.x,lo,hi,action:a,loss:loss(c,a,row.x)});});
  }
  const N=test.length,h=Math.sqrt(Math.log(16/c.alpha)/(2*N)),Lmax=Math.max(c.b,c.f,c.d,c.c),summary=H.map((a,i)=>{
   const coverage=1-(a[0][2]+a[1][2])/N,miss=a[1][0]/N,fp=a[0][1]/N,L=(c.b*a[1][0]+c.f*a[0][1]+c.d*a[1][1])/N+c.c*(1-coverage);

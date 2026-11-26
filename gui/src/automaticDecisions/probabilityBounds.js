@@ -1,7 +1,7 @@
 // Simplex intersected with unequal component bounds. Greedy linear extrema.
 const sum=a=>a.reduce((s,v)=>s+v,0);
 export function simplexMax(h,lo,hi){
- if(h.length!==lo.length||h.length!==hi.length||lo.some((v,i)=>!Number.isFinite(v)||v<0||v>hi[i]||hi[i]>1)||sum(lo)>1+1e-10||sum(hi)<1-1e-10)throw Error("Пустое или некорректное множество вероятностей");
+ if(h.length!==lo.length||h.length!==hi.length||lo.some((v,i)=>!Number.isFinite(v)||!Number.isFinite(hi[i])||v<0||v>hi[i]||hi[i]>1)||sum(lo)>1+1e-10||sum(hi)<1-1e-10)throw Error("Пустое или некорректное множество вероятностей");
  let rest=Math.max(0,1-sum(lo)),value=sum(h.map((v,i)=>v*lo[i]));
  for(const i of h.map((_,i)=>i).sort((a,b)=>h[b]-h[a])){const d=Math.min(rest,hi[i]-lo[i]);value+=d*h[i];rest-=d;if(rest<=1e-15)break;}
  if(rest>1e-10)throw Error("Нарушена нормировка симплекса");
