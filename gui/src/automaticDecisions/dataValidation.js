@@ -37,12 +37,12 @@ function diagnostics(train,test,groups){
 }
 function evaluateSplit(f,config,cut){
  const train=f.rows.slice(0,cut),test=f.rows.slice(cut);
- if(config.calibrationMode!=="partial"&&train.some(r=>r.agents.some(a=>a.includes(null))))throw Error("Калибровочная часть должна содержать полные наблюдения; неполные строки не исключаются молча. Измените долю или предоставьте отдельные полные данные.");
+ if(!["partial","identified"].includes(config.calibrationMode)&&train.some(r=>r.agents.some(a=>a.includes(null))))throw Error("Калибровочная часть должна содержать полные наблюдения; неполные строки не исключаются молча. Измените долю или предоставьте отдельные полные данные.");
  const M=[0,1].map(x=>train.filter(r=>r.x===x).length);if(M.some(n=>n<2))throw Error("В калибровке нужны минимум две полные строки каждого класса");
  const c=validateExt({...BASE,...config,groups:f.groups,u:[0,1].map(()=>f.groups.map(()=>.5)),rho:f.groups.map(()=>0),m:Math.max(...M),prior:M[1]/cut,stress:"none",eta:0});
- if(config.calibrationMode==="partial"){
+ if(["partial","identified"].includes(config.calibrationMode)){
   const r=evaluatePartial(c,train,test,config);
-  return {version:"E2-data-partial-v1",source:f.source,synthetic:f.synthetic,config:c,split:{cut,trainN:cut,testN:test.length,trainLast:train.at(-1).time,testFirst:test[0].time,M},...r,iidTest:!!config.iidTest,certified:false,warning:"EM — условное правдоподобие при игнорируемой маске; отсутствие полной доставки может делать закон неидентифицируемым. Границы завершения не требуют MCAR в калибровке, но апостериорная модель требует предпосылок тестовой доставки, независимости групп и известного приора. Здесь приор оценён по обучению, полевой сертификат не заявляется. "+r.partial.assumptions};
+  return {version:config.calibrationMode==="identified"?"E2-data-identified-v1":"E2-data-partial-v1",source:f.source,synthetic:f.synthetic,config:c,split:{cut,trainN:cut,testN:test.length,trainLast:train.at(-1).time,testFirst:test[0].time,M},...r,iidTest:!!config.iidTest,certified:false,warning:"EM — условное правдоподобие при игнорируемой маске; отсутствие полной доставки может делать закон неидентифицируемым. Границы завершения не требуют MCAR в калибровке, но апостериорная модель требует предпосылок тестовой доставки, независимости групп и известного приора. Здесь приор оценён по обучению, полевой сертификат не заявляется. "+r.partial.assumptions};
  }
  const counts=[0,1].map(x=>f.groups.map(n=>seq(n+1).map(()=>0)));
  for(const r of train)r.agents.forEach((a,g)=>counts[r.x][g][sum(a)]++);
@@ -57,7 +57,7 @@ export function validateObservations(raw,config){
  const f=parseDataset(raw),fraction=config.trainFraction??.6;if(!Number.isFinite(fraction)||fraction<.1||fraction>.9)throw Error("Доля калибровки 0,1–0,9");
  const cut=Math.floor(f.rows.length*fraction);
  if(!config.discoverGroups)return evaluateSplit(f,config,cut);
- if(config.calibrationMode==="partial")throw Error("Поиск структуры требует полных данных; для неполной калибровки задайте группы заранее.");
+ if(["partial","identified"].includes(config.calibrationMode))throw Error("Поиск структуры требует полных данных; для неполной калибровки задайте группы заранее.");
  const discoveryN=Math.floor(cut*(config.discoveryFraction??.5));
  if(discoveryN<4||cut-discoveryN<4)throw Error("Недостаточно наблюдений для независимого выявления и калибровки групп");
  const discovery=f.rows.slice(0,discoveryN),fit=f.rows.slice(discoveryN,cut),test=f.rows.slice(cut),grouping=discoverGrouping(discovery,fit,f.groups,config);

@@ -1,3 +1,4 @@
+import {identifiedBounds} from "./identifiedBounds.js";
 // E2.18: partial likelihood under ignorable uniform masks; conservative
 // completion bounds require no assumption on the calibration mask mechanism.
 import {groupGeometry,point,select,loss} from "./extendedModel.js";
@@ -32,22 +33,24 @@ export function completionBounds(n,hist,h){
 export function fitPartial(c,train,config){
  const G=c.groups.map(groupGeometry),M=[0,1].map(x=>train.filter(r=>r.x===x).length),hist=[0,1].map(()=>G.map(g=>g.pairs.map(()=>0)));
  for(const row of train)row.agents.forEach((a,g)=>hist[row.x][g][observationIndex(a)]++);
- const K=2*sum(c.groups.map(n=>n+1)),radius=M.map(N=>Math.sqrt(Math.log(2*K/c.alpha)/(2*N)));
+ const K=2*sum(c.groups.map(n=>n+1)),identified=config.calibrationMode==="identified",events=identified?2*K+2*c.groups.length:K,radius=M.map(N=>Math.sqrt(Math.log(2*events/c.alpha)/(2*N)));
  if(c.groups.reduce((s,n)=>s+(n+1)*(n+2)/2*(n+1),0)*config.emIterations>5e7)throw Error("Слишком большой объём EM; уменьшите число итераций или размер групп");
  const fit=hist.map((row,x)=>row.map((a,g)=>({...fitPartialGroup(c.groups[g],a,config.emIterations,config.emTolerance),...completionBounds(c.groups[g],a,radius[x])})));
+ if(identified)for(const row of fit)for(const v of row)v.identified=identifiedBounds(v,v.N,radius[fit.indexOf(row)],config.selectionGamma);
  const hat=fit.map(row=>row.map(v=>v.p)),lower=fit.map(row=>row.map(v=>v.lower)),upper=fit.map(row=>row.map(v=>v.upper)),robust=boundedTables(G,hat,lower,upper),predictive=predictiveTables(G,hat);
- return {hist,fit,radius,robust,predictive,M};
+ const narrowed=identified?boundedTables(G,hat,fit.map(row=>row.map(v=>v.identified.lower)),fit.map(row=>row.map(v=>v.identified.upper))):null;
+ return {hist,fit,radius,robust,predictive,narrowed,M,events};
 }
 export function evaluatePartial(c,train,test,config){
- const fit=fitPartial(c,train,config),names=["EM — точечный","Границы завершения — M6"],H=names.map(()=>[[0,0,0],[0,0,0]]),trace=[];
+ const fit=fitPartial(c,train,config),names=["EM — точечный","Границы завершения — M6",...(fit.narrowed?["Частичная идентификация — M6"]:[])],H=names.map(()=>[[0,0,0],[0,0,0]]),trace=[];
  for(const row of test){
-  const ix=row.agents.map(observationIndex),intervals=[point(c,fit.predictive,ix),point(c,fit.robust,ix)];
+  const ix=row.agents.map(observationIndex),intervals=[point(c,fit.predictive,ix),point(c,fit.robust,ix),...(fit.narrowed?[point(c,fit.narrowed,ix)]:[])];
   intervals.forEach(([lo,hi],i)=>{const supported=i!==0||fit.predictive.high.some(r=>r.every((a,g)=>a[ix[g]]>0)),a=supported?select(c,lo,hi,i===0?7:6):2;H[i][row.x][a]++;trace.push({policy:names[i],time:row.time,x:row.x,lo,hi,action:a,loss:loss(c,a,row.x)});});
  }
- const N=test.length,h=Math.sqrt(Math.log(16/c.alpha)/(2*N)),Lmax=Math.max(c.b,c.f,c.d,c.c),summary=H.map((a,i)=>{
+ const N=test.length,h=Math.sqrt(Math.log(8*names.length/c.alpha)/(2*N)),Lmax=Math.max(c.b,c.f,c.d,c.c),summary=H.map((a,i)=>{
   const coverage=1-(a[0][2]+a[1][2])/N,miss=a[1][0]/N,fp=a[0][1]/N,L=(c.b*a[1][0]+c.f*a[0][1]+c.d*a[1][1])/N+c.c*(1-coverage);
   return {policy:names[i],N,coverage,loss:L,miss,false:fp,...(config.iidTest?{coverageLow:clip(coverage-h),coverageHigh:clip(coverage+h),lossLow:Math.max(0,L-Lmax*h),lossHigh:Math.min(Lmax,L+Lmax*h),missLow:clip(miss-h),missHigh:clip(miss+h),falseLow:clip(fp-h),falseHigh:clip(fp+h)}:{})};
  });
- const diagnostics=fit.fit.flatMap((row,x)=>row.map((v,g)=>({x,group:g+1,N:v.N,complete:v.complete,empty:v.empty,maxDelivered:v.maxDelivered,identifiability:v.identifiability,converged:v.converged,iterations:v.iterations,logLikelihood:v.logLikelihood,delta:v.delta})));
- return {summary,trace,diagnostics,hist:H[1],partial:{hist:fit.hist,fit:fit.fit,radius:fit.radius,policyHist:H,assumptions:"EM: независимость маски от полного счётчика, равномерная доставка внутри группы. Границы завершения: iid истинные полные счётчики и отсутствие ошибок в доставленных значениях, без предположения MCAR для калибровочной маски. Апостериорный расчёт обеих политик требует номинального тестового ядра и независимости групп."}};
+ const diagnostics=fit.fit.flatMap((row,x)=>row.map((v,g)=>({x,group:g+1,N:v.N,complete:v.complete,empty:v.empty,maxDelivered:v.maxDelivered,identifiability:v.identifiability,converged:v.converged,iterations:v.iterations,logLikelihood:v.logLikelihood,delta:v.delta,...(v.identified?{compatible:v.identified.compatible,fullRate:v.identified.fullRate,selectionLow:v.identified.selectionLow,selectionHigh:v.identified.selectionHigh,widthBefore:v.identified.widthBefore,widthAfter:v.identified.widthAfter}:{})})));
+ return {summary,trace,diagnostics,hist:H[1],partial:{hist:fit.hist,fit:fit.fit,radius:fit.radius,policyHist:H,events:fit.events,identified:!!fit.narrowed,selectionGamma:fit.narrowed?config.selectionGamma:null,assumptions:"EM: независимость маски от полного счётчика, равномерная доставка внутри группы. Границы завершения: iid истинные полные счётчики и отсутствие ошибок в доставленных значениях, без предположения MCAR для калибровочной маски. Апостериорный расчёт требует номинального тестового ядра и независимости групп."+(fit.narrowed?" Частичная идентификация: ограничение отношения шансов полной доставки условно по J к маргинальным шансам полной доставки в классе X. При пустом пересечении сохранены границы завершения. Непустота не доказывает предположение; Gamma задаётся пользователем.":"")}};
 }
