@@ -24,7 +24,7 @@ export function validateStudy(mode,raw){
  if(mode==="robustness"&&(!["drift","cross","mnar","nonexchangeable","biasedMask","contamination","all"].includes(c.stress)||!integer(c.levels,2,11)||c.levels*c.reps*(c.stress==="all"?6:1)>450))fail();
  if(mode==="optimization"&&(!["grid","multiclass"].includes(c.experiment)||!real(c.requiredCoverage,0,1)||!real(c.riskLimit,0,1000)||!real(c.agentCost,0,1000)||!real(c.groupCost,0,1000)||!integer(c.groupsMin,1,8)||!integer(c.groupsMax,c.groupsMin,8)||!integer(c.agentsMin,2,20)||!integer(c.agentsMax,c.agentsMin,20)||!integer(c.mcN,1000,50000)))fail();
  if(mode==="dynamics"&&(!["adaptive","sequential"].includes(c.experiment)||!integer(c.steps,100,20000)||!integer(c.window,20,2000)||!integer(c.delay,0,2000)||!integer(c.updateEvery,1,1000)||!real(c.changeAt,.1,.9)||!real(c.shift,0,1)||!integer(c.rounds,2,20)||!real(c.waitCost,0,1000)))fail();
- if(mode==="queue"&&(!real(c.arrival,.01,100000)||!real(c.service,.01,100000)||!integer(c.operators,1,100)||!["model","lower","manual"].includes(c.gammaSource)||!real(c.gamma,0,1)||!real(c.deadline,0,10000)||!integer(c.arrivals,100,100000)||!integer(c.warmup,0,c.arrivals-1)||!integer(c.queueReps,1,30)))fail();
+ if(mode==="queue"&&(!real(c.arrival,.01,100000)||!real(c.service,.01,100000)||!integer(c.operators,1,100)||!["model","lower","manual"].includes(c.gammaSource)||!real(c.gamma,0,1)||!real(c.deadline,0,10000)||!integer(c.arrivals,100,100000)||!integer(c.warmup,0,c.arrivals-2)||!integer(c.queueReps,1,30)))fail();
  if(mode==="data"&&(!real(c.trainFraction,.1,.9)||typeof c.iidTest!=="boolean"))fail();
  return {...c,...base,stress:c.stress,experiment:c.experiment};
 }
