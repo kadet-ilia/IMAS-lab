@@ -768,6 +768,47 @@ if(advancedE2.records.length!==2||advancedE2.config.groups.length!==4||advancedE
 extensionEvidence["Расширенный Монте-Карло"]={groups:4,calibrations:2,adaptiveN:advancedE2.records.map(r=>r.n)};
 await page.getByRole("button",{name:"Классический Монте-Карло S1–S8",exact:true}).click();
 
+// E2.13–E2.16: four new calculations through the real browser controls.
+await modesE2.getByRole("button",{name:"Динамика",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид динамического исследования"}).selectOption("weighted");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"Количество запросов"}).fill("100");
+await page.getByRole("spinbutton",{name:"Размер окна каждого класса"}).fill("50");
+await page.getByRole("spinbutton",{name:"Короткое окно"}).fill("20");
+await page.getByRole("spinbutton",{name:"Повторов на режим"}).fill("1");
+await runE2();
+const weightedE2=await downloadE2();
+if(weightedE2.records.length!==2||weightedE2.tables.rows.length!==8||weightedE2.records[0].stationaryGuarantee!==true)throw Error("E2.13 weighted adaptation missing");
+extensionEvidence["Взвешенная калибровка"]={series:weightedE2.records.length,policies:4};
+await page.getByRole("combobox",{name:"Вид динамического исследования"}).selectOption("optimal");
+await page.getByRole("spinbutton",{name:"Бюджет запросов сообщений"}).fill("3");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("500");
+await runE2();
+const optimalE2=await downloadE2();
+if(optimalE2.tables.rows.length!==3||optimalE2.tables.rows.some(r=>r.unsafe!==0)||optimalE2.tables.rows[2].nominalValue>optimalE2.tables.rows[1].nominalValue+1e-9)throw Error("E2.14 active DP missing");
+extensionEvidence["Активный запрос"]={states:optimalE2.records[0].states,policies:3};
+await modesE2.getByRole("button",{name:"СМО",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид исследования СМО"}).selectOption("closed");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"Горизонт потока (ч)"}).fill("1");
+await page.getByRole("spinbutton",{name:"Разогрев (ч)"}).fill("0");
+await page.getByRole("spinbutton",{name:"Повторностей"}).fill("1");
+await runE2();
+const closedE2=await downloadE2();
+if(closedE2.tables.rows.length!==2||closedE2.tables.rows.some(r=>r.unsafe!==0||r.N<=0))throw Error("E2.15 feedback missing");
+extensionEvidence["Замкнутая СМО"]={policies:2,N:closedE2.tables.rows[0].N};
+await page.getByRole("combobox",{name:"Вид исследования СМО"}).selectOption("joint");
+await page.getByRole("spinbutton",{name:"Минимум операторов"}).fill("1");
+await page.getByRole("spinbutton",{name:"Максимум операторов"}).fill("2");
+await page.getByRole("spinbutton",{name:"Уровни базового порога"}).fill("1");
+await page.getByRole("spinbutton",{name:"Уровни коэффициента связи"}).fill("1");
+await runE2();
+const jointE2=await downloadE2();
+if(jointE2.tables.rows.length!==2||jointE2.records.length!==2||jointE2.tables.rows.some(r=>r.unsafe!==0))throw Error("E2.16 joint design missing");
+extensionEvidence["Совместная оптимизация"]={candidates:2};
+
+
 
 await page.getByRole("group",{name:"Режим эксперимента"}).getByRole("button",{name:"Общее",exact:true}).click();
 await page.getByRole("combobox",{name:"Режим исследования"}).waitFor();
