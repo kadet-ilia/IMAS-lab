@@ -1,0 +1,364 @@
+{
+  "seed": 20261130,
+  "uniqueConfigurations": 256,
+  "static": {
+    "all": {
+      "cases": 128,
+      "meanCandidates": 196,
+      "meanPareto": 16.8671875,
+      "multiVsCMI": {
+        "loss": {
+          "mean": -0.07667205247120855,
+          "negative": 84,
+          "positive": 3,
+          "zero": 41,
+          "min": -0.38257990173503353,
+          "max": 0.014953646743832816
+        },
+        "coverage": {
+          "mean": 0.10479687500000003,
+          "negative": 3,
+          "positive": 84,
+          "zero": 41,
+          "min": -0.013000000000000012,
+          "max": 0.63
+        },
+        "dependence": {
+          "mean": 0.019493904178423362,
+          "negative": 0,
+          "positive": 87,
+          "zero": 41,
+          "min": 0,
+          "max": 0.14967032673025477
+        }
+      },
+      "multiVsOriginal": {
+        "loss": {
+          "mean": -0.059482374910831436,
+          "negative": 75,
+          "positive": 11,
+          "zero": 42,
+          "min": -0.38257990173503353,
+          "max": 0.049201260985901496
+        },
+        "coverage": {
+          "mean": 0.08546875000000005,
+          "negative": 10,
+          "positive": 76,
+          "zero": 42,
+          "min": -0.04199999999999998,
+          "max": 0.63
+        }
+      },
+      "cmiVsOriginal": {
+        "loss": {
+          "mean": 0.01718967756037709,
+          "negative": 16,
+          "positive": 43,
+          "zero": 69,
+          "min": -0.08742961586788434,
+          "max": 0.3387815681155193
+        },
+        "coverage": {
+          "mean": -0.019328125,
+          "negative": 39,
+          "positive": 20,
+          "zero": 69,
+          "min": -0.433,
+          "max": 0.122
+        },
+        "dependence": {
+          "mean": -0.0011701082920466022,
+          "negative": 65,
+          "positive": 0,
+          "zero": 63,
+          "min": -0.006579042267729528,
+          "max": 0
+        }
+      },
+      "sameChoice": 41
+    },
+    "confirmation": {
+      "cases": 64,
+      "meanCandidates": 196,
+      "meanPareto": 18.53125,
+      "multiVsCMI": {
+        "loss": {
+          "mean": -0.06510226430183119,
+          "negative": 39,
+          "positive": 3,
+          "zero": 22,
+          "min": -0.3709712422449253,
+          "max": 0.014953646743832816
+        },
+        "coverage": {
+          "mean": 0.09949999999999998,
+          "negative": 3,
+          "positive": 39,
+          "zero": 22,
+          "min": -0.013000000000000012,
+          "max": 0.63
+        },
+        "dependence": {
+          "mean": 0.0172013554438063,
+          "negative": 0,
+          "positive": 42,
+          "zero": 22,
+          "min": 0,
+          "max": 0.14967032673025477
+        }
+      },
+      "multiVsOriginal": {
+        "loss": {
+          "mean": -0.04616669010591071,
+          "negative": 36,
+          "positive": 7,
+          "zero": 21,
+          "min": -0.3709712422449253,
+          "max": 0.049201260985901496
+        },
+        "coverage": {
+          "mean": 0.080828125,
+          "negative": 6,
+          "positive": 37,
+          "zero": 21,
+          "min": -0.04199999999999998,
+          "max": 0.63
+        }
+      },
+      "cmiVsOriginal": {
+        "loss": {
+          "mean": 0.018935574195920478,
+          "negative": 6,
+          "positive": 25,
+          "zero": 33,
+          "min": -0.07738230651481537,
+          "max": 0.19478364939673432
+        },
+        "coverage": {
+          "mean": -0.018671875,
+          "negative": 23,
+          "positive": 8,
+          "zero": 33,
+          "min": -0.294,
+          "max": 0.122
+        },
+        "dependence": {
+          "mean": -0.001057971147236529,
+          "negative": 32,
+          "positive": 0,
+          "zero": 32,
+          "min": -0.004455334327253525,
+          "max": 0
+        }
+      },
+      "sameChoice": 22
+    }
+  },
+  "dynamic": {
+    "all": {
+      "cases": 128,
+      "null": {
+        "dynamicVsRefit": {
+          "loss": {
+            "mean": -0.004890962301172742,
+            "negative": 20,
+            "positive": 16,
+            "zero": 92,
+            "min": -0.23274636426010287,
+            "max": 0.04429110613429377
+          },
+          "decisionLoss": {
+            "mean": -0.005665646640681536,
+            "negative": 23,
+            "positive": 13,
+            "zero": 92,
+            "min": -0.2388965294236537,
+            "max": 0.04284737241416631
+          },
+          "coverage": {
+            "mean": 0.007572251760334655,
+            "negative": 12,
+            "positive": 24,
+            "zero": 92,
+            "min": -0.12031466913465982,
+            "max": 0.2880228136882129
+          }
+        },
+        "dynamicVsFixed": {
+          "loss": {
+            "mean": 0.003394251552598658,
+            "negative": 48,
+            "positive": 48,
+            "zero": 32,
+            "min": -0.07656034037976223,
+            "max": 0.16612378332594058
+          },
+          "coverage": {
+            "mean": -0.005284715773356596,
+            "negative": 48,
+            "positive": 48,
+            "zero": 32,
+            "min": -0.136158388329281,
+            "max": 0.17578125
+          }
+        },
+        "changes": 0.484375,
+        "changedCases": 36,
+        "reconfCost": 1.8304849445072857
+      },
+      "shift": {
+        "dynamicVsRefit": {
+          "loss": {
+            "mean": -0.0017611107254093539,
+            "negative": 29,
+            "positive": 66,
+            "zero": 33,
+            "min": -0.10229053639895835,
+            "max": 0.0421417158593107
+          },
+          "decisionLoss": {
+            "mean": -0.0035759232830458775,
+            "negative": 34,
+            "positive": 46,
+            "zero": 48,
+            "min": -0.10523094420305035,
+            "max": 0.03674402864819892
+          },
+          "coverage": {
+            "mean": 0.0030366673433403304,
+            "negative": 48,
+            "positive": 31,
+            "zero": 49,
+            "min": -0.07369844489519944,
+            "max": 0.17693213024715576
+          }
+        },
+        "dynamicVsFixed": {
+          "loss": {
+            "mean": -0.0020099414194082524,
+            "negative": 65,
+            "positive": 63,
+            "zero": 0,
+            "min": -0.0741242261394035,
+            "max": 0.15915070100471929
+          },
+          "coverage": {
+            "mean": 0.003766556047227766,
+            "negative": 43,
+            "positive": 71,
+            "zero": 14,
+            "min": -0.14102118791246965,
+            "max": 0.17613636363636365
+          }
+        },
+        "changes": 1,
+        "changedCases": 95,
+        "reconfCost": 4.342122305507171
+      }
+    },
+    "confirmation": {
+      "cases": 64,
+      "null": {
+        "dynamicVsRefit": {
+          "loss": {
+            "mean": -0.006246728253139752,
+            "negative": 7,
+            "positive": 5,
+            "zero": 52,
+            "min": -0.23274636426010287,
+            "max": 0.027798504234302857
+          },
+          "decisionLoss": {
+            "mean": -0.0068433591442635285,
+            "negative": 9,
+            "positive": 3,
+            "zero": 52,
+            "min": -0.2388965294236537,
+            "max": 0.02779540630633537
+          },
+          "coverage": {
+            "mean": 0.005667645556494242,
+            "negative": 3,
+            "positive": 9,
+            "zero": 52,
+            "min": -0.12031466913465982,
+            "max": 0.2618949110467522
+          }
+        },
+        "dynamicVsFixed": {
+          "loss": {
+            "mean": 0.0019613513505681414,
+            "negative": 23,
+            "positive": 19,
+            "zero": 22,
+            "min": -0.07656034037976223,
+            "max": 0.16612378332594058
+          },
+          "coverage": {
+            "mean": 0.0011547607905481477,
+            "negative": 18,
+            "positive": 24,
+            "zero": 22,
+            "min": -0.136158388329281,
+            "max": 0.17578125
+          }
+        },
+        "changes": 0.296875,
+        "changedCases": 12,
+        "reconfCost": 1.3816759603165942
+      },
+      "shift": {
+        "dynamicVsRefit": {
+          "loss": {
+            "mean": -0.003927692319536686,
+            "negative": 14,
+            "positive": 34,
+            "zero": 16,
+            "min": -0.09331722399716902,
+            "max": 0.022249826345061452
+          },
+          "decisionLoss": {
+            "mean": -0.0056910200977012765,
+            "negative": 16,
+            "positive": 22,
+            "zero": 26,
+            "min": -0.10356749926975373,
+            "max": 0.021390462329755833
+          },
+          "coverage": {
+            "mean": 0.0037802642808644547,
+            "negative": 22,
+            "positive": 16,
+            "zero": 26,
+            "min": -0.07266121707538603,
+            "max": 0.12287960281340499
+          }
+        },
+        "dynamicVsFixed": {
+          "loss": {
+            "mean": -0.003941906725256773,
+            "negative": 32,
+            "positive": 32,
+            "zero": 0,
+            "min": -0.0741242261394035,
+            "max": 0.15915070100471929
+          },
+          "coverage": {
+            "mean": 0.010539639662504745,
+            "negative": 18,
+            "positive": 36,
+            "zero": 10,
+            "min": -0.14102118791246965,
+            "max": 0.17613636363636365
+          }
+        },
+        "changes": 0.90625,
+        "changedCases": 48,
+        "reconfCost": 4.196529097923
+      }
+    }
+  },
+  "run": 45895745009,
+  "commit": "81cf405aed1c273813226891db31e4783562aac2"
+}
