@@ -7,3 +7,9 @@ test("Full grid has distinct input configurations and unique repeat seeds",()=>{
 test("LHS covers each one-dimensional stratum exactly once",()=>{const z={...c,batchDesign:"lhs"},p=batchDesign(z);assert.equal(p.length,128);for(const [k,l,h] of [["prior",.1,.6],["drop",0,.9]])assert.equal(new Set(p.map(v=>Math.floor(128*(v[k]-l)/(h-l)))).size,128);assert.deepEqual(p,batchDesign(z));});
 test("Batch exact uses existing model and aggregates only completed repeats",()=>{const p=studyPlan("batch",c),r=p.slice(0,3).map(u=>evaluateUnit("batch",c,u,p.length)),s=summarizeStudy("batch",c,r);assert.equal(s.rows.length,3);assert.equal(s.aux.length,2);assert.equal(s.aux[0].reps,2);assert.equal(s.aux[1].lossSD,null);assert.ok(r.every(v=>v.summary[0].coverage>=0&&v.primary.counts.length===2));assert.throws(()=>batchPlan({...c,factor2:"prior"}));});
 test("Cross stress does not claim nominal assumptions",()=>{const z={...c,batchTarget:"cross",batchStress:.5},p=studyPlan("batch",z),r=evaluateUnit("batch",z,p[0],p.length);assert.equal(r.summary[0].assumptionsValid,false);assert.equal(r.primary.eta,.5);});
+
+test("Reject invalid simulation dimensions before creating workers",()=>{
+ assert.throws(()=>batchPlan({...c,batchTarget:"optimal",steps:0}));
+ assert.throws(()=>batchPlan({...c,batchTarget:"queue",operators:0}));
+ assert.throws(()=>batchPlan({...c,batchTarget:"queue",service:0}));
+});

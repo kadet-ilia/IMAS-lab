@@ -1,0 +1,52 @@
+{
+  "version": "E2.20-oracle-pilot-v1",
+  "seed": 20261128,
+  "uniqueConfigurations": 1024,
+  "summary": {
+    "wide": {
+      "configurations": 512,
+      "negative": 323,
+      "zero": 189,
+      "positive": 0,
+      "mean": -0.010881459805999274,
+      "min": -0.2021834770029549,
+      "max": 0
+    },
+    "local": {
+      "configurations": 512,
+      "negative": 492,
+      "zero": 0,
+      "positive": 20,
+      "mean": -0.003295005087336065,
+      "min": -0.015070115874938362,
+      "max": 0.0018736913501765692,
+      "maxExample": {
+        "domain": "local",
+        "case": 49,
+        "inputs": {
+          "n": 10,
+          "u0": 0.14,
+          "u1": 0.48,
+          "prior": 0.56,
+          "b": 2.49,
+          "f": 6.56,
+          "d": 1.86,
+          "c": 0.95,
+          "rhoLow": 0.52,
+          "rhoHigh": 0.63,
+          "dropLow": 0.24,
+          "dropHigh": 0.39
+        },
+        "risks": [
+          0.8776565496917074,
+          0.8934005466142309,
+          0.905168583951399,
+          0.9227862722240991
+        ],
+        "contrast": 0.0018736913501765692,
+        "sign": 1
+      }
+    }
+  },
+  "scope": "One exchangeable group, common shock, MCAR, ideal Bayes with escalation. Exact rational arithmetic. Local domain was selected after observing a counterexample; counts are not population probabilities."
+}

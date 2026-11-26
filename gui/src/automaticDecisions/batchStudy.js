@@ -30,11 +30,11 @@ export function batchPlan(raw){
  if(total>2000)throw Error("Не более 2000 расчётных единиц на пакет");
  if(["exact","cross"].includes(c.batchTarget)&&(spaceSize(c)>300000||spaceSize(c)*total>50000000))throw Error("Точный пакет ограничен 300000 наблюдений на задачу и 50 млн суммарно");
  if(c.batchTarget==="mc"){validateAdvancedMC({...c,reps:1});if(c.mcN*total>10000000)throw Error("Пакет MC ограничен 10 млн тестовых запросов");}
- if(c.batchTarget==="optimal"){validateStopping(c);if(c.steps*total>2000000)throw Error("Пакет DP ограничен 2 млн тестовых запросов");}
- if(c.batchTarget==="queue"){validateClosedQueue(c);if(c.arrival*c.queueHorizon*(1+(c.peakEnd-c.peakStart)*(c.peakMultiplier-1))*total>2000000)throw Error("Пакет СМО ограничен 2 млн ожидаемых запросов");}
+ if(c.batchTarget==="optimal"){if(!int(c.steps,100,20000))throw Error("Некорректное число тестовых запросов DP");validateStopping(c);if(c.steps*total>2000000)throw Error("Пакет DP ограничен 2 млн тестовых запросов");}
+ if(c.batchTarget==="queue"){if(!real(c.arrival,.01,100000)||!real(c.service,.01,100000)||!int(c.operators,1,100)||!real(c.deadline,0,10000))throw Error("Некорректные параметры потока или обслуживания");validateClosedQueue(c);if(c.arrival*c.queueHorizon*(1+(c.peakEnd-c.peakStart)*(c.peakMultiplier-1))*total>2000000)throw Error("Пакет СМО ограничен 2 млн ожидаемых запросов");}
  return points.flatMap((values,i)=>seq(c.reps).map(rep=>({kind:"batch",case:i+1,rep,values,seed:seedFor(c.seed,200000+i*c.reps+rep)})));
 }
-const compact=r=>Object.fromEntries(["coverage","loss","miss","false","tight","upperRisk","posteriorMass","violation","assumptionsValid","failed","Wq","Lq","unsafe","nominalValue","delay","n","achieved","method","policy"].filter(k=>r[k]!==undefined).map(k=>[k,r[k]]));
+const compact=r=>Object.fromEntries(["coverage","loss","miss","false","tight","upperRisk","posteriorMass","violation","assumptionsValid","failed","Wq","Lq","unsafe","nominalValue","delay","n","achieved","method","policy","coverageLow","coverageHigh","lossLow","lossHigh","missLow","missHigh","falseLow","falseHigh","exactLoss","exactCoverage","missEvents","falseEvents","rejected","timeout","rho","N","escalation","served","meanPrice"].filter(k=>r[k]!==undefined).map(k=>[k,r[k]]));
 export function batchEvaluate(raw,unit){
  const c=validateExt({...raw,...unit.values,seed:unit.seed,reps:1,stress:"none",eta:0}),start=performance.now();
  let summary,primary;
