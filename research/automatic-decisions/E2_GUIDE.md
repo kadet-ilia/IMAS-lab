@@ -56,3 +56,6 @@ npm run build
 
 ## E2.21–E2.22
 В Устойчивости выберите робастную межгрупповую TV, в Данных — частичную идентификацию. Предположения ε и Γ задаются пользователем, а не выводятся автоматически из наблюдений. См. [E2_DEPENDENCE_IDENTIFICATION.md](E2_DEPENDENCE_IDENTIFICATION.md).
+
+## E2.23–E2.25, E2.30
+В Динамике выберите контроль адекватности и адаптацию. В расширенном Монте-Карло — редкие ошибки внутри класса. В Чувствительности — PAC с учётом дисперсии. См. [E2_MONITOR_STATISTICS.md](E2_MONITOR_STATISTICS.md). Пилот: node scripts/e2-monitor-campaign.mjs monitor-campaign (из gui).

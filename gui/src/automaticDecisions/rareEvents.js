@@ -14,7 +14,7 @@ export function tiltLaw(q,theta){
  return a.map(v=>v/z);
 }
 export function mixtureWeight(c,q,tilted,row){
- const x=row.x,ratio=row.full.reduce((a,j,g)=>a*tilted[x][g][j]/q[x][g][j],1),wClass=x?c.prior/c.mcProposal:(1-c.prior)/(1-c.mcProposal);
+ const x=row.x,ratio=row.full.reduce((a,j,g)=>a*(tilted[x][g][j]/q[x][g][j]),1),wClass=x?c.prior/c.mcProposal:(1-c.prior)/(1-c.mcProposal);
  return wClass/(c.rareDefensive+(1-c.rareDefensive)*ratio);
 }
 export function rareStudy(raw,rep){

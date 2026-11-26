@@ -886,6 +886,47 @@ if(identifiedE2.tables.rows.length!==3||!identifiedE2.dataResult.partial.identif
 await page.getByRole("heading",{name:"Оценки условных законов и границы завершения",exact:true}).waitFor();
 extensionEvidence["Частичная идентификация"]={policies:3,test:400};
 
+await modesE2.getByRole("button",{name:"Динамика",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид динамического исследования"}).selectOption("monitor");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"Количество запросов"}).fill("200");
+await page.getByRole("spinbutton",{name:"Объём независимого эталона"}).fill("200");
+await page.getByRole("spinbutton",{name:"Повторов на режим"}).fill("1");
+await page.getByRole("spinbutton",{name:"Минимум аудитов каждого класса"}).fill("20");
+await runE2();
+const monitorE2=await downloadE2();
+if(monitorE2.records.length!==2||monitorE2.tables.rows.length!==8||monitorE2.records.some(r=>r.events.length!==200))throw Error("E2.23/25 monitor incomplete");
+await page.getByRole("heading",{name:"Сигналы контроля адекватности",exact:true}).waitFor();
+extensionEvidence["Контроль адекватности"]={runs:2,policies:4,requests:200};
+
+await modesE2.getByRole("button",{name:"Чувствительность",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид анализа"}).selectOption("riskBounds");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+await page.getByRole("spinbutton",{name:"Объём отдельной калибровки риска"}).fill("100");
+await page.getByRole("spinbutton",{name:"Объём независимого теста"}).fill("1000");
+await runE2();
+const varianceE2=await downloadE2();
+if(varianceE2.tables.rows.length!==7||varianceE2.records[0].control.curve.some(v=>!Number.isFinite(v.bernsteinBound)||!Number.isFinite(v.combinedBound)))throw Error("E2.30 PAC variance incomplete");
+extensionEvidence["PAC с дисперсией"]={policies:7};
+
+await modesE2.getByRole("button",{name:"Монте-Карло",exact:true}).click();
+await page.getByRole("button",{name:"Расширенный Монте-Карло",exact:true}).click();
+await page.getByRole("combobox",{name:"Метод имитации"}).selectOption("rare");
+await page.getByRole("textbox",{name:"Размеры групп (через запятую)"}).fill("2,2,2");
+await page.getByRole("spinbutton",{name:"M — объём калибровки на закон"}).fill("100");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+await page.getByRole("spinbutton",{name:"Имитаций на калибровку (фиксированное N)"}).fill("1000");
+await page.getByRole("checkbox",{name:"Точное сравнение M6",exact:true}).check();
+await runE2();
+const rareE2=await downloadE2();
+if(rareE2.tables.rows.length!==3||rareE2.tables.rows.some(v=>!Number.isFinite(v.exactMiss)||v.maxWeight>v.weightBound+1e-10))throw Error("E2.30 rare events incomplete");
+await page.getByRole("heading",{name:"Редкие ошибки — сравнение предложений (первый повтор)",exact:true}).waitFor();
+extensionEvidence["Редкие ошибки"]={policies:3,N:1000};
+
+
 
 
 
