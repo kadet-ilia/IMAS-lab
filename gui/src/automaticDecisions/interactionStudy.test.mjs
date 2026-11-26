@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {EXTRA_DEFAULTS,studyPlan,evaluateUnit,summarizeStudy} from "./extendedStudies.js";
+import {countLaw,interactionPoint,symmetricThreeRisk} from "./interactionStudy.js";
+import {exactExt} from "./extendedModel.js";
+const c={...EXTRA_DEFAULTS,groups:[3],u:[[.2],[.8]],rho:[.4],prior:.5,b:1,f:1,d:0,c:.5,m:2000,reps:2,experiment:"interaction",interactionLevels:3,rhoFrom:0,rhoTo:.9,dropFrom:0,dropTo:.9};
+const close=(a,b,t=1e-9)=>assert.ok(Math.abs(a-b)<=t,JSON.stringify([a,b,t]));
+test("Count laws reproduce mean and feasible correlations",()=>{for(const [family,r] of [["shock",-.25],["shock",0],["shock",.8],["beta",.3],["beta",1]]){const n=4,u=.3,p=countLaw(n,u,r,family),m=p.reduce((s,v,j)=>s+j*v,0),v=p.reduce((s,v,j)=>s+(j-m)**2*v,0);close(p.reduce((s,v)=>s+v,0),1);close(m,n*u);close(v,n*u*(1-u)*(1+(n-1)*r));}assert.throws(()=>countLaw(4,.3,-1,"shock"));assert.throws(()=>countLaw(4,.3,-.1,"beta"));});
+test("Exact Bayes risk matches analytical three-agent expression",()=>{for(const e of [.1,.2,.4])for(const rho of [0,.3,1])for(const drop of [0,.4,1]){const raw={...c,u:[[e],[1-e]],interactionLaw:"shock"};const r=interactionPoint(raw,{kind:"interaction",rho,drop,rep:0,i:0,j:0});close(r.lossOracle,symmetricThreeRisk(e,rho,drop));assert.ok(r.lossOracle<=r.lossM6+1e-10);}});
+test("Exact robust results match existing core for common shock",()=>{const r=interactionPoint(c,{kind:"interaction",rho:.3,drop:.4,rep:0,i:0,j:0});const a=exactExt({...c,rho:[.3],rhoScale:1,drop:.4,stress:"none",eta:0},r.counts);close(r.lossM6,a.loss);close(r.coverageM6,a.coverage);});
+test("Paired local contrasts only after all four points",()=>{const p=studyPlan("sensitivity",c);assert.equal(p.length,18);const a=p.map(u=>evaluateUnit("sensitivity",c,u,p.length));const summary=summarizeStudy("sensitivity",c,a);assert.equal(summary.rows.length,9);assert.equal(summary.aux.length,8);assert.ok(summary.aux.every(r=>r.lossOracle<0));assert.equal(summarizeStudy("sensitivity",c,a.slice(0,3)).aux.length,0);});
