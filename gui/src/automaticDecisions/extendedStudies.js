@@ -1,3 +1,6 @@
+import {adaptiveNext,validateAdaptiveNext} from "./adaptiveNext.js";
+import {optimalStopping,validateStopping} from "./optimalStopping.js";
+import {closedQueue,validateClosedQueue,jointPlan,jointSummary} from "./closedLoopQueue.js";
 import {candidateConfigs,evaluateDesign} from "./designOptimization.js";
 import {advancedMC,validateAdvancedMC} from "./advancedMC.js";
 import {BASE,EXT_VERSION,validateExt,uniformGroups,seedFor,spaceSize,lawsExt,calibration,tables,point,select,loss,exactExt,simulateExt,sampler,mixLaw,groupGeometry,l1Radius,draw} from "./extendedModel.js";
@@ -6,10 +9,10 @@ import {studentCritical} from "./statistics.js";
 const seq=n=>Array.from({length:n},(_,i)=>i),sum=a=>a.reduce((s,v)=>s+v,0),mean=a=>sum(a)/a.length,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const integer=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b,real=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b;
 const fail=()=>{throw Error("Некорректные параметры серии");};
-export const STUDY_VERSION="E2.12-experimental-v1";
+export const STUDY_VERSION="E2.16-experimental-v1";
 export const FACTORS={prior:{label:"π",min:.01,max:.8},c:{label:"c",min:0,max:3},m:{label:"M",min:100,max:100000},rhoScale:{label:"Множитель ρ",min:0,max:1},drop:{label:"Пропуски",min:0,max:.9}};
 const METRICS=["coverage","loss","lower","tight","upperRisk","posteriorMass","violation","width","identityGap"];
-export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false,discoverGroups:false,discoveryFraction:.5,groupThreshold:.05,groupMethod:"complete",groupMaxSize:50,approxLarge:true,designSpec:[{name:"Базовая",groups:[9,7,5]},{name:"Компактная",groups:[5,4,3]},{name:"Расширенная",groups:[10,8,6,4]}]};
+export const EXTRA_DEFAULTS={...BASE,experiment:"grid",factor:"rhoScale",factor2:"drop",from:0,to:1,from2:0,to2:.8,levels:5,levels2:5,sobolN:12,stress:"drift",eta:0,groupsMin:2,groupsMax:4,agentsMin:2,agentsMax:5,agentCost:1,groupCost:2,requiredCoverage:.7,riskLimit:.8,mcN:10000,mcBatch:1000,mcAlpha:.05,mcTolerance:0,mcImportance:false,mcProposal:.5,mcExact:false,steps:1000,window:150,delay:20,updateEvery:25,changeAt:.5,shift:.7,waitCost:.03,rounds:4,shortWindow:50,forgetting:.98,adaptiveReps:3,alarmAlpha:.05,queryBudget:6,queryCost:.03,safetyRisk:1.5,queueExperiment:"stationary",queueHorizon:8,queueWarmup:1,peakMultiplier:3,peakStart:.3,peakEnd:.6,queueCapacity:50,queuePriority:true,priorityThreshold:.5,feedbackGain:2,queueWaitCost:1,failureCost:2,queueOperatorLoss:1.25,operatorMin:2,operatorMax:4,priceMin:.8,priceMax:1.4,priceLevels:2,gainMin:0,gainMax:2,gainLevels:2,operatorCost:1,failureLimit:.05,arrival:120,service:8,operators:3,gammaSource:"model",gamma:.85,deadline:.5,arrivals:5000,warmup:500,queueReps:5,classSpec:null,trainFraction:.6,iidTest:false,discoverGroups:false,discoveryFraction:.5,groupThreshold:.05,groupMethod:"complete",groupMaxSize:50,approxLarge:true,designSpec:[{name:"Базовая",groups:[9,7,5]},{name:"Компактная",groups:[5,4,3]},{name:"Расширенная",groups:[10,8,6,4]}]};
 function grid(a,b,n,round=false){return [...new Set(seq(n).map(i=>{const v=a+(b-a)*i/(n-1);return round?Math.round(v):v;}))];}
 function range(a,b,n,f){if(!FACTORS[f]||!integer(n,2,15)||!real(a,FACTORS[f].min,FACTORS[f].max)||!real(b,a,FACTORS[f].max)||(f==="m"&&(!Number.isInteger(a)||!Number.isInteger(b))))fail();return grid(a,b,n,f==="m");}
 function baseFor(raw){return validateExt({...raw,stress:"none",eta:0});}
@@ -27,8 +30,11 @@ export function validateStudy(mode,raw){
  if(mode==="robustness"&&(!["drift","cross","mnar","nonexchangeable","biasedMask","contamination","all"].includes(c.stress)||!integer(c.levels,2,11)||c.levels*c.reps*(c.stress==="all"?6:1)>450))fail();
  if(mode==="optimization"&&(!["grid","heterogeneous","multiclass"].includes(c.experiment)||!real(c.requiredCoverage,0,1)||!real(c.riskLimit,0,1000)||!real(c.agentCost,0,1000)||!real(c.groupCost,0,1000)||!integer(c.groupsMin,1,8)||!integer(c.groupsMax,c.groupsMin,8)||!integer(c.agentsMin,2,20)||!integer(c.agentsMax,c.agentsMin,20)||!integer(c.mcN,1000,50000)))fail();
  if(mode==="optimization"&&c.experiment==="heterogeneous"){if(typeof c.approxLarge!=="boolean")fail();candidateConfigs(c,c.designSpec);}
- if(mode==="dynamics"&&(!["adaptive","sequential"].includes(c.experiment)||!integer(c.steps,100,20000)||!integer(c.window,20,2000)||!integer(c.delay,0,2000)||!integer(c.updateEvery,1,1000)||!real(c.changeAt,.1,.9)||!real(c.shift,0,1)||!integer(c.rounds,2,20)||!real(c.waitCost,0,1000)))fail();
+ if(mode==="dynamics"&&(!["adaptive","sequential","weighted","optimal"].includes(c.experiment)||!integer(c.steps,100,20000)||!integer(c.window,20,2000)||!integer(c.delay,0,2000)||!integer(c.updateEvery,1,1000)||!real(c.changeAt,.1,.9)||!real(c.shift,0,1)||!integer(c.rounds,2,20)||!real(c.waitCost,0,1000)))fail();
+ if(mode==="dynamics"&&c.experiment==="weighted")validateAdaptiveNext(c);
+ if(mode==="dynamics"&&c.experiment==="optimal")validateStopping(c);
  if(mode==="queue"&&(!real(c.arrival,.01,100000)||!real(c.service,.01,100000)||!integer(c.operators,1,100)||!["model","lower","manual"].includes(c.gammaSource)||!real(c.gamma,0,1)||!real(c.deadline,0,10000)||!integer(c.arrivals,100,100000)||!integer(c.warmup,0,c.arrivals-2)||!integer(c.queueReps,1,30)))fail();
+ if(mode==="queue"){if(!["stationary","closed","joint"].includes(c.queueExperiment))fail();if(c.queueExperiment!=="stationary")validateClosedQueue(c);if(c.queueExperiment==="joint")jointPlan(c);}
  if(mode==="data"&&(!real(c.trainFraction,.1,.9)||typeof c.iidTest!=="boolean"||typeof c.discoverGroups!=="boolean"||!real(c.discoveryFraction,.1,.9)||!real(c.groupThreshold,1e-8,1)||!["complete","components"].includes(c.groupMethod)||!integer(c.groupMaxSize,1,50)))fail();
  return {...c,...base,stress:c.stress,experiment:c.experiment};
 }
@@ -56,7 +62,8 @@ export function studyPlan(mode,raw){
  }else if(mode==="optimization"&&c.experiment==="heterogeneous"){for(const spec of candidateConfigs(c,c.designSpec))units.push({kind:"heterogeneous",spec});
  }else if(mode==="optimization"&&c.experiment==="grid"){
   for(let B=c.groupsMin;B<=c.groupsMax;B++)for(let n=c.agentsMin;n<=c.agentsMax;n++)units.push({kind:"candidate",B,n});
- }else if(mode==="queue"){for(let rep=0;rep<c.queueReps;rep++)units.push({kind:"queue",rep});}
+ }else if(mode==="queue"){if(c.queueExperiment==="joint")units.push(...jointPlan(c));else for(let rep=0;rep<c.queueReps;rep++)units.push({kind:c.queueExperiment==="closed"?"closedQueue":"queue",rep});}
+ else if(mode==="dynamics"&&c.experiment==="weighted"){for(let rep=0;rep<c.adaptiveReps;rep++)for(const shift of [...new Set([0,c.shift])])units.push({kind:"weighted",rep,shift});}
  else units.push({kind:mode==="optimization"?"multiclass":mode==="dynamics"?c.experiment:mode});
  if(!units.length)fail();
  return units;
@@ -82,6 +89,9 @@ export function evaluateUnit(mode,raw,unit,total=1){
  }
  if(unit.kind==="advancedMC")return {unit,...advancedMC(c,unit.rep),ms:performance.now()-t0};
  if(unit.kind==="queue"){const r=queueStudy(c,unit.rep);return {unit,...r,ms:performance.now()-t0};}
+ if(unit.kind==="weighted")return {unit,...adaptiveNext(base,unit),ms:performance.now()-t0};
+ if(unit.kind==="optimal")return {unit,...optimalStopping(base),ms:performance.now()-t0};
+ if(unit.kind==="closedQueue"||unit.kind==="jointQueue")return {unit,...closedQueue(base,unit),ms:performance.now()-t0};
  if(unit.kind==="adaptive")return {unit,...adaptiveStudy(c),ms:performance.now()-t0};
  if(unit.kind==="sequential")return {unit,...sequentialStudy(c),ms:performance.now()-t0};
  if(unit.kind==="multiclass")return {unit,...multiStudy(c),ms:performance.now()-t0};
@@ -90,6 +100,9 @@ export function evaluateUnit(mode,raw,unit,total=1){
 function stats(a,alpha){const m=mean(a),s=a.length>1?Math.sqrt(sum(a.map(v=>(v-m)**2))/(a.length-1)):null,h=s===null?null:studentCritical(alpha,a.length-1)*s/Math.sqrt(a.length);return {mean:m,sd:s,lo:h===null?null:m-h,hi:h===null?null:m+h};}
 export function summarizeStudy(mode,c,records){
  if(!records.length)return {rows:[],aux:[]};
+ if(mode==="queue"&&c.queueExperiment==="joint")return jointSummary(c,records);
+ if(mode==="queue"&&c.queueExperiment==="closed")return {rows:records.flatMap(r=>r.summary),aux:records[0].trace};
+ if(mode==="dynamics"&&c.experiment==="weighted"){const groups=new Map();for(const r of records)for(const row of r.summary){const key=JSON.stringify([row.policy,row.shift]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}const rows=[...groups.values()].map(a=>{const v=a[0],mean=k=>sum(a.map(r=>r[k]))/a.length,detected=a.filter(r=>r.alarmDelay!==null);return {policy:v.policy,shift:v.shift,reps:a.length,coverage:mean("coverage"),loss:mean("loss"),miss:mean("miss"),false:mean("false"),falseAlarm:mean("preAlarm"),detectionRate:v.shift>0?detected.length/a.length:null,alarmDelay:detected.length?sum(detected.map(r=>r.alarmDelay))/detected.length:null};});return {rows,aux:(records.find(r=>r.unit.shift>0)||records[0]).trace};}
  if(mode==="mcExtended")return {rows:records.flatMap(r=>r.summary),aux:records.flatMap(r=>r.trace.map(v=>({...v,rep:r.unit.rep})))};
  if(mode==="sensitivity"&&c.experiment==="morris"){
   const rows=[];for(const metric of ["coverage","loss","tight"])for(const factor of ["prior","c","rhoScale","drop"]){const effects=[];for(let i=0;i<c.sobolN;i++){const tr=records.filter(r=>r.unit.i===i).sort((a,b)=>a.unit.step-b.unit.step);if(tr.length!==5)continue;const j=tr.findIndex(r=>r.unit.tag===factor);effects.push((tr[j][metric]-tr[j-1][metric])/tr[j].unit.delta);}if(effects.length){const m=mean(effects);rows.push({metric,factor,N:effects.length,mu:m,muStar:mean(effects.map(Math.abs)),sigma:effects.length>1?Math.sqrt(sum(effects.map(v=>(v-m)**2))/(effects.length-1)):null});}}return {rows,aux:[]};

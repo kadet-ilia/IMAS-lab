@@ -4,7 +4,7 @@ import {validateExt,lawsExt,calibration,tables,point,select,loss,sampler,seedFor
 import {random} from "./kernel.js";
 const sum=a=>a.reduce((s,v)=>s+v,0),int=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b,real=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b;
 export function validateClosedQueue(c){
- if(!real(c.queueHorizon,.01,1000)||!real(c.queueWarmup,0,c.queueHorizon-1e-6)||!real(c.peakMultiplier,.01,20)||!real(c.peakStart,.01,.98)||!real(c.peakEnd,c.peakStart+.001,.999)||!int(c.queueCapacity,0,1000)||!real(c.priorityThreshold,0,1)||typeof c.queuePriority!=="boolean"||!real(c.feedbackGain,0,1000)||!real(c.safetyRisk,0,1000)||!real(c.queueWaitCost,0,1000)||!real(c.failureCost,0,1000))throw Error("Некорректные параметры динамической СМО");
+ if(!real(c.queueHorizon,.01,1000)||!real(c.queueWarmup,0,c.queueHorizon-1e-6)||!real(c.peakMultiplier,.01,20)||!real(c.peakStart,.01,.98)||!real(c.peakEnd,c.peakStart+.001,.999)||!int(c.queueCapacity,0,1000)||!real(c.priorityThreshold,0,1)||typeof c.queuePriority!=="boolean"||!real(c.feedbackGain,0,1000)||!real(c.safetyRisk,0,1000)||!real(c.queueWaitCost,0,1000)||!real(c.failureCost,0,1000)||!real(c.queueOperatorLoss,0,1000))throw Error("Некорректные параметры динамической СМО");
  const expected=c.arrival*c.queueHorizon*(1+(c.peakEnd-c.peakStart)*(c.peakMultiplier-1));
  if(expected>30000)throw Error("Ожидаемый поток превышает 30 000 запросов на повтор");
  return c;
@@ -24,7 +24,7 @@ export function processQueue(c,stream,feedback){
  function integrate(t){const dt=Math.max(0,Math.min(t,c.queueHorizon)-Math.max(last,c.queueWarmup));areaQ+=dt*waiting.length;areaBusy+=dt*servers.filter(Boolean).length;last=t;}
  function log(v,kind,t,wait=0){if(!measured(v))return;events.push({id:v.id,t:v.t,outcome:kind,finish:t,wait,action:v.action,price:v.price,lo:v.lo,hi:v.hi,x:v.x});}
  function fail(v,kind,t){if(measured(v)){acc[kind]++;acc.loss+=c.failureCost+c.b*v.x+c.queueWaitCost*(t-v.t);log(v,kind,t,t-v.t);}}
- function fill(t){for(let i=0;i<servers.length;i++)if(!servers[i]&&waiting.length){let j=c.queuePriority?waiting.findIndex(v=>v.high):-1;if(j<0)j=0;const v=waiting.splice(j,1)[0],w=t-v.t;servers[i]={v,start:t,finish:t+v.service};if(measured(v)){acc.served++;acc.wait+=w;acc.loss+=c.c+c.queueWaitCost*w;log(v,"served",t+v.service,w);}}}
+ function fill(t){for(let i=0;i<servers.length;i++)if(!servers[i]&&waiting.length){let j=c.queuePriority?waiting.findIndex(v=>v.high):-1;if(j<0)j=0;const v=waiting.splice(j,1)[0],w=t-v.t;servers[i]={v,start:t,finish:t+v.service};if(measured(v)){acc.served++;acc.wait+=w;acc.loss+=c.queueOperatorLoss+c.queueWaitCost*w;log(v,"served",t+v.service,w);}}}
  function advance(to){
   for(;;){const done=Math.min(Infinity,...servers.filter(Boolean).map(v=>v.finish)),expiry=waiting.length?waiting[0].t+c.deadline:Infinity,t=Math.min(done,expiry);if(!Number.isFinite(t)||t>to)break;integrate(t);
    for(let i=0;i<servers.length;i++)if(servers[i]&&servers[i].finish<=t){servers[i]=null;finished++;}
@@ -61,7 +61,7 @@ export function closedQueue(raw,unit){
  const c=validateClosedQueue(validateExt({...raw,stress:"none",eta:0,...(unit.operators===undefined?{}:{operators:unit.operators}),...(unit.price===undefined?{}:{c:unit.price}),...(unit.gain===undefined?{}:{feedbackGain:unit.gain})}));
  const calSeed=seedFor(c.seed,90000+unit.rep),counts=calibration(c,lawsExt(c).cal,calSeed),T=tables(c,counts),{stream,...seeds}=makeQueueStream(c,unit.rep,T,lawsExt(c).test);
  const policies=unit.kind==="jointQueue"?[true]:[false,true],results=policies.map(feedback=>({policy:feedback?"Обратная связь":"Постоянная цена",...processQueue(c,stream,feedback)}));
- return {summary:results.map(({trace,events,counts,...a})=>({...a,rep:unit.rep,operators:c.operators,price:c.c,gain:c.feedbackGain})),trace:results.flatMap(r=>r.trace.map(v=>({...v,policy:r.policy}))),outcomes:results.map(({policy,events,counts})=>({policy,events,counts})),calibrationCounts:counts,calSeed,...seeds,config:c,warning:"Нестационарный поток с фиксированным пиковым интервалом. Приоритет определяется верхней оценкой вероятности, не истинным классом. Дедлайн относится к ожиданию. Номинальный предельный риск автоматического действия не зависит от очереди. Потери отказа: failureCost+bX+цена ожидания."};
+ return {summary:results.map(({trace,events,counts,...a})=>({...a,rep:unit.rep,operators:c.operators,price:c.c,gain:c.feedbackGain})),trace:results.flatMap(r=>r.trace.map(v=>({...v,policy:r.policy}))),outcomes:results.map(({policy,events,counts})=>({policy,events,counts})),calibrationCounts:counts,calSeed,...seeds,config:c,warning:"Нестационарный поток с фиксированным пиковым интервалом. Приоритет определяется верхней оценкой вероятности, не истинным классом. Дедлайн относится к ожиданию. Номинальный предельный риск автоматического действия не зависит от очереди. Фактическая цена оператора фиксирована отдельно от порога решения. Потери отказа: failureCost+bX+цена ожидания."};
 }
 export function jointPlan(c){
  if(!int(c.operatorMin,1,20)||!int(c.operatorMax,c.operatorMin,20)||!int(c.priceLevels,1,10)||!int(c.gainLevels,1,10)||!real(c.priceMin,0,1000)||!real(c.priceMax,c.priceMin,1000)||!real(c.gainMin,0,1000)||!real(c.gainMax,c.gainMin,1000)||!real(c.operatorCost,0,1000)||!real(c.failureLimit,0,1)||!real(c.requiredCoverage,0,1)||!real(c.riskLimit,0,1000))throw Error("Некорректная сетка совместной оптимизации");
@@ -79,7 +79,7 @@ export function jointSummary(c,records){
   // Bounds for averages of independent run-level bounded quantities; no request-iid assertion.
   // Empty measured streams are excluded from empirical averages; fail closed for certification.
   const K=jointPlan(c).length/c.queueReps,complete=a.length===c.queueReps&&valid.length===a.length,h=Math.sqrt(Math.log(3*K/c.alpha)/(2*a.length));
-  const Lmax=Math.max(c.b,c.f,c.d,v.price+c.queueWaitCost*c.deadline,c.failureCost+c.b+c.queueWaitCost*c.deadline);
+  const Lmax=Math.max(c.b,c.f,c.d,c.queueOperatorLoss+c.queueWaitCost*c.deadline,c.failureCost+c.b+c.queueWaitCost*c.deadline);
   const coverage=mean("coverage"),L=mean("loss"),failure=mean("failed"),lower=complete?Math.max(0,coverage-h):null,upperRisk=complete?Math.min(Lmax,L+Lmax*h):null,upperFailure=complete?Math.min(1,failure+h):null;
   const status=!complete?"incomplete":lower>=c.requiredCoverage&&upperRisk<=c.riskLimit&&upperFailure<=c.failureLimit?"simulation_bound":coverage>=c.requiredCoverage&&L<=c.riskLimit&&failure<=c.failureLimit?"empirical":"not_certified";
   rows.push({operators:v.operators,price:v.price,gain:v.gain,cost:v.operators*c.operatorCost,reps:a.length,validReps:valid.length,coverage,loss:L,failed:failure,lower,upperRisk,upperFailure,status,pareto:false,unsafe:sum(a.map(r=>r.unsafe))});
