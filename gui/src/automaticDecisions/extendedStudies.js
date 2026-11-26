@@ -16,9 +16,9 @@ export function validateStudy(mode,raw){
  const c={...EXTRA_DEFAULTS,...raw},base=baseFor(c);
  if(!["sensitivity","robustness","optimization","dynamics","queue","data"].includes(mode))fail();
  if(mode==="sensitivity"){
-  if(!["grid","two","sobol","families","scale"].includes(c.experiment))fail();
+  if(!["grid","two","sobol","morris","families","scale"].includes(c.experiment))fail();
   if(["grid","two"].includes(c.experiment)){range(c.from,c.to,c.levels,c.factor);if(c.experiment==="two"){if(c.factor===c.factor2)fail();range(c.from2,c.to2,c.levels2,c.factor2);if(c.levels*c.levels2*c.reps>450)throw Error("Не более 450 расчётов за серию");}}
-  if(c.experiment==="sobol"&&!integer(c.sobolN,4,64))fail();
+  if(["sobol","morris"].includes(c.experiment)&&!integer(c.sobolN,4,64))fail();
   if(c.experiment==="scale"&&(!integer(c.mcN,1000,50000)||!integer(c.groupsMax,1,20)||!integer(c.agentsMax,2,50)))fail();
  }
  if(mode==="robustness"&&(!["drift","cross","mnar","nonexchangeable","biasedMask","contamination","all"].includes(c.stress)||!integer(c.levels,2,11)||c.levels*c.reps*(c.stress==="all"?6:1)>450))fail();
@@ -38,7 +38,13 @@ export function studyPlan(mode,raw){
    const names=["prior","c","rhoScale","drop"],r=random(seedFor(c.seed,10001));
    const vector=()=>Object.fromEntries(names.map(k=>[k,FACTORS[k].min+r()*(FACTORS[k].max-FACTORS[k].min)]));
    for(let i=0;i<c.sobolN;i++){const a=vector(),b=vector();units.push({kind:"sobol",i,tag:"A",values:a},{kind:"sobol",i,tag:"B",values:b});for(const k of names)units.push({kind:"sobol",i,tag:k,values:{...a,[k]:b[k]}});}
-  }else if(c.experiment==="families"){for(const family of ["l1","box","wasserstein"])for(let rep=0;rep<c.reps;rep++)units.push({kind:"exact",family,rep,x:family});}
+  }else if(c.experiment==="morris"){
+   const names=["prior","c","rhoScale","drop"],r=random(seedFor(c.seed,10002)),delta=2/3;
+   for(let i=0;i<c.sobolN;i++){const direction=names.map(()=>r()<.5?-1:1),z=Object.fromEntries(names.map((k,j)=>[k,(r()<.5?0:1/3)+(direction[j]<0?delta:0)])),order=names.slice();for(let k=order.length-1;k>0;k--){const j=Math.floor(r()*(k+1));[order[k],order[j]]=[order[j],order[k]];}
+    const values=()=>Object.fromEntries(names.map(k=>[k,FACTORS[k].min+z[k]*(FACTORS[k].max-FACTORS[k].min)]));units.push({kind:"sobol",i,tag:"start",values:values(),step:0});
+    for(let j=0;j<order.length;j++){const k=order[j],d=direction[names.indexOf(k)]*delta;z[k]=clamp(z[k]+d,0,1);units.push({kind:"sobol",i,tag:k,values:values(),step:j+1,delta:d});}
+   }
+  }else if(c.experiment==="families"){for(const family of ["l1","box","wasserstein","kl","moments"])for(let rep=0;rep<c.reps;rep++)units.push({kind:"exact",family,rep,x:family});}
   else for(const x of range(c.from,c.to,c.levels,c.factor))for(const y of c.experiment==="two"?range(c.from2,c.to2,c.levels2,c.factor2):[null])for(let rep=0;rep<c.reps;rep++)units.push({kind:"exact",x,y,rep,values:{[c.factor]:x,...(y===null?{}:{[c.factor2]:y})}});
  }else if(mode==="robustness"){
   for(const stress of c.stress==="all"?["drift","cross","mnar","nonexchangeable","biasedMask","contamination"]:[c.stress])for(const x of grid(0,1,c.levels))for(let rep=0;rep<c.reps;rep++)units.push({kind:"exact",stress,x,rep});
@@ -76,6 +82,9 @@ export function evaluateUnit(mode,raw,unit,total=1){
 function stats(a,alpha){const m=mean(a),s=a.length>1?Math.sqrt(sum(a.map(v=>(v-m)**2))/(a.length-1)):null,h=s===null?null:studentCritical(alpha,a.length-1)*s/Math.sqrt(a.length);return {mean:m,sd:s,lo:h===null?null:m-h,hi:h===null?null:m+h};}
 export function summarizeStudy(mode,c,records){
  if(!records.length)return {rows:[],aux:[]};
+ if(mode==="sensitivity"&&c.experiment==="morris"){
+  const rows=[];for(const metric of ["coverage","loss","tight"])for(const factor of ["prior","c","rhoScale","drop"]){const effects=[];for(let i=0;i<c.sobolN;i++){const tr=records.filter(r=>r.unit.i===i).sort((a,b)=>a.unit.step-b.unit.step);if(tr.length!==5)continue;const j=tr.findIndex(r=>r.unit.tag===factor);effects.push((tr[j][metric]-tr[j-1][metric])/tr[j].unit.delta);}if(effects.length){const m=mean(effects);rows.push({metric,factor,N:effects.length,mu:m,muStar:mean(effects.map(Math.abs)),sigma:effects.length>1?Math.sqrt(sum(effects.map(v=>(v-m)**2))/(effects.length-1)):null});}}return {rows,aux:[]};
+ }
  if(mode==="sensitivity"&&c.experiment==="sobol"){
   const names=["prior","c","rhoScale","drop"],lookup=new Map(records.map(r=>[r.unit.i+":"+r.unit.tag,r]));
   const complete=seq(c.sobolN).filter(i=>["A","B",...names].every(k=>lookup.has(i+":"+k))),rows=[];
@@ -130,18 +139,18 @@ function add(acc,c,a,x,wait=0,waitCost=0){acc.auto+=+(a!==2);acc.loss+=loss(c,a,
 export function adaptiveStudy(c){
  const base={...baseFor(c),m:c.window,alpha:c.alpha/(c.steps+1)},q=lawsExt(base).nominal,r0=random(seedFor(c.seed,40000)),hist=q.map(row=>row[0].length&&seq(c.window).map(()=>row.map(a=>draw(a.map((_,i)=>sum(a.slice(0,i+1))),r0())))),counts=q.map(row=>row.map(a=>a.map(()=>0)));
  for(let x=0;x<2;x++)for(const full of hist[x])counted(base,counts,x,full,1);
- const initial=clone(counts),fixed=tables(base,initial),refMean=sum(initial[1][0].map((n,j)=>n*j))/(c.window*base.groups[0]),testSeed=seedFor(c.seed,40001),rng=random(testSeed),shifted={...base,stress:"drift",eta:c.shift},before=sampler(base,q,rng),after=sampler(shifted,lawsExt(shifted).test,rng),acc=[accumulator(),accumulator()],pending=[],trace=[];
- let B=fixed,alarm=null,released=0,lastUpdate=0,lossWindow=[0,0],autoWindow=[0,0],windowN=0;
+ const initial=clone(counts),fixed=tables(base,initial),refMean=sum(initial[1][0].map((n,j)=>n*j))/(c.window*base.groups[0]),testSeed=seedFor(c.seed,40001),rng=random(testSeed),shifted={...base,stress:"drift",eta:c.shift},before=sampler(base,q,rng),after=sampler(shifted,lawsExt(shifted).test,rng),acc=[accumulator(),accumulator(),accumulator()],pending=[],trace=[];
+ let B=fixed,alarm=null,released=0,lastUpdate=0,lossWindow=[0,0,0],autoWindow=[0,0,0],windowN=0;
  const switchAt=Math.floor(c.steps*c.changeAt);
  for(let t=0;t<c.steps;t++){
   while(released<pending.length&&pending[released].reveal<=t){const v=pending[released++];counted(base,counts,v.x,hist[v.x].shift(),-1);hist[v.x].push(v.full);counted(base,counts,v.x,v.full,1);}
   if(t%c.updateEvery===0){B=tables(base,counts);lastUpdate=t;const avg=sum(counts[1][0].map((n,j)=>n*j))/(c.window*base.groups[0]),h=2*Math.sqrt(Math.log(4*(c.steps+1)/c.alpha)/(2*c.window));if(alarm===null&&Math.abs(avg-refMean)>h)alarm=t;}
-  const {x,ix,full}=t<switchAt?before():after(),actions=[fixed,B].map(T=>select(base,...point(base,T,ix)));
-  for(let k=0;k<2;k++){add(acc[k],base,actions[k],x);lossWindow[k]+=loss(base,actions[k],x);autoWindow[k]+=+(actions[k]!==2);}windowN++;
+  const {x,ix,full}=t<switchAt?before():after(),actions=[fixed,B,alarm===null?fixed:B].map(T=>select(base,...point(base,T,ix)));
+  for(let k=0;k<3;k++){add(acc[k],base,actions[k],x);lossWindow[k]+=loss(base,actions[k],x);autoWindow[k]+=+(actions[k]!==2);}windowN++;
   pending.push({x,full,reveal:t+Math.max(1,c.delay)});
-  if((t+1)%c.updateEvery===0||t===c.steps-1){trace.push({t:t+1,staticLoss:lossWindow[0]/windowN,adaptiveLoss:lossWindow[1]/windowN,staticCoverage:autoWindow[0]/windowN,adaptiveCoverage:autoWindow[1]/windowN,released,lastUpdate});lossWindow=[0,0];autoWindow=[0,0];windowN=0;}
+  if((t+1)%c.updateEvery===0||t===c.steps-1){trace.push({t:t+1,staticLoss:lossWindow[0]/windowN,adaptiveLoss:lossWindow[1]/windowN,triggerLoss:lossWindow[2]/windowN,staticCoverage:autoWindow[0]/windowN,adaptiveCoverage:autoWindow[1]/windowN,triggerCoverage:autoWindow[2]/windowN,released,lastUpdate});lossWindow=[0,0,0];autoWindow=[0,0,0];windowN=0;}
  }
- return {summary:[scoreSummary("Фиксированная",acc[0],c.steps),scoreSummary("Скользящее окно",acc[1],c.steps)],trace,initialCounts:initial,finalCounts:counts,initialSeed:seedFor(c.seed,40000),testSeed,switchAt,alarm,alarmDelay:alarm===null?null:alarm-switchAt,stationaryGuarantee:c.shift===0,labelsReleased:released,alphaPerUpdate:base.alpha,warning:"Полные счётчики становятся доступны вместе с отложенной истинной меткой; при сдвиге интервалы эвристические."};
+ return {summary:[scoreSummary("Фиксированная",acc[0],c.steps),scoreSummary("Скользящее окно",acc[1],c.steps),scoreSummary("Перекалибровка по сигналу",acc[2],c.steps)],trace,initialCounts:initial,finalCounts:counts,initialSeed:seedFor(c.seed,40000),testSeed,switchAt,alarm,alarmDelay:alarm===null?null:alarm-switchAt,stationaryGuarantee:c.shift===0,labelsReleased:released,alphaPerUpdate:base.alpha,warning:"Полные счётчики становятся доступны вместе с отложенной истинной меткой; при сдвиге интервалы эвристические."};
 }
 export function sequentialStudy(c){
  const base=baseFor(c),counts=calibration(base,lawsExt(base).cal),T=tables(base,counts),r=random(seedFor(c.seed,50000)),next=sampler(base,lawsExt(base).test,r),acc=[accumulator(),accumulator(),accumulator()],trace=[];
@@ -180,6 +189,6 @@ export function multiStudy(c){
   const bayes=logs=>{const z=Math.max(...logs);if(!Number.isFinite(z))return A;const w=logs.map(v=>Math.exp(v-z)),R=spec.losses.map(row=>sum(row.map((v,k)=>v*w[k]))/sum(w)),a=R.indexOf(Math.min(...R));return R[a]<=base.c?a:A;};
   [robustMulti(lo,up,spec.losses,base.c),bayes(p),bayes(truth)].forEach((a,k)=>hist[k][x][a]++);
  }
- const summary=hist.map((H,i)=>({policy:["Робастная","Байес эмпирический","Истинный закон"][i],coverage:1-sum(H.map(row=>row[A]))/c.mcN,loss:sum(H.map((row,x)=>sum(row.map((n,a)=>n*(a===A?base.c:spec.losses[a][x])))))/c.mcN,N:c.mcN}));
- return {summary,trace:[],spec,counts,hist,seed,eps,warning:"Многоклассовая модель с прямоугольными множествами правдоподобия. Истинный закон — недоступный эталон. Имитационные оценки условны относительно калибровки."};
+ const hMC=Math.sqrt(Math.log(12/base.alpha)/(2*c.mcN)),Lmax=Math.max(base.c,...spec.losses.flat());const summary=hist.map((H,i)=>({policy:["Робастная","Байес эмпирический","Истинный закон"][i],coverage:1-sum(H.map(row=>row[A]))/c.mcN,loss:sum(H.map((row,x)=>sum(row.map((n,a)=>n*(a===A?base.c:spec.losses[a][x])))))/c.mcN,N:c.mcN}));
+ for(const row of summary){row.coverageLow=clamp(row.coverage-hMC,0,1);row.coverageHigh=clamp(row.coverage+hMC,0,1);row.lossLow=clamp(row.loss-Lmax*hMC,0,Lmax);row.lossHigh=clamp(row.loss+Lmax*hMC,0,Lmax);}return {summary,trace:[],spec,counts,hist,seed,eps,warning:"Многоклассовая модель с прямоугольными множествами правдоподобия. Истинный закон — недоступный эталон. Имитационные оценки условны относительно калибровки."};
 }

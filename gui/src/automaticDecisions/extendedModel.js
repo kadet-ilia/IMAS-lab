@@ -3,14 +3,14 @@ import {DEFAULTS,extrem,boxExt,random,multinomial} from "./kernel.js";
 export const EXT_VERSION="E2-extension-1.0";
 export const BASE={...DEFAULTS,mode:"custom",m:2000,reps:3,drop:.4,stress:"none",eta:0,family:"l1",rhoScale:1};
 export const STRESS=["none","drift","cross","mnar","nonexchangeable","biasedMask","contamination"];
-export const FAMILIES=["l1","box","wasserstein"];
+export const FAMILIES=["l1","box","wasserstein","kl","moments"];
 const sum=a=>a.reduce((s,v)=>s+v,0),dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),seq=n=>Array.from({length:n},(_,i)=>i),clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 export const seedFor=(s,i)=>((s+Math.imul(i+1,0x9e3779b9))>>>0)||1;
 export function validateExt(raw={}){
  const c={...BASE,...raw},B=c.groups?.length,real=(v,l,h)=>Number.isFinite(v)&&v>=l&&v<=h,int=(v,l,h)=>Number.isInteger(v)&&v>=l&&v<=h;
  if(!int(B,1,20)||c.groups.some(n=>!int(n,2,50)))throw Error("1–20 групп по 2–50 агентов");
  if(!Array.isArray(c.u)||c.u.length!==2||c.u.some(a=>!Array.isArray(a)||a.length!==B||a.some(v=>!real(v,0,1)))||!Array.isArray(c.rho)||c.rho.length!==B||c.rho.some(v=>!real(v,0,1)))throw Error("Неверные групповые параметры");
- if(!int(c.m,1,100000)||!int(c.reps,1,30)||!int(c.seed,1,4294967295)||!real(c.prior,1e-8,1-1e-8)||!real(c.alpha,1e-8,1-1e-8)||!real(c.drop,0,1)||!real(c.eta,0,1)||!real(c.rhoScale,0,1)||!real(c.b,1e-8,1000)||!real(c.f,1e-8,1000)||!real(c.d,0,c.f)||c.d>=c.f||!real(c.c,0,1000)||!STRESS.includes(c.stress)||!FAMILIES.includes(c.family))throw Error("Некорректные параметры расширенной модели");
+ if(!int(c.m,1,100000)||!int(c.reps,1,30)||!int(c.seed,1,4294967295)||!real(c.prior,1e-8,1-1e-8)||!real(c.alpha,1e-8,1-1e-8)||!real(c.drop,0,1)||!real(c.eta,0,1)||!real(c.rhoScale,0,1)||!real(c.b,1e-8,1000)||!real(c.f,1e-8,1000)||!real(c.d,0,c.f)||c.d>=c.f||c.d>=c.b||!real(c.c,0,1000)||!STRESS.includes(c.stress)||!FAMILIES.includes(c.family))throw Error("Некорректные параметры расширенной модели");
  return c;
 }
 export function uniformGroups(B,n,c=BASE){return {groups:seq(B).map(()=>n),u:[0,1].map(x=>seq(B).map(g=>c.u[x][g%c.u[x].length])),rho:seq(B).map(g=>c.rho[g%c.rho.length])};}
@@ -37,21 +37,41 @@ export function wasserRadius(c,M=c.m){return Math.min(1,Math.sqrt(Math.log(4*c.g
 export function wasserMax(h,p,r){
  if(r<=0)return dot(h,p);if(r>=1)return Math.max(...h);
  const n=h.length-1,range=Math.max(...h)-Math.min(...h);
- const dual=lambda=>lambda*r+sum(p.map((a,i)=>a*Math.max(...h.map((v,j)=>v-lambda*Math.abs(i-j)/n))));
+ const dual=lambda=>{const d=lambda/n,left=h.slice(),right=h.slice();for(let i=1;i<h.length;i++)left[i]=Math.max(h[i],left[i-1]-d);for(let i=h.length-2;i>=0;i--)right[i]=Math.max(h[i],right[i+1]-d);return lambda*r+sum(p.map((a,i)=>a*Math.max(left[i],right[i])));};
  let l=0,u=n*range,best=Math.min(dual(l),dual(u));
  for(let k=0;k<40;k++){const a=(2*l+u)/3,b=(l+2*u)/3,fa=dual(a),fb=dual(b);best=Math.min(best,fa,fb);if(fa<fb)u=b;else l=a;}
  return Math.min(Math.max(...h),best+1e-13);
+}
+// Method-of-types radius for reverse KL D(q_hat || q). The dual follows
+// from weighted AM-GM; any evaluated dual point gives a valid upper bound.
+export function klRadius(c,n,M=c.m){return ((n+1)*Math.log(M+1)+Math.log(2*c.groups.length/c.alpha))/M;}
+export function klMax(h,p,r){
+ if(r<=0)return dot(h,p);
+ const max=Math.max(...h),range=max-Math.min(...h);if(range===0)return max;
+ const dual=nu=>nu-Math.exp(sum(p.map((v,i)=>v>0?v*Math.log(nu-h[i]):0))-r);
+ let l=max+Math.max(1e-13,range*1e-13),u=max+2*range/Math.max(1e-12,-Math.expm1(-r)),best=max;
+ for(let i=0;i<70;i++){const a=(2*l+u)/3,b=(l+2*u)/3,fa=dual(a),fb=dual(b);best=Math.min(best,fa,fb);if(fa<fb)u=b;else l=a;}
+ return Math.min(max,best+1e-12);
+}
+export function momentRadius(c,M=c.m){return Math.sqrt(Math.log(8*c.groups.length/c.alpha)/(2*M));}
+export function momentMax(h,p,r){
+ const t=h.map((_,i)=>i/(h.length-1)),s=t.map(v=>v*v),a=dot(t,p),b=dot(s,p);
+ const dual=(x,y)=>Math.max(...h.map((v,i)=>v-x*t[i]-y*s[i]))+x*a+y*b+r*(Math.abs(x)+Math.abs(y));
+ let x=0,y=0,best=dual(0,0),step=Math.max(...h)-Math.min(...h);
+ // Feasible dual upper estimates; no claim of exact LP optimum.
+ for(let k=0;k<35&&step>1e-12;k++){let bx=x,by=y,old=best;for(const dx of [-step,0,step])for(const dy of [-step,0,step]){const v=dual(x+dx,y+dy);if(v<best){best=v;bx=x+dx;by=y+dy;}}x=bx;y=by;if(best===old)step/=2;}
+ return Math.min(Math.max(...h),best+1e-12);
 }
 export function tables(c,counts,Ms=null){
  const G=c.groups.map(groupGeometry),B=c.groups.length;
  const sizes=Ms||[c.m,c.m];
  if(!Array.isArray(counts)||counts.length!==2||counts.some((row,x)=>!Array.isArray(row)||row.length!==B||row.some((a,g)=>!Array.isArray(a)||a.length!==c.groups[g]+1||a.some(v=>!Number.isSafeInteger(v)||v<0)||sum(a)!==sizes[x]||sizes[x]<1)))throw Error("Некорректные калибровочные счётчики");
  const hat=counts.map((row,x)=>row.map(a=>a.map(v=>v/sizes[x])));
- const r=(x,g)=>c.family==="l1"?l1Radius(c,c.groups[g],sizes[x]):c.family==="box"?boxRadiusExt(c,sizes[x]):wasserRadius(c,sizes[x]);
- const fn=(h,p,x,g)=>c.family==="l1"?extrem(h,p,r(x,g)):c.family==="box"?boxExt(h,p,r(x,g)):wasserMax(h,p,r(x,g));
+ const r=(x,g)=>c.family==="l1"?l1Radius(c,c.groups[g],sizes[x]):c.family==="box"?boxRadiusExt(c,sizes[x]):c.family==="wasserstein"?wasserRadius(c,sizes[x]):c.family==="kl"?klRadius(c,c.groups[g],sizes[x]):momentRadius(c,sizes[x]);
+ const fn=(h,p,x,g)=>c.family==="l1"?extrem(h,p,r(x,g)):c.family==="box"?boxExt(h,p,r(x,g)):c.family==="wasserstein"?wasserMax(h,p,r(x,g)):c.family==="kl"?klMax(h,p,r(x,g)):momentMax(h,p,r(x,g));
  const low=hat.map((row,x)=>row.map((p,g)=>G[g].H.map(h=>clamp(-fn(h.map(v=>-v),p,x,g),0,1))));
  const high=hat.map((row,x)=>row.map((p,g)=>G[g].H.map(h=>clamp(fn(h,p,x,g),0,1))));
- const tv=[0,1].map(x=>1-c.groups.reduce((v,n,g)=>v*(1-Math.min(1,c.family==="l1"?r(x,g)/2:c.family==="box"?(n+1)*r(x,g)/2:n*r(x,g))),1));
+ const tv=[0,1].map(x=>1-c.groups.reduce((v,n,g)=>v*(1-Math.min(1,c.family==="l1"?r(x,g)/2:c.family==="box"?(n+1)*r(x,g)/2:c.family==="wasserstein"?n*r(x,g):c.family==="kl"?Math.sqrt(r(x,g)/2):1)),1));
  return {G,hat,low,high,D:(1-c.prior)*tv[0]+c.prior*tv[1],radii:[0,1].map(x=>seq(B).map(g=>r(x,g)))};
 }
 function logprod(row,ix){let v=0;for(let g=0;g<ix.length;g++){const p=row[g][ix[g]];if(p<=0)return -Infinity;v+=Math.log(p);}return v;}

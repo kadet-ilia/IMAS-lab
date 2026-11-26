@@ -24,7 +24,7 @@ function diagnostics(train,test,groups){
   const rows=train.filter(r=>r.x===x),N=rows.length,probs=P.map(({g,i})=>mean(rows.map(r=>r.agents[g][i]))),pair=[];
   for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++){
    const a=probs[i],b=probs[j],den=Math.sqrt(a*(1-a)*b*(1-b));
-   if(den>0){const ab=mean(rows.map(r=>r.agents[P[i].g][P[i].i]*r.agents[P[j].g][P[j].i]));pair.push({within:P[i].g===P[j].g,r:Math.abs((ab-a*b)/den)});}
+   if(den>0){let joint=0;for(const row of rows)joint+=row.agents[P[i].g][P[i].i]*row.agents[P[j].g][P[j].i];const ab=joint/N;pair.push({within:P[i].g===P[j].g,r:Math.abs((ab-a*b)/den)});}
   }
   for(let g=0;g<groups.length;g++){const p=seq(groups[g]).map(i=>mean(rows.map(r=>r.agents[g][i]))),t=test.filter(r=>r.x===x);
    out.push({x,group:g+1,N,mean:mean(p),marginalSpread:Math.max(...p)-Math.min(...p),missing:t.length?sum(t.map(r=>r.agents[g].filter(v=>v===null).length))/(t.length*groups[g]):null});
