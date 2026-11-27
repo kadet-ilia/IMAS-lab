@@ -4,6 +4,7 @@ on:
     branches: [IMAS_Lab_test]
     paths:
       - 'gui/scripts/e2-operator-campaign.mjs'
+      - 'gui/src/automaticDecisions/heterogeneousQueue.js'
       - '.github/workflows/e2-operator-campaign.yml'
   workflow_dispatch:
 jobs:
