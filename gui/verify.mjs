@@ -864,6 +864,17 @@ await runE2();
 const restoredBatchE2=await downloadE2();
 if(JSON.stringify(restoredBatchE2.records)!==JSON.stringify(batchE2.records))throw Error("E2.31 checkpoint not restored identically");
 extensionEvidence["Серии экспериментов"]={configurations:4,runs:8,workers:2,restored:true};
+await page.getByRole("heading",{name:"Выявление закономерностей и контрпримеров",exact:true}).waitFor();
+await page.getByRole("spinbutton",{name:"Минимум конфигураций в правиле"}).fill("2");
+await page.getByRole("spinbutton",{name:"Уровень метрики"}).fill("10");
+await page.getByRole("button",{name:"Выявить закономерности",exact:true}).click();
+await page.getByText("Поиск: 2; проверка: 2;",{exact:false}).waitFor();
+const patternDownload=page.waitForEvent("download");
+await page.getByRole("button",{name:"Скачать анализ JSON",exact:true}).click();
+const patternFile=await patternDownload;
+if(patternFile.suggestedFilename()!=="imas_e2_patterns.json")throw Error("E2.32 analysis export absent");
+extensionEvidence["Анализ закономерностей"]={discovery:2,confirmation:2,export:true};
+
 
 await modesE2.getByRole("button",{name:"Устойчивость",exact:true}).click();
 await page.getByRole("combobox",{name:"Тип нарушения"}).selectOption("dependenceRobust");
