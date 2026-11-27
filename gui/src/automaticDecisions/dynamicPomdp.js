@@ -1,7 +1,7 @@
 // E2.27/E2.28. Finite-horizon, two-state, serial acquisition, exact
 // enumeration of histories. Robust value is an upper bound obtained by
 // rectangularizing belief and observation ambiguity at every public history.
-import {validateExt,select,loss} from "./extendedModel.js";
+import {validateExt,loss} from "./extendedModel.js";
 const clip=x=>Math.max(0,Math.min(1,x)),sum=a=>a.reduce((s,v)=>s+v,0),int=(v,a,b)=>Number.isInteger(v)&&v>=a&&v<=b,real=(v,a,b)=>Number.isFinite(v)&&v>=a&&v<=b;
 export const DEFAULT_AGENTS=[
  {name:"IDS",u0:.12,u1:.86,availability:.95,delay:1,cost:.035,radius:.03},
@@ -49,7 +49,10 @@ function combine(c,values,weights,agent,delay,cost){
 }
 const lower=(a,b,k)=>b[k]<a[k]-1e-12?b:a;
 function terminal(c,I,p,s){
- const safe=select({...c,c:c.safetyRisk},...I,6),actions=safe===2?[2]:[2,safe];
+ // Strict preference is fail-closed near a numerical tie. At the closed
+ // cost boundary only, allow a few ulps for binary rounding (e.g. 3*.2).
+ const [l,h]=I,r0=c.b*h,r1=c.f+(c.d-c.f)*l,eps=8*Number.EPSILON*Math.max(c.b,c.f,c.d),costOK=r=>r<=c.safetyRisk+8*Number.EPSILON*Math.max(Math.abs(r),Math.abs(c.safetyRisk));
+ const safe=r0+eps<c.f+(c.d-c.f)*h&&costOK(r0)?0:r1+eps<c.b*l&&costOK(r1)?1:2,actions=safe===2?[2]:[2,safe];
  const rows=actions.map(a=>({type:"stop",a,upper:Math.max(...I.map(q=>(1-q)*loss(c,a,0)+q*loss(c,a,1))),nom:terminalMetrics(c,a,p),stress:terminalMetrics(c,a,s)}));
  return {n:rows.reduce((a,b)=>b.nom.loss<a.nom.loss-1e-12?b:a),r:rows.reduce((a,b)=>lower(a,b,"upper"))};
 }
