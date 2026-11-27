@@ -107,6 +107,9 @@ jobs:
       - name: Independent E2 dynamic, Bayesian and partial-data reference
         working-directory: gui
         run: node scripts/check-e2-next.mjs e2-next-verification.json
+      - name: External CSV adapter tests
+        working-directory: research/automatic-decisions/reference
+        run: python -m unittest -v test_convert_external_csv
       - name: Independent E2 late reference (LP, rational DP, statistical tests)
         working-directory: gui
         run: node scripts/check-e2-late.mjs e2-late-verification.json

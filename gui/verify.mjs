@@ -1037,6 +1037,18 @@ if(operatorsE2.tables.rows.length!==4||operatorsE2.records[0].operatorStats.leng
 await page.getByRole("heading",{name:"Динамика очереди и резерва",exact:true}).waitFor();
 extensionEvidence["Неоднородные операторы"]={policies:4,operators:3,N:operatorsE2.tables.rows[0].N};
 
+await modesE2.getByRole("button",{name:"Данные",exact:true}).click();
+await page.getByRole("button",{name:"Загрузить пример внешнего протокола",exact:true}).click();
+await page.getByText("Синтетический контроль · 1000 строк",{exact:true}).waitFor();
+await runE2();
+const externalE2=await downloadE2(),ext=externalE2.dataResult;
+if(!ext.external||!ext.synthetic||ext.certified||ext.summary.length!==4||ext.split.trainN!==600||ext.split.testN!==400||ext.trace.length!==1600||ext.summary.some(v=>v.knownN>=400||v.lossLow>v.lossHigh)||ext.contrasts.length!==3)throw Error("E2.34 external protocol incomplete");
+await page.getByRole("heading",{name:"Протокол внешней валидации",exact:true}).waitFor();
+await page.getByRole("heading",{name:"Границы потерь при неизвестных метках",exact:true}).waitFor();
+extensionEvidence["Внешний протокол"]={synthetic:true,train:600,test:400,known:ext.summary[0].knownN,policies:4,contrasts:3,certified:false};
+console.log("E2_EXTERNAL_EXAMPLE "+JSON.stringify({split:ext.split,summary:ext.summary,contrasts:ext.contrasts,synthetic:true}));
+
+
 
 
 
