@@ -875,6 +875,58 @@ const patternFile=await patternDownload;
 if(patternFile.suggestedFilename()!=="imas_e2_patterns.json")throw Error("E2.32 analysis export absent");
 extensionEvidence["Анализ закономерностей"]={discovery:2,confirmation:2,export:true};
 
+// E2.33: actual application checkpoint, legacy migration and integrity failure.
+const checkpointKey=await page.evaluate(async({version,mode,config})=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify([version,mode,config])))),v=>v.toString(16).padStart(2,"0")).join(""),batchE2);
+const checkpointProbe=async(action,key,payload=null)=>page.evaluate(async({action,key,payload})=>{
+ const db=await new Promise((ok,no)=>{const r=indexedDB.open("imas-e2-research-v1",2);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});
+ try{
+  const hash=payload===null?null:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(payload))),v=>v.toString(16).padStart(2,"0")).join("");
+  return await new Promise((ok,no)=>{
+   const t=db.transaction(["series","records-v2"],action==="inspect"?"readonly":"readwrite"),s=t.objectStore("series"),r=t.objectStore("records-v2"),range=IDBKeyRange.bound([key,0],[key,Number.MAX_SAFE_INTEGER]);let result;
+   if(action==="inspect"){const m=s.get(key),v=r.getAll(range);t.oncomplete=()=>ok({meta:m.result,records:v.result.length,bytes:v.result.reduce((a,b)=>a+b.bytes,0)});}
+   else if(action==="legacy"){r.delete(range);s.put({payload,hash},key);t.oncomplete=()=>ok(true);}
+   else if(action==="corrupt"){const a=r.get([key,0]);a.onsuccess=()=>{r.put({...a.result,payload:a.result.payload+" "},[key,0]);};t.oncomplete=()=>ok(true);}
+   else if(action==="repair"){const a=r.get([key,0]);a.onsuccess=()=>{r.put({...a.result,payload:a.result.payload.slice(0,-1)},[key,0]);};t.oncomplete=()=>ok(true);}
+   t.onerror=()=>no(t.error);t.onabort=()=>no(t.error);
+  });
+ }finally{db.close();}
+},{action,key,payload});
+let stored=await checkpointProbe("inspect",checkpointKey);
+if(stored.meta.format!=="append-v2"||stored.records!==8||stored.meta.payloadBytes!==stored.bytes)throw Error("E2.33 append manifest");
+await checkpointProbe("legacy",checkpointKey,JSON.stringify(batchE2.records));
+await runE2();
+const migratedBatchE2=await downloadE2();
+if(JSON.stringify(migratedBatchE2.records)!==JSON.stringify(batchE2.records)||(await checkpointProbe("inspect",checkpointKey)).meta.format!=="append-v2")throw Error("E2.33 legacy migration");
+await checkpointProbe("corrupt",checkpointKey);
+await runE2();
+await page.locator(".error-banner").getByText("Нарушена целостность контрольной точки",{exact:false}).waitFor();
+await checkpointProbe("repair",checkpointKey);
+await runE2();
+const recoveredBatchE2=await downloadE2();
+if(JSON.stringify(recoveredBatchE2.records)!==JSON.stringify(batchE2.records))throw Error("E2.33 recovered records differ");
+extensionEvidence["Дозапись и целостность"]={records:8,migration:true,corruptionRejected:true,recovered:true};
+
+// Actual 128-configuration browser run. Main-renderer heap snapshots only;
+// not worker memory or peak physical RSS. JSON bytes exclude IDB metadata.
+await page.getByRole("spinbutton",{name:"Число различных конфигураций"}).fill("128");
+await page.getByRole("spinbutton",{name:"R — калибровок на точку"}).fill("1");
+await page.getByRole("spinbutton",{name:"Параллельных потоков"}).fill("4");
+const e2cdp=await page.context().newCDPSession(page);
+const heapBefore=await e2cdp.send("Runtime.getHeapUsage"),profileStart=performance.now();
+await runE2();
+const profileBatchE2=await downloadE2();
+const profileMs=performance.now()-profileStart,heapAfter=await e2cdp.send("Runtime.getHeapUsage");await e2cdp.detach();
+if(profileBatchE2.records.length!==128||profileBatchE2.tables.aux.length!==128)throw Error("E2.33 128-case profiling incomplete");
+const sizes=profileBatchE2.records.map(r=>Buffer.byteLength(JSON.stringify(r))),newBytes=sizes.reduce((a,b)=>a+b,0);
+let oldBytes=0,prefix=0;for(let i=0;i<sizes.length;i++){prefix+=sizes[i];if((i+1)%4===0||i===sizes.length-1)oldBytes+=prefix+i+2;}
+const profileKey=await page.evaluate(async({version,mode,config})=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(JSON.stringify([version,mode,config])))),v=>v.toString(16).padStart(2,"0")).join(""),profileBatchE2);
+const profileStored=await checkpointProbe("inspect",profileKey);
+if(profileStored.records!==128||profileStored.bytes!==newBytes)throw Error("E2.33 actual stored bytes differ");
+const scalingEvidence={configurations:128,workers:4,wave:4,newBytes,oldBytes,ratio:oldBytes/newBytes,wallMs:profileMs,heapBefore:heapBefore.usedSize,heapAfter:heapAfter.usedSize,heapScope:"main renderer snapshots; no peak or worker heap"};
+extensionEvidence["Масштабирование хранения"]=scalingEvidence;
+console.log("E2_STORAGE_PROFILE "+JSON.stringify(scalingEvidence));
+
+
 
 await modesE2.getByRole("button",{name:"Устойчивость",exact:true}).click();
 await page.getByRole("combobox",{name:"Тип нарушения"}).selectOption("dependenceRobust");
