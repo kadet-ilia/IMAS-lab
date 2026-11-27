@@ -1,0 +1,26 @@
+name: E2 heterogeneous operators pilot (128 configurations)
+on:
+  push:
+    branches: [IMAS_Lab_test]
+    paths:
+      - 'gui/scripts/e2-operator-campaign.mjs'
+      - '.github/workflows/e2-operator-campaign.yml'
+  workflow_dispatch:
+jobs:
+  campaign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run paired operator pilot
+        working-directory: gui
+        run: node scripts/e2-operator-campaign.mjs operator-campaign
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2-operator-evidence
+          path: gui/operator-campaign/
+          retention-days: 90

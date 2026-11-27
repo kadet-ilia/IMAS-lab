@@ -962,6 +962,19 @@ if(pomdpE2.tables.rows.length!==6||pomdpE2.records[0].lowerBound>pomdpE2.records
 await page.getByRole("heading",{name:"Сравнение индивидуальных политик POMDP",exact:true}).waitFor();
 extensionEvidence["Робастная динамическая POMDP"]={policies:6,horizon:2,nodes:pomdpE2.records[0].states};
 
+await modesE2.getByRole("button",{name:"СМО",exact:true}).click();
+await page.getByRole("combobox",{name:"Вид исследования СМО"}).selectOption("heterogeneous");
+await page.getByRole("spinbutton",{name:"Горизонт потока (ч)"}).fill("2");
+await page.getByRole("spinbutton",{name:"Разогрев (ч)"}).fill("0");
+await page.getByRole("spinbutton",{name:"Поток запросов λ (1/ч)"}).fill("40");
+await page.getByRole("spinbutton",{name:"Повторностей",exact:true}).fill("1");
+await runE2();
+const operatorsE2=await downloadE2();
+if(operatorsE2.tables.rows.length!==4||operatorsE2.records[0].operatorStats.length!==12||operatorsE2.tables.rows.some(v=>v.unsafe||Math.abs(v.coverage+v.served+v.failed-1)>1e-9||Math.abs(v.loss-v.decisionLoss-v.taskCost-v.waitLoss-v.failureLoss-v.staffCost)>1e-9))throw Error("E2.29 operator experiment incomplete");
+await page.getByRole("heading",{name:"Динамика очереди и резерва",exact:true}).waitFor();
+extensionEvidence["Неоднородные операторы"]={policies:4,operators:3,N:operatorsE2.tables.rows[0].N};
+
+
 
 
 
