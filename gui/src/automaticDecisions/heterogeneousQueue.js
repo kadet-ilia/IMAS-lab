@@ -60,8 +60,10 @@ export function processHeterogeneousQueue(c,stream,policy){
   return j;
  }
  function fill(t){
-  activate(waiting.length);
-  while(waiting.length&&free().length){
+  // Reserve only covers demand left after allocating idle active servers.
+  while(waiting.length){
+   if(!free().length)activate(waiting.length);
+   if(!free().length)break;
    const j=pickJob(),v=waiting.splice(j,1)[0],candidates=free();
    // An expected service-time penalty is a routing heuristic, not actual loss.
    // A faster source is preferred if predicted costs are equal.
